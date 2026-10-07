@@ -129,7 +129,7 @@ Or run from source during development:
 
 Meta: `panel_health`, `whoami`, `get_dashboard_stats`, `get_recent_activity`, `list_permissions_catalog`, `get_my_permissions`.
 
-Servers: `list_servers`, `get_server`, `create_server`, `update_server`, `delete_server`, `clone_server`, `resize_server_disk`, `start_server`, `stop_server`, `restart_server`, `kill_server`, `install_server`, `reinstall_server`, `cancel_install`, `rebuild_server`, `suspend_server`, `unsuspend_server`, `respond_to_eula`, `send_console_command`, `get_server_logs`, `get_server_variables`, `update_server_variables`, `get_server_stats`, `get_server_metrics_history`.
+Servers: `list_servers`, `get_server`, `create_server`, `update_server`, `delete_server`, `clone_server_preflight`, `clone_server`, `resize_server_disk`, `start_server`, `stop_server`, `restart_server`, `kill_server`, `install_server`, `reinstall_server`, `cancel_install`, `rebuild_server`, `suspend_server`, `unsuspend_server`, `respond_to_eula`, `send_console_command`, `get_server_logs`, `get_server_variables`, `update_server_variables`, `get_server_stats`, `get_server_metrics_history`.
 
 Sharing: `list_server_invites`, `create_server_invite`, `delete_server_invite`, `regenerate_server_invite`, `preview_invite`, `list_server_access`, `grant_server_access`, `remove_server_access`, `get_my_server_permissions`, `list_transfer_candidates`, `transfer_server_ownership`.
 

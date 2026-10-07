@@ -13,11 +13,10 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
   server.registerTool(
     "list_servers",
     {
-      description: "List servers visible to the API key (GET /api/servers). Supports search and pagination.",
+      description: "List servers visible to the API key (GET /api/servers). Supports offset pagination and live metrics.",
       inputSchema: z.object({
-        page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(100).optional(),
-        search: z.string().optional(),
+        offset: z.number().int().min(0).optional().describe("Servers to skip, for pagination"),
+        limit: z.number().int().min(1).max(500).optional().describe("Page size, 1-500 (default 50)"),
         withMetrics: z.boolean().optional().describe("Include live resource metrics"),
       }),
     },
@@ -36,18 +35,52 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
   server.registerTool(
     "create_server",
     {
-      description: "Create a game server (POST /api/servers). Needs templateId, nodeId, and resource allocations.",
+      description:
+        "Create a game server (POST /api/servers). Needs templateId, nodeId, locationId, primaryPort, and all three resource allocations. Get locationId from list_locations, nodeId from list_nodes, templateId from list_templates.",
       inputSchema: z.object({
         name: z.string().min(1).max(100),
         templateId: z.string(),
         nodeId: z.string(),
-        locationId: z.string().optional(),
-        description: z.string().optional(),
-        allocatedMemoryMb: z.number().int().min(128).optional(),
-        allocatedCpuCores: z.number().optional(),
-        allocatedDiskMb: z.number().int().min(1024).optional(),
+        locationId: z.string().describe("Location ID from list_locations (required)"),
+        primaryPort: z
+          .number()
+          .int()
+          .min(1)
+          .max(65535)
+          .describe("Primary port players connect on, e.g. 25565"),
+        allocatedMemoryMb: z
+          .number()
+          .int()
+          .min(512)
+          .max(131072)
+          .describe("Memory allocation in MB (512-131072)"),
+        allocatedCpuCores: z
+          .number()
+          .int()
+          .min(1)
+          .max(128)
+          .describe("CPU allocation in whole cores (1-128)"),
+        allocatedDiskMb: z
+          .number()
+          .int()
+          .min(1024)
+          .max(1048576)
+          .describe("Disk allocation in MB (1024-1048576)"),
+        description: z.string().max(500).optional(),
+        ownerId: z.string().optional().describe("Owner user ID (admin only)"),
         environment: z.record(z.string(), z.string()).optional().describe("Template variable overrides"),
-        startupCommand: z.string().optional(),
+        portBindings: z
+          .record(z.string(), z.number().int().min(1).max(65535))
+          .optional()
+          .describe("Container port → host port map"),
+        primaryIp: z.string().optional().describe("Static IP (macvlan mode only)"),
+        allocationId: z.string().optional().describe("Node allocation to claim (host mode)"),
+        backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
+        databaseAllocation: z.number().int().min(0).max(1048576).optional(),
+        networkMode: z
+          .enum(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"])
+          .optional()
+          .describe("Defaults to mc-lan-static"),
       }),
     },
     async (args) => text(await client.post("/servers", args)),
@@ -60,12 +93,30 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
       inputSchema: z.object({
         serverId,
         name: z.string().min(1).max(100).optional(),
-        description: z.string().optional(),
-        allocatedMemoryMb: z.number().int().min(128).optional(),
-        allocatedCpuCores: z.number().optional(),
-        allocatedDiskMb: z.number().int().min(1024).optional(),
+        description: z.string().max(500).optional(),
+        allocatedMemoryMb: z
+          .number()
+          .int()
+          .min(512)
+          .max(131072)
+          .optional()
+          .describe("Memory allocation in MB (512-131072)"),
+        allocatedCpuCores: z
+          .number()
+          .int()
+          .min(1)
+          .max(128)
+          .optional()
+          .describe("CPU allocation in whole cores (1-128)"),
+        allocatedDiskMb: z
+          .number()
+          .int()
+          .min(1024)
+          .max(1048576)
+          .optional()
+          .describe("Disk allocation in MB (1024-1048576)"),
         environment: z.record(z.string(), z.string()).optional(),
-        startupCommand: z.string().optional(),
+        startupCommand: z.string().max(4096).nullable().optional(),
       }),
     },
     async (args) => {
@@ -84,16 +135,53 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
   );
 
   server.registerTool(
+    "clone_server_preflight",
+    {
+      description:
+        "Resolve a server clone and return the node-specific change set, blockers and warnings WITHOUT creating anything (POST /api/servers/:id/clone/preflight). Cross-node clones must run this first and pass the returned preflightId to clone_server.",
+      inputSchema: z.object({
+        serverId,
+        mode: z.enum(["full", "configuration"]).describe("full (config + files, source must be stopped) or configuration (config only + fresh install)"),
+        targetNodeId: z.string().describe("Node the clone will be created on"),
+        networkMode: z.enum(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"]).optional().describe("Network mode override"),
+        allocationId: z.string().optional().describe("Node allocation to claim (host/bridge)"),
+        ownerId: z.string().optional().describe("Owner for the clone"),
+        allocatedMemoryMb: z.number().int().min(512).max(131072).optional().describe("Memory override (MB)"),
+        allocatedCpuCores: z.number().int().min(1).max(128).optional().describe("CPU override (cores)"),
+        allocatedDiskMb: z.number().int().min(1024).max(1048576).optional().describe("Disk override (MB)"),
+      }),
+    },
+    async (args) => {
+      const { serverId: id, ...body } = args;
+      return text(await client.post(`/servers/${id}/clone/preflight`, body));
+    },
+  );
+
+  server.registerTool(
     "clone_server",
     {
-      description: "Clone a server onto the same or another node (POST /api/servers/:id/clone).",
+      description:
+        "Clone a server (POST /api/servers/:id/clone). mode=full copies configuration and files (source must be stopped); mode=configuration copies configuration only and runs a fresh install. Cloning to a different node requires preflightId from clone_server_preflight and acknowledgedWarnings for any warnings it returned.",
       inputSchema: z.object({
         serverId,
         name: z.string().min(1).max(100).describe("Name for the cloned server"),
         nodeId: z.string().optional().describe("Target node (defaults to source node)"),
+        mode: z.enum(["full", "configuration"]).optional().describe("full or configuration"),
+        copyFiles: z.boolean().optional().describe("Deprecated alias: true → mode=full, false → mode=configuration"),
+        preflightId: z.string().optional().describe("preflightId returned by clone_server_preflight (required cross-node)"),
+        fingerprint: z.string().optional().describe("Fingerprint returned by clone_server_preflight"),
+        acknowledgedWarnings: z.array(z.string()).optional().describe("Warning codes to acknowledge"),
+        allocationId: z.string().optional().describe("Node allocation to claim"),
+        networkMode: z.enum(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"]).optional().describe("Network mode override"),
+        allocatedMemoryMb: z.number().int().min(512).max(131072).optional().describe("Memory override (MB)"),
+        allocatedCpuCores: z.number().int().min(1).max(128).optional().describe("CPU override (cores)"),
+        allocatedDiskMb: z.number().int().min(1024).max(1048576).optional().describe("Disk override (MB)"),
       }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/clone`, { name: args.name, nodeId: args.nodeId })),
+    async (args) => {
+      const { serverId: id, ...body } = args;
+      return text(await client.post(`/servers/${id}/clone`, body));
+    },
   );
 
   server.registerTool(
@@ -167,10 +255,10 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
       description: "Recent stored console output for a server (GET /api/servers/:id/logs).",
       inputSchema: z.object({
         serverId,
-        limit: z.number().int().min(1).max(1000).optional(),
+        lines: z.number().int().min(1).optional().describe("Number of lines, default 100"),
       }),
     },
-    async (args) => text(await client.get(`/servers/${args.serverId}/logs`, { limit: args.limit })),
+    async (args) => text(await client.get(`/servers/${args.serverId}/logs`, { lines: args.lines })),
   );
 
   server.registerTool(
@@ -185,12 +273,14 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
   server.registerTool(
     "update_server_variables",
     {
-      description: "Update startup/environment variables for a server (PATCH /api/servers/:id/variables).",
+      description: "Update startup/environment variables for a server (PATCH /api/servers/:id/variables). The body is a flat variable-name → value map.",
       inputSchema: z.object({
         serverId,
-        variables: z.record(z.string(), z.string()).describe("Variable key/value pairs"),
+        variables: z.record(z.string(), z.string()).describe("Flat map of variable name → new value"),
       }),
     },
-    async (args) => text(await client.patch(`/servers/${args.serverId}/variables`, { variables: args.variables })),
+    // The route reads the body as a flat Record<string, string>; wrapping the
+    // map in { variables: ... } makes every update a silent no-op.
+    async (args) => text(await client.patch(`/servers/${args.serverId}/variables`, args.variables)),
   );
 }

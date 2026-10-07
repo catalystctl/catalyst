@@ -13,20 +13,20 @@ export function registerTemplateManagementTools(server: McpServer, client: Catal
   server.registerTool(
     "create_template",
     {
-      description: "Create a server template/egg (POST /api/templates). Needs author, image, startup, and variables.",
+      description: "Create a server template/egg (POST /api/templates). Needs author, version, image, startup, stopCommand, supportedPorts, and default resource allocations.",
       inputSchema: z.object({
         name: z.string(),
         author: z.string(),
-        version: z.string().optional(),
+        version: z.string().describe("Template version label, e.g. 1.0.0"),
         description: z.string().optional(),
         image: z.string().describe("Default container image, e.g. ghcr.io/pterodactyl/yolks:java_21"),
         startup: z.string().describe("Startup command, e.g. java -jar server.jar"),
-        stopCommand: z.string().optional(),
+        stopCommand: z.string().describe("Graceful stop command, e.g. stop"),
         variables: z.array(z.record(z.string(), z.unknown())).optional().describe("Environment variable definitions"),
         installScript: z.string().optional(),
-        supportedPorts: z.array(z.number().int()).optional(),
-        allocatedMemoryMb: z.number().int().optional(),
-        allocatedCpuCores: z.number().optional(),
+        supportedPorts: z.array(z.number().int()).describe("Ports players connect on, e.g. [25565]"),
+        allocatedMemoryMb: z.number().int().min(512).max(131072).describe("Default memory allocation in MB"),
+        allocatedCpuCores: z.number().int().min(1).max(128).describe("Default CPU allocation in whole cores"),
         nestId: z.string().optional(),
       }),
     },
@@ -329,8 +329,6 @@ export function registerServerOpsTools(server: McpServer, client: CatalystClient
   );
 }
 
-const modTarget = z.string().optional().describe("Mods target, e.g. mods, datapacks, modpack (defaults per template)");
-
 export function registerModTools(server: McpServer, client: CatalystClient): void {
   server.registerTool(
     "search_mods",
@@ -343,6 +341,8 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
         game: z.string().optional(),
         gameVersion: z.string().optional(),
         loader: z.string().optional().describe("e.g. fabric, forge, paper"),
+        target: z.string().optional().describe("Filter by target, e.g. mods, datapacks, modpack"),
+        page: z.number().int().min(1).optional(),
       }),
     },
     async (args) => {
@@ -362,7 +362,7 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
         versionId: z.string(),
         game: z.string().optional(),
         projectName: z.string().optional(),
-        target: modTarget,
+        target: z.string().describe("Mods target enabled for this template, e.g. mods, datapacks, modpack — the API requires it"),
       }),
     },
     async (args) => {
@@ -384,7 +384,11 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
     "uninstall_mod",
     {
       description: "Remove an installed mod file (POST /api/servers/:id/mod-manager/uninstall).",
-      inputSchema: z.object({ serverId, filename: z.string(), target: modTarget }),
+      inputSchema: z.object({
+        serverId,
+        filename: z.string(),
+        target: z.string().optional().describe("Mods target, e.g. mods, datapacks, modpack (defaults to mods)"),
+      }),
     },
     async (args) => {
       const { serverId: id, ...body } = args;
@@ -395,8 +399,8 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
   server.registerTool(
     "check_mod_updates",
     {
-      description: "Check installed mods for newer versions (POST /api/servers/:id/mod-manager/check-updates).",
-      inputSchema: z.object({ serverId, filenames: z.array(z.string()).min(1) }),
+      description: "Check all installed mods for newer versions (POST /api/servers/:id/mod-manager/check-updates). The server checks every installed mod; no body is read.",
+      inputSchema: z.object({ serverId }),
     },
     async (args) => {
       const { serverId: id, ...body } = args;
@@ -412,9 +416,9 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
         serverId,
         provider: z.string(),
         query: z.string().optional(),
-        game: z.string().optional(),
         gameVersion: z.string().optional(),
-        loader: z.string().optional(),
+        sort: z.string().optional(),
+        page: z.number().int().min(1).optional(),
       }),
     },
     async (args) => {
@@ -432,9 +436,7 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
         provider: z.string(),
         projectId: z.string(),
         versionId: z.string(),
-        game: z.string().optional(),
         projectName: z.string().optional(),
-        target: modTarget,
       }),
     },
     async (args) => {
@@ -456,7 +458,11 @@ export function registerModTools(server: McpServer, client: CatalystClient): voi
     "uninstall_plugin",
     {
       description: "Remove an installed plugin file (POST /api/servers/:id/plugin-manager/uninstall).",
-      inputSchema: z.object({ serverId, filename: z.string() }),
+      inputSchema: z.object({
+        serverId,
+        filename: z.string(),
+        target: z.string().optional().describe("Plugin target, e.g. plugins (defaults to plugins)"),
+      }),
     },
     async (args) => {
       const { serverId: id, ...body } = args;

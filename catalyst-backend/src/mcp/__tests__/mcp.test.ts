@@ -112,7 +112,7 @@ describe('mcp settings service', () => {
 
 describe('mcp tool registry', () => {
   it('covers the full panel surface with unique, well-formed tools', () => {
-    expect(MCP_TOOLS.length).toBe(175);
+    expect(MCP_TOOLS.length).toBe(174);
     const names = MCP_TOOLS.map((t) => t.name);
     expect(new Set(names).size).toBe(names.length);
     for (const tool of MCP_TOOLS) {
@@ -157,7 +157,7 @@ describe('mcp protocol', () => {
   it('lists all tools with destructive annotations', async () => {
     const res = (await handleMcpMessage(rpc('tools/list', {}), stubCtx))!;
     const tools = (res.result as { tools: Array<{ name: string; annotations?: Record<string, boolean> }> }).tools;
-    expect(tools.length).toBe(175);
+    expect(tools.length).toBe(174);
     expect(tools.find((t) => t.name === 'list_servers')).toMatchObject({ inputSchema: { type: 'object' } });
     expect(tools.find((t) => t.name === 'delete_server')?.annotations?.destructiveHint).toBe(true);
     expect(tools.find((t) => t.name === 'list_servers')?.annotations).toBeUndefined();
@@ -263,7 +263,7 @@ describe('mcp http routes', () => {
     expect(init.json().result.capabilities).toMatchObject({ tools: { listChanged: false } });
 
     const list = await postMcp(app, rpc('tools/list', {}), auth);
-    expect(list.json().result.tools.length).toBe(175);
+    expect(list.json().result.tools.length).toBe(174);
 
     const who = await postMcp(app, rpc('tools/call', { name: 'whoami', arguments: {} }), auth);
     const whoResult = who.json().result as { content: Array<{ text: string }> };

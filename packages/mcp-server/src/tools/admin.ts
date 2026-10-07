@@ -22,15 +22,6 @@ export function registerUserTools(server: McpServer, client: CatalystClient): vo
   );
 
   server.registerTool(
-    "get_user",
-    {
-      description: "One user with roles, sessions, and login metadata (GET /api/admin/users/:id).",
-      inputSchema: z.object({ userId: z.string() }),
-    },
-    async (args) => text(await client.get(`/admin/users/${args.userId}`)),
-  );
-
-  server.registerTool(
     "create_user",
     {
       description: "Create a user with email, username, and password (POST /api/admin/users).",
@@ -47,11 +38,12 @@ export function registerUserTools(server: McpServer, client: CatalystClient): vo
   server.registerTool(
     "update_user",
     {
-      description: "Update email, username, or role assignments (PUT /api/admin/users/:id).",
+      description: "Update email, username, role assignments, or password (PUT /api/admin/users/:id).",
       inputSchema: z.object({
         userId: z.string(),
         email: z.string().email().optional(),
         username: z.string().min(2).max(32).optional(),
+        password: z.string().min(8).optional().describe("New password (minimum 8 characters)"),
         roleIds: z.array(z.string()).optional(),
       }),
     },
@@ -77,7 +69,12 @@ export function registerUserTools(server: McpServer, client: CatalystClient): vo
       inputSchema: z.object({
         userId: z.string(),
         reason: z.string().optional(),
-        expiresAt: z.string().optional().describe("ISO timestamp when the ban expires"),
+        expiresInSeconds: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Ban duration in seconds; omit for a permanent ban"),
       }),
     },
     async (args) => {
@@ -204,13 +201,10 @@ export function registerApiKeyTools(server: McpServer, client: CatalystClient): 
   server.registerTool(
     "list_api_keys",
     {
-      description: "List API keys (admin sees all; others see their own) (GET /api/admin/api-keys).",
-      inputSchema: z.object({
-        page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(100).optional(),
-      }),
+      description: "List API keys (admin sees all; others see their own) (GET /api/admin/api-keys). Unpaginated.",
+      inputSchema: z.object({}),
     },
-    async (args) => text(await client.get("/admin/api-keys", args)),
+    async () => text(await client.get("/admin/api-keys")),
   );
 
   server.registerTool(
@@ -305,8 +299,14 @@ export function registerAlertTools(server: McpServer, client: CatalystClient): v
     {
       description: "Fired alerts, newest first (GET /api/alerts).",
       inputSchema: z.object({
-        resolved: z.boolean().optional().describe("Filter by resolved state"),
+        page: z.number().int().min(1).optional(),
         limit: z.number().int().min(1).max(100).optional(),
+        serverId: z.string().optional().describe("Filter by server"),
+        nodeId: z.string().optional().describe("Filter by node"),
+        type: z.string().optional().describe("Filter by alert type"),
+        severity: z.string().optional().describe("Filter by severity"),
+        resolved: z.boolean().optional().describe("Filter by resolved state"),
+        scope: z.enum(["mine", "all"]).optional(),
       }),
     },
     async (args) => text(await client.get("/alerts", args)),

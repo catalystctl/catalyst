@@ -47,9 +47,13 @@ const num = (description?: string): JsonSchema => ({
   type: "number",
   ...(description ? { description } : {}),
 });
-const int = (description?: string): JsonSchema => ({
+const int = (
+  description?: string,
+  bounds?: { minimum?: number; maximum?: number },
+): JsonSchema => ({
   type: "integer",
   ...(description ? { description } : {}),
+  ...(bounds ?? {}),
 });
 const bool = (description?: string): JsonSchema => ({
   type: "boolean",
@@ -171,14 +175,15 @@ function powerTool(
 const serverTools: McpToolDef[] = [
   def({
     name: "list_servers",
-    description: "List servers visible to the API key (GET /api/servers). Supports search and pagination.",
+    description: "List servers visible to the API key (GET /api/servers). Supports offset pagination and live metrics.",
     inputSchema: schema({
-      ...pageLimitSearch(),
+      offset: int("Servers to skip, for pagination", { minimum: 0 }),
+      limit: int("Page size, 1-500 (default 50)", { minimum: 1, maximum: 500 }),
       withMetrics: bool("Include live resource metrics"),
     }),
     method: "GET",
     path: () => "/api/servers",
-    queryKeys: ["page", "limit", "search", "withMetrics"],
+    queryKeys: ["offset", "limit", "withMetrics"],
   }),
   def({
     name: "get_server",
@@ -190,21 +195,41 @@ const serverTools: McpToolDef[] = [
   }),
   def({
     name: "create_server",
-    description: "Create a game server (POST /api/servers). Needs templateId, nodeId, and resource allocations.",
+    description:
+      "Create a game server (POST /api/servers). Needs templateId, nodeId, locationId, primaryPort, and all three resource allocations. Get locationId from list_locations, nodeId from list_nodes, templateId from list_templates.",
     inputSchema: schema(
       {
         name: str("Server name (1-100 chars)"),
         templateId: str(),
         nodeId: str(),
-        locationId: str(),
-        description: str(),
-        allocatedMemoryMb: int(),
-        allocatedCpuCores: num(),
-        allocatedDiskMb: int(),
+        locationId: str("Location ID from list_locations (required)"),
+        primaryPort: int("Primary port players connect on, e.g. 25565", { minimum: 1, maximum: 65535 }),
+        allocatedMemoryMb: int("Memory allocation in MB (512-131072)", { minimum: 512, maximum: 131072 }),
+        allocatedCpuCores: int("CPU allocation in whole cores (1-128)", { minimum: 1, maximum: 128 }),
+        allocatedDiskMb: int("Disk allocation in MB (1024-1048576)", { minimum: 1024, maximum: 1048576 }),
+        description: str("Optional description (max 500 chars)"),
+        ownerId: str("Owner user ID (admin only)"),
         environment: obj("Template variable overrides"),
-        startupCommand: str(),
+        portBindings: obj("Container port → host port map, e.g. {\"25565\": 25565}"),
+        primaryIp: str("Static IP (macvlan mode only)"),
+        allocationId: str("Node allocation to claim (host mode)"),
+        backupAllocationMb: int("Backup storage allocation in MB", { minimum: 0, maximum: 1048576 }),
+        databaseAllocation: int("Database storage allocation in MB", { minimum: 0, maximum: 1048576 }),
+        networkMode: enumOf(
+          ["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"],
+          "Defaults to mc-lan-static",
+        ),
       },
-      ["name", "templateId", "nodeId"],
+      [
+        "name",
+        "templateId",
+        "nodeId",
+        "locationId",
+        "primaryPort",
+        "allocatedMemoryMb",
+        "allocatedCpuCores",
+        "allocatedDiskMb",
+      ],
     ),
     method: "POST",
     path: () => "/api/servers",
@@ -215,13 +240,18 @@ const serverTools: McpToolDef[] = [
     description: "Update server name, resources, environment, or startup command (PUT /api/servers/:id).",
     inputSchema: schema({
       serverId: serverId(),
-      name: str(),
-      description: str(),
-      allocatedMemoryMb: int(),
-      allocatedCpuCores: num(),
-      allocatedDiskMb: int(),
+      name: str("Server name (1-100 chars)"),
+      description: str("Optional description (max 500 chars)"),
+      allocatedMemoryMb: int("Memory allocation in MB (512-131072)", { minimum: 512, maximum: 131072 }),
+      allocatedCpuCores: int("CPU allocation in whole cores (1-128)", { minimum: 1, maximum: 128 }),
+      allocatedDiskMb: int("Disk allocation in MB (1024-1048576)", { minimum: 1024, maximum: 1048576 }),
       environment: obj(),
-      startupCommand: str(),
+      startupCommand: str("Startup command; pass null to reset to the template default"),
+      portBindings: obj("Container port → host port map"),
+      primaryPort: int("Primary port (1-65535)", { minimum: 1, maximum: 65535 }),
+      primaryIp: str("Static IP (macvlan mode only)"),
+      allocationId: str("Node allocation to claim"),
+      networkMode: enumOf(["bridge", "macvlan", "host"], "Network mode"),
     }),
     method: "PUT",
     path: (a) => `/api/servers/${a.serverId}`,
@@ -246,12 +276,12 @@ const serverTools: McpToolDef[] = [
         serverId: serverId(),
         mode: enumOf(["full", "configuration"], "full (config + files, source must be stopped) or configuration (config only + fresh install)"),
         targetNodeId: str("Node the clone will be created on"),
-        networkMode: str("Network mode override"),
+        networkMode: enumOf(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"], "Network mode override"),
         allocationId: str("Node allocation to claim (host/bridge)"),
         ownerId: str("Owner for the clone"),
-        allocatedMemoryMb: int("Memory override (MB)"),
-        allocatedCpuCores: int("CPU override (cores)"),
-        allocatedDiskMb: int("Disk override (MB)"),
+        allocatedMemoryMb: int("Memory override (MB, min 512)", { minimum: 512, maximum: 131072 }),
+        allocatedCpuCores: int("CPU override (whole cores, 1-128)", { minimum: 1, maximum: 128 }),
+        allocatedDiskMb: int("Disk override (MB, min 1024)", { minimum: 1024, maximum: 1048576 }),
       },
       ["serverId", "mode", "targetNodeId"],
     ),
@@ -284,10 +314,10 @@ const serverTools: McpToolDef[] = [
         fingerprint: str("Fingerprint returned by clone_server_preflight"),
         acknowledgedWarnings: arr(str(), "Warning codes to acknowledge"),
         allocationId: str("Node allocation to claim"),
-        networkMode: str("Network mode override"),
-        allocatedMemoryMb: int("Memory override (MB)"),
-        allocatedCpuCores: int("CPU override (cores)"),
-        allocatedDiskMb: int("Disk override (MB)"),
+        networkMode: enumOf(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"], "Network mode override"),
+        allocatedMemoryMb: int("Memory override (MB, min 512)", { minimum: 512, maximum: 131072 }),
+        allocatedCpuCores: int("CPU override (whole cores, 1-128)", { minimum: 1, maximum: 128 }),
+        allocatedDiskMb: int("Disk override (MB, min 1024)", { minimum: 1024, maximum: 1048576 }),
       },
       ["serverId", "name"],
     ),
@@ -371,11 +401,11 @@ const serverTools: McpToolDef[] = [
   def({
     name: "get_server_logs",
     description: "Recent stored console output for a server (GET /api/servers/:id/logs).",
-    inputSchema: schema({ serverId: serverId(), limit: int() }),
+    inputSchema: schema({ serverId: serverId(), lines: int("Number of lines, default 100") }),
     method: "GET",
     path: (a) => `/api/servers/${a.serverId}/logs`,
     pathKeys: ["serverId"],
-    queryKeys: ["limit"],
+    queryKeys: ["lines"],
   }),
   def({
     name: "get_server_variables",
@@ -387,15 +417,17 @@ const serverTools: McpToolDef[] = [
   }),
   def({
     name: "update_server_variables",
-    description: "Update startup/environment variables for a server (PATCH /api/servers/:id/variables).",
+    description: "Update startup/environment variables for a server (PATCH /api/servers/:id/variables). The body is a flat variable-name → value map.",
     inputSchema: schema(
-      { serverId: serverId(), variables: obj("Variable key/value pairs") },
+      { serverId: serverId(), variables: obj("Flat map of variable name → new string value") },
       ["serverId", "variables"],
     ),
     method: "PATCH",
     path: (a) => `/api/servers/${a.serverId}/variables`,
     pathKeys: ["serverId"],
-    body: ["variables"],
+    // The route treats the body itself as the variable map; wrapping it in
+    // { variables: ... } makes every update a silent no-op.
+    body: (a) => (a.variables && typeof a.variables === "object" ? a.variables : {}),
   }),
 ];
 
@@ -441,16 +473,16 @@ const fileTools: McpToolDef[] = [
     inputSchema: schema(
       {
         serverId: serverId(),
-        name: str("File or directory name/path"),
-        type: enumOf(["file", "directory"], "What to create"),
-        content: str("Initial content for files"),
+        path: str("Full file or directory path"),
+        isDirectory: bool("True to create a directory, false for a file"),
+        content: str("Initial content, files only"),
       },
-      ["serverId", "name", "type"],
+      ["serverId", "path", "isDirectory"],
     ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/files/create`,
     pathKeys: ["serverId"],
-    body: "rest",
+    body: ["path", "isDirectory", "content"],
   }),
   def({
     name: "rename_file",
@@ -490,36 +522,39 @@ const fileTools: McpToolDef[] = [
       {
         serverId: serverId(),
         paths: arr(str(), "Source paths to include"),
-        destination: str("Archive path, e.g. /backup.zip"),
+        archiveName: str("Archive path, e.g. /backup.zip — must end in .zip/.tar.gz"),
       },
-      ["serverId", "paths", "destination"],
+      ["serverId", "paths", "archiveName"],
     ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/files/compress`,
     pathKeys: ["serverId"],
-    body: "rest",
+    body: ["paths", "archiveName"],
   }),
   def({
     name: "decompress_archive",
     description: "Extract a zip/tar.gz archive (POST /api/servers/:id/files/decompress).",
-    inputSchema: schema({
-      serverId: serverId(),
-      path: str("Archive path"),
-      destination: str("Target directory (defaults to archive directory)"),
-    }),
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        archivePath: str("Archive path"),
+        targetPath: str("Directory to extract into"),
+      },
+      ["serverId", "archivePath", "targetPath"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/files/decompress`,
     pathKeys: ["serverId"],
-    body: "rest",
+    body: ["archivePath", "targetPath"],
   }),
   def({
     name: "list_archive_contents",
     description: "Peek inside an archive without extracting it (POST /api/servers/:id/files/archive-contents).",
-    inputSchema: schema({ serverId: serverId(), path: str("Archive path") }, ["serverId", "path"]),
+    inputSchema: schema({ serverId: serverId(), archivePath: str("Archive path") }, ["serverId", "archivePath"]),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/files/archive-contents`,
     pathKeys: ["serverId"],
-    body: ["path"],
+    body: ["archivePath"],
   }),
   def({
     name: "list_server_allocations",
@@ -531,13 +566,16 @@ const fileTools: McpToolDef[] = [
   }),
   def({
     name: "add_server_allocation",
-    description: "Bind a free node allocation or a host/container port pair to a server (POST /api/servers/:id/allocations).",
-    inputSchema: schema({
-      serverId: serverId(),
-      allocationId: str(),
-      containerPort: int(),
-      hostPort: int(),
-    }),
+    description: "Bind a free node allocation or a host/container port pair to a server (POST /api/servers/:id/allocations). Provide allocationId, or both containerPort and hostPort.",
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        allocationId: str(),
+        containerPort: int("Container port (1-65535)", { minimum: 1, maximum: 65535 }),
+        hostPort: int("Host port (1-65535)", { minimum: 1, maximum: 65535 }),
+      },
+      ["serverId"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/allocations`,
     pathKeys: ["serverId"],
@@ -545,11 +583,17 @@ const fileTools: McpToolDef[] = [
   }),
   def({
     name: "remove_server_allocation",
-    description: "Unbind a network allocation from a server (DELETE /api/servers/:id/allocations/:allocationId).",
-    inputSchema: schema({ serverId: serverId(), allocationId: str() }, ["serverId", "allocationId"]),
+    description: "Unbind a network allocation from a server by its container port (DELETE /api/servers/:id/allocations/:containerPort).",
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        containerPort: int("Container port of the binding to remove; the primary port cannot be removed", { minimum: 1, maximum: 65535 }),
+      },
+      ["serverId", "containerPort"],
+    ),
     method: "DELETE",
-    path: (a) => `/api/servers/${a.serverId}/allocations/${a.allocationId}`,
-    pathKeys: ["serverId", "allocationId"],
+    path: (a) => `/api/servers/${a.serverId}/allocations/${a.containerPort}`,
+    pathKeys: ["serverId", "containerPort"],
     destructive: true,
   }),
   def({
@@ -570,11 +614,14 @@ const fileTools: McpToolDef[] = [
   def({
     name: "create_server_database",
     description: "Provision a database for a server (POST /api/servers/:id/databases).",
-    inputSchema: schema({
-      serverId: serverId(),
-      hostId: str("Database host ID from list_database_hosts"),
-      database: str("Database name (generated when omitted)"),
-    }),
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        hostId: str("Database host ID from list_database_hosts"),
+        name: str("Desired database name; normalized to lowercase letters/numbers/underscores (max 32). Generated when omitted"),
+      },
+      ["serverId", "hostId"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/databases`,
     pathKeys: ["serverId"],
@@ -635,7 +682,7 @@ const fileTools: McpToolDef[] = [
   }),
   def({
     name: "create_scheduled_task",
-    description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks).",
+    description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks). Tasks always start enabled.",
     inputSchema: schema(
       {
         serverId: serverId(),
@@ -643,7 +690,7 @@ const fileTools: McpToolDef[] = [
         action: enumOf(["restart", "stop", "start", "backup", "command"]),
         schedule: str("Cron expression, e.g. 0 3 * * *"),
         payload: obj("Extra data, e.g. {command: 'say hi'}"),
-        enabled: bool(),
+        description: str(),
       },
       ["serverId", "name", "action", "schedule"],
     ),
@@ -659,6 +706,8 @@ const fileTools: McpToolDef[] = [
       serverId: serverId(),
       taskId: str(),
       name: str(),
+      description: str(),
+      action: enumOf(["restart", "stop", "start", "backup", "command"]),
       schedule: str(),
       enabled: bool(),
       payload: obj(),
@@ -701,11 +750,10 @@ const fileTools: McpToolDef[] = [
 const infraTools: McpToolDef[] = [
   def({
     name: "list_nodes",
-    description: "List compute nodes with online status (GET /api/nodes).",
-    inputSchema: schema({ ...pageLimitSearch() }),
+    description: "List compute nodes with online status (GET /api/nodes). Returns all nodes visible to the key; the endpoint has no pagination or search.",
+    inputSchema: schema({}),
     method: "GET",
     path: () => "/api/nodes",
-    queryKeys: ["search", "page", "limit"],
   }),
   def({
     name: "get_node",
@@ -825,14 +873,14 @@ const infraTools: McpToolDef[] = [
     description: "Assign a node to a user or role, optionally expiring (POST /api/nodes/:id/assign).",
     inputSchema: schema({
       nodeId: str(),
-      userId: str("User to assign (one of userId or roleId)"),
-      roleId: str("Role to assign (one of userId or roleId)"),
+      targetType: enumOf(["user", "role"], "Whether targetId is a user ID or a role ID"),
+      targetId: str("User or role ID"),
       expiresAt: str("ISO timestamp for temporary access"),
     }),
     method: "POST",
     path: (a) => `/api/nodes/${a.nodeId}/assign`,
     pathKeys: ["nodeId"],
-    body: "rest",
+    body: ["targetType", "targetId", "expiresAt"],
   }),
   def({
     name: "remove_node_assignment",
@@ -886,11 +934,16 @@ const infraTools: McpToolDef[] = [
   }),
   def({
     name: "list_templates",
-    description: "List server templates/eggs (GET /api/templates).",
-    inputSchema: schema({ search: str(), nestId: str(), page: int(), limit: int() }),
+    description: "List server templates/eggs (GET /api/templates). Supports offset pagination and nest filtering.",
+    inputSchema: schema({
+      offset: int("Templates to skip, for pagination", { minimum: 0 }),
+      limit: int("Page size, 1-100 (omitted returns all)", { minimum: 1, maximum: 100 }),
+      nestId: str("Filter by nest/category"),
+      full: bool("Include install scripts"),
+    }),
     method: "GET",
     path: () => "/api/templates",
-    queryKeys: ["search", "nestId", "page", "limit"],
+    queryKeys: ["nestId", "limit", "offset", "full"],
   }),
   def({
     name: "get_template",
@@ -914,12 +967,12 @@ const infraTools: McpToolDef[] = [
         stopCommand: str(),
         variables: arr(obj(), "Environment variable definitions"),
         installScript: str(),
-        supportedPorts: arr(int()),
-        allocatedMemoryMb: int(),
-        allocatedCpuCores: num(),
+        supportedPorts: arr(int(), "Port ranges players connect on, e.g. [25565]"),
+        allocatedMemoryMb: int("Default memory allocation in MB (512-131072)", { minimum: 512, maximum: 131072 }),
+        allocatedCpuCores: int("Default CPU allocation in whole cores (1-128)", { minimum: 1, maximum: 128 }),
         nestId: str(),
       },
-      ["name", "author", "image", "startup"],
+      ["name", "author", "version", "image", "startup", "stopCommand", "supportedPorts", "allocatedMemoryMb", "allocatedCpuCores"],
     ),
     method: "POST",
     path: () => "/api/templates",
@@ -1033,14 +1086,6 @@ const adminTools: McpToolDef[] = [
     queryKeys: ["search", "page", "limit"],
   }),
   def({
-    name: "get_user",
-    description: "One user with roles, sessions, and login metadata (GET /api/admin/users/:id).",
-    inputSchema: schema({ userId: str() }, ["userId"]),
-    method: "GET",
-    path: (a) => `/api/admin/users/${a.userId}`,
-    pathKeys: ["userId"],
-  }),
-  def({
     name: "create_user",
     description: "Create a user with email, username, and password (POST /api/admin/users).",
     inputSchema: schema(
@@ -1058,8 +1103,14 @@ const adminTools: McpToolDef[] = [
   }),
   def({
     name: "update_user",
-    description: "Update email, username, or role assignments (PUT /api/admin/users/:id).",
-    inputSchema: schema({ userId: str(), email: str(), username: str(), roleIds: arr(str()) }),
+    description: "Update email, username, role assignments, or password (PUT /api/admin/users/:id).",
+    inputSchema: schema({
+      userId: str(),
+      email: str(),
+      username: str(),
+      password: str("New password (minimum 8 characters)"),
+      roleIds: arr(str()),
+    }),
     method: "PUT",
     path: (a) => `/api/admin/users/${a.userId}`,
     pathKeys: ["userId"],
@@ -1078,7 +1129,7 @@ const adminTools: McpToolDef[] = [
   def({
     name: "ban_user",
     description: "Ban a user with an optional reason and expiry (POST /api/admin/users/:id/ban).",
-    inputSchema: schema({ userId: str(), reason: str(), expiresAt: str("ISO timestamp when the ban expires") }),
+    inputSchema: schema({ userId: str(), reason: str(), expiresInSeconds: int("Ban duration in seconds; omit for a permanent ban") }),
     method: "POST",
     path: (a) => `/api/admin/users/${a.userId}/ban`,
     pathKeys: ["userId"],
@@ -1229,11 +1280,10 @@ const adminTools: McpToolDef[] = [
   }),
   def({
     name: "list_api_keys",
-    description: "List API keys (admin sees all; others see their own) (GET /api/admin/api-keys).",
-    inputSchema: schema({ page: int(), limit: int() }),
+    description: "List API keys (admin sees all; others see their own) (GET /api/admin/api-keys). Unpaginated.",
+    inputSchema: schema({}),
     method: "GET",
     path: () => "/api/admin/api-keys",
-    queryKeys: ["page", "limit"],
   }),
   def({
     name: "create_api_key",
@@ -1242,7 +1292,9 @@ const adminTools: McpToolDef[] = [
       name: str(),
       allPermissions: bool("Inherit the creator's full permission set"),
       permissions: arr(str(), "Scoped permissions when allPermissions is false"),
-      expiresIn: int("Lifetime in seconds"),
+      expiresIn: int("Lifetime in seconds (3600-31536000)", { minimum: 3600, maximum: 31536000 }),
+      rateLimitMax: int("Max requests per time window (default 100)", { minimum: 1, maximum: 10000 }),
+      rateLimitTimeWindow: int("Rate-limit window in ms (default 60000)", { minimum: 1000, maximum: 3600000 }),
     }),
     method: "POST",
     path: () => "/api/admin/api-keys",
@@ -1568,24 +1620,29 @@ const extendedTools: McpToolDef[] = [
       game: str(),
       gameVersion: str(),
       loader: str("e.g. fabric, forge, paper"),
-    }),
+      target: str("Filter by target, e.g. mods, datapacks, modpack"),
+      page: int(),
+    }, ["serverId", "provider"]),
     method: "GET",
     path: (a) => `/api/servers/${a.serverId}/mod-manager/search`,
     pathKeys: ["serverId"],
-    queryKeys: ["provider", "query", "game", "gameVersion", "loader"],
+    queryKeys: ["provider", "query", "game", "gameVersion", "loader", "target", "page"],
   }),
   def({
     name: "install_mod",
-    description: "Install a mod version onto a server (POST /api/servers/:id/mod-manager/install).",
-    inputSchema: schema({
-      serverId: serverId(),
-      provider: str(),
-      projectId: str(),
-      versionId: str(),
-      game: str(),
-      projectName: str(),
-      target: str("Mods target, e.g. mods, datapacks, modpack (defaults per template)"),
-    }),
+    description: "Install a mod version onto a server (POST /api/servers/:id/mod-manager/install). target must be a target enabled for this template, e.g. mods, datapacks, modpack — the API requires it.",
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        provider: str(),
+        projectId: str(),
+        versionId: str(),
+        game: str(),
+        projectName: str(),
+        target: str("Mods target enabled for this template, e.g. mods, datapacks, modpack"),
+      },
+      ["serverId", "provider", "projectId", "versionId", "target"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/mod-manager/install`,
     pathKeys: ["serverId"],
@@ -1602,7 +1659,10 @@ const extendedTools: McpToolDef[] = [
   def({
     name: "uninstall_mod",
     description: "Remove an installed mod file (POST /api/servers/:id/mod-manager/uninstall).",
-    inputSchema: schema({ serverId: serverId(), filename: str(), target: str() }),
+    inputSchema: schema(
+      { serverId: serverId(), filename: str(), target: str("Mods target, e.g. mods, datapacks, modpack (defaults to mods)") },
+      ["serverId", "filename"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/mod-manager/uninstall`,
     pathKeys: ["serverId"],
@@ -1610,41 +1670,45 @@ const extendedTools: McpToolDef[] = [
   }),
   def({
     name: "check_mod_updates",
-    description: "Check installed mods for newer versions (POST /api/servers/:id/mod-manager/check-updates).",
-    inputSchema: schema({ serverId: serverId(), filenames: arr(str()) }, ["serverId", "filenames"]),
+    description: "Check all installed mods for newer versions (POST /api/servers/:id/mod-manager/check-updates). The server checks every installed mod; no body is read.",
+    inputSchema: schema({ serverId: serverId() }, ["serverId"]),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/mod-manager/check-updates`,
     pathKeys: ["serverId"],
-    body: "rest",
+    body: [],
   }),
   def({
     name: "search_plugins",
     description: "Search providers for server plugins (GET /api/servers/:id/plugin-manager/search).",
-    inputSchema: schema({
-      serverId: serverId(),
-      provider: str(),
-      query: str(),
-      game: str(),
-      gameVersion: str(),
-      loader: str(),
-    }),
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        provider: str(),
+        query: str(),
+        gameVersion: str(),
+        sort: str(),
+        page: int(),
+      },
+      ["serverId", "provider"],
+    ),
     method: "GET",
     path: (a) => `/api/servers/${a.serverId}/plugin-manager/search`,
     pathKeys: ["serverId"],
-    queryKeys: ["provider", "query", "game", "gameVersion", "loader"],
+    queryKeys: ["provider", "query", "gameVersion", "sort", "page"],
   }),
   def({
     name: "install_plugin",
     description: "Install a plugin version onto a server (POST /api/servers/:id/plugin-manager/install).",
-    inputSchema: schema({
-      serverId: serverId(),
-      provider: str(),
-      projectId: str(),
-      versionId: str(),
-      game: str(),
-      projectName: str(),
-      target: str(),
-    }),
+    inputSchema: schema(
+      {
+        serverId: serverId(),
+        provider: str("modrinth or spigot"),
+        projectId: str(),
+        versionId: str(),
+        projectName: str(),
+      },
+      ["serverId", "provider", "projectId", "versionId"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/plugin-manager/install`,
     pathKeys: ["serverId"],
@@ -1661,7 +1725,10 @@ const extendedTools: McpToolDef[] = [
   def({
     name: "uninstall_plugin",
     description: "Remove an installed plugin file (POST /api/servers/:id/plugin-manager/uninstall).",
-    inputSchema: schema({ serverId: serverId(), filename: str() }, ["serverId", "filename"]),
+    inputSchema: schema(
+      { serverId: serverId(), filename: str(), target: str("Plugin target, e.g. plugins (defaults to plugins)") },
+      ["serverId", "filename"],
+    ),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/plugin-manager/uninstall`,
     pathKeys: ["serverId"],
@@ -1770,12 +1837,11 @@ const extendedTools: McpToolDef[] = [
   }),
   def({
     name: "ping_db_host",
-    description: "Test connectivity to a database host (POST /api/admin/database-hosts/:id/ping).",
+    description: "Test connectivity to a database host (GET /api/admin/database-hosts/:id/ping).",
     inputSchema: schema({ hostId: str() }, ["hostId"]),
-    method: "POST",
+    method: "GET",
     path: (a) => `/api/admin/database-hosts/${a.hostId}/ping`,
     pathKeys: ["hostId"],
-    body: [],
   }),
   def({
     name: "list_panel_plugins",
@@ -1795,11 +1861,14 @@ const extendedTools: McpToolDef[] = [
   def({
     name: "set_panel_plugin_enabled",
     description: "Enable or disable a plugin. Enabling may require safety disclaimer acceptance (POST /api/plugins/:name/enable).",
-    inputSchema: schema({
-      name: str(),
-      enabled: bool(),
-      disclaimerVersion: str("Safety disclaimer version being accepted, when prompted"),
-    }),
+    inputSchema: schema(
+      {
+        name: str(),
+        enabled: bool(),
+        disclaimerVersion: str("Safety disclaimer version being accepted, when prompted"),
+      },
+      ["name", "enabled"],
+    ),
     method: "POST",
     path: (a) => `/api/plugins/${a.name}/enable`,
     pathKeys: ["name"],
@@ -1970,14 +2039,17 @@ export function planUpstreamRequest(
   } else if (tool.body === "rest") {
     const skip = new Set([...(tool.pathKeys ?? []), ...(tool.queryKeys ?? []), "confirm"]);
     // Object.fromEntries keeps hostile keys as own properties instead of
-    // letting them reach a prototype setter.
+    // letting them reach a prototype setter. Explicit nulls are preserved so
+    // nullable fields (e.g. startupCommand reset) keep reaching the API.
     body = Object.fromEntries(
       Object.entries(args).filter(([key, value]) => !skip.has(key) && value !== undefined),
     );
   } else {
     const picked: Record<string, unknown> = {};
     for (const key of tool.body) {
-      if (args[key] !== undefined) picked[key] = args[key];
+      // Drop explicit nulls: array-built bodies feed non-nullable zod fields,
+      // where a null 400s instead of meaning "omit".
+      if (args[key] !== undefined && args[key] !== null) picked[key] = args[key];
     }
     body = picked;
   }

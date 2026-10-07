@@ -11,14 +11,10 @@ export function registerNodeTools(server: McpServer, client: CatalystClient): vo
   server.registerTool(
     "list_nodes",
     {
-      description: "List compute nodes with online status (GET /api/nodes).",
-      inputSchema: z.object({
-        search: z.string().optional(),
-        page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(100).optional(),
-      }),
+      description: "List compute nodes with online status (GET /api/nodes). Returns all nodes visible to the key; the endpoint has no pagination or search.",
+      inputSchema: z.object({}),
     },
-    async (args) => text(await client.get("/nodes", args)),
+    async () => text(await client.get("/nodes")),
   );
 
   server.registerTool(
@@ -180,12 +176,12 @@ export function registerTemplateTools(server: McpServer, client: CatalystClient)
   server.registerTool(
     "list_templates",
     {
-      description: "List server templates/eggs (GET /api/templates).",
+      description: "List server templates/eggs (GET /api/templates). Supports offset pagination and nest filtering.",
       inputSchema: z.object({
-        search: z.string().optional(),
-        nestId: z.string().optional(),
-        page: z.number().int().min(1).optional(),
-        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().min(0).optional().describe("Templates to skip, for pagination"),
+        limit: z.number().int().min(1).max(100).optional().describe("Page size, 1-100 (omitted returns all)"),
+        nestId: z.string().optional().describe("Filter by nest/category"),
+        full: z.boolean().optional().describe("Include install scripts"),
       }),
     },
     async (args) => text(await client.get("/templates", args)),

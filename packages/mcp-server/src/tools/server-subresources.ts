@@ -52,7 +52,15 @@ export function registerFileTools(server: McpServer, client: CatalystClient): vo
         content: z.string().optional().describe("Initial content for files"),
       }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/files/create`, args)),
+    // Route body is { path, isDirectory, content? } — not name/type.
+    async (args) =>
+      text(
+        await client.post(`/servers/${args.serverId}/files/create`, {
+          path: args.name,
+          isDirectory: args.type === "directory",
+          content: args.content,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -77,7 +85,11 @@ export function registerFileTools(server: McpServer, client: CatalystClient): vo
     "set_file_permissions",
     {
       description: "chmod a file using octal notation like 644 (POST /api/servers/:id/files/permissions).",
-      inputSchema: z.object({ serverId, path: z.string(), mode: z.string().describe("Octal mode, e.g. 644") }),
+      inputSchema: z.object({
+        serverId,
+        path: z.string(),
+        mode: z.string().regex(/^[0-7]{3,4}$/, "Octal mode, e.g. 644"),
+      }),
     },
     async (args) => text(await client.post(`/servers/${args.serverId}/files/permissions`, { path: args.path, mode: args.mode })),
   );
@@ -92,7 +104,14 @@ export function registerFileTools(server: McpServer, client: CatalystClient): vo
         destination: z.string().describe("Archive path, e.g. /backup.zip"),
       }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/files/compress`, args)),
+    // Route body is { paths, archiveName } — not destination.
+    async (args) =>
+      text(
+        await client.post(`/servers/${args.serverId}/files/compress`, {
+          paths: args.paths,
+          archiveName: args.destination,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -102,10 +121,17 @@ export function registerFileTools(server: McpServer, client: CatalystClient): vo
       inputSchema: z.object({
         serverId,
         path: z.string().describe("Archive path"),
-        destination: z.string().optional().describe("Target directory (defaults to archive directory)"),
+        destination: z.string().describe("Target directory to extract into (required)"),
       }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/files/decompress`, args)),
+    // Route body is { archivePath, targetPath } and both are required.
+    async (args) =>
+      text(
+        await client.post(`/servers/${args.serverId}/files/decompress`, {
+          archivePath: args.path,
+          targetPath: args.destination,
+        }),
+      ),
   );
 
   server.registerTool(
@@ -114,7 +140,9 @@ export function registerFileTools(server: McpServer, client: CatalystClient): vo
       description: "Peek inside an archive without extracting it (POST /api/servers/:id/files/archive-contents).",
       inputSchema: z.object({ serverId, path: z.string().describe("Archive path") }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/files/archive-contents`, { path: args.path })),
+    // Route body is { archivePath } — not path.
+    async (args) =>
+      text(await client.post(`/servers/${args.serverId}/files/archive-contents`, { archivePath: args.path })),
   );
 }
 
@@ -132,12 +160,16 @@ export function registerNetworkTools(server: McpServer, client: CatalystClient):
     "add_server_allocation",
     {
       description: "Bind a free node allocation or a host/container port pair to a server (POST /api/servers/:id/allocations).",
-      inputSchema: z.object({
-        serverId,
-        allocationId: z.string().optional(),
-        containerPort: z.number().int().min(1).max(65535).optional(),
-        hostPort: z.number().int().min(1).max(65535).optional(),
-      }),
+      inputSchema: z
+        .object({
+          serverId,
+          allocationId: z.string().optional(),
+          containerPort: z.number().int().min(1).max(65535).optional(),
+          hostPort: z.number().int().min(1).max(65535).optional(),
+        })
+        .refine((v) => v.allocationId || (v.containerPort !== undefined && v.hostPort !== undefined), {
+          message: "Provide allocationId, or both containerPort and hostPort",
+        }),
     },
     async (args) => {
       const { serverId: id, ...body } = args;
@@ -148,10 +180,18 @@ export function registerNetworkTools(server: McpServer, client: CatalystClient):
   server.registerTool(
     "remove_server_allocation",
     {
-      description: "Unbind a network allocation from a server (DELETE /api/servers/:id/allocations/:allocationId).",
-      inputSchema: z.object({ serverId, allocationId: z.string() }),
+      description: "Unbind a network allocation from a server by its container port (DELETE /api/servers/:id/allocations/:containerPort).",
+      inputSchema: z.object({
+        serverId,
+        containerPort: z
+          .number()
+          .int()
+          .min(1)
+          .max(65535)
+          .describe("Container port of the binding to remove (see list_server_allocations)"),
+      }),
     },
-    async (args) => text(await client.delete(`/servers/${args.serverId}/allocations/${args.allocationId}`)),
+    async (args) => text(await client.delete(`/servers/${args.serverId}/allocations/${args.containerPort}`)),
   );
 }
 
@@ -181,7 +221,10 @@ export function registerDatabaseTools(server: McpServer, client: CatalystClient)
       inputSchema: z.object({
         serverId,
         hostId: z.string().describe("Database host ID from list_database_hosts"),
-        database: z.string().optional().describe("Database name (generated when omitted)"),
+        name: z
+          .string()
+          .optional()
+          .describe("Desired database name; normalized to lowercase letters/numbers/underscores (max 32). Generated when omitted"),
       }),
     },
     async (args) => {
@@ -254,14 +297,14 @@ export function registerTaskTools(server: McpServer, client: CatalystClient): vo
   server.registerTool(
     "create_scheduled_task",
     {
-      description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks).",
+      description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks). Tasks always start enabled.",
       inputSchema: z.object({
         serverId,
         name: z.string(),
         action: z.enum(["restart", "stop", "start", "backup", "command"]),
         schedule: z.string().describe("Cron expression, e.g. 0 3 * * *"),
         payload: z.record(z.string(), z.unknown()).optional().describe("Extra data, e.g. {command: 'say hi'}"),
-        enabled: z.boolean().optional(),
+        description: z.string().optional(),
       }),
     },
     async (args) => {
@@ -278,6 +321,8 @@ export function registerTaskTools(server: McpServer, client: CatalystClient): vo
         serverId,
         taskId: z.string(),
         name: z.string().optional(),
+        description: z.string().optional(),
+        action: z.enum(["restart", "stop", "start", "backup", "command"]).optional(),
         schedule: z.string().optional(),
         enabled: z.boolean().optional(),
         payload: z.record(z.string(), z.unknown()).optional(),

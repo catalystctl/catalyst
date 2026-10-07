@@ -11,12 +11,15 @@ export interface RequestOptions {
 export class CatalystApiError extends Error {
   status: number;
   code?: string;
+  /** Field-level validation details from the API, when provided. */
+  details?: unknown;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, details?: unknown) {
     super(message);
     this.name = "CatalystApiError";
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -88,7 +91,14 @@ export class CatalystClient {
           (record?.message as string | undefined) ??
           `Request failed with HTTP ${res.status}`;
         const code = record?.code as string | undefined;
-        throw new CatalystApiError(res.status, message, code);
+        const details = record?.details;
+        // Validation failures arrive as { error, details: [...] }; without the
+        // details the model only sees "Invalid request body" and cannot retry.
+        const fullMessage =
+          details === undefined || details === null
+            ? message
+            : `${message}: ${typeof details === "string" ? details : JSON.stringify(details)}`;
+        throw new CatalystApiError(res.status, fullMessage, code, details);
       }
       return unwrap(payload) as T;
     } catch (error) {
