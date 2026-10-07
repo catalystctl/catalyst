@@ -265,6 +265,25 @@ describe('PUT /users role-assignment escalation guard is hasGrant-based (unified
     });
   });
 
+  it('assigns multiple roles without replacing the existing role', async () => {
+    const app = buildApp();
+    asUser(writeAdminId, ['admin.write']);
+    const res = await app.inject({
+      method: 'PUT',
+      url: `/api/admin/users/${targetUserId}`,
+      payload: { roleIds: [plainRole.id, concreteRole.id] },
+    });
+    expect(res.statusCode).toBe(200);
+    const updated = res.json() as { roles: Array<{ id: string }> };
+    expect(updated.roles.map((role) => role.id)).toEqual(expect.arrayContaining([plainRole.id, concreteRole.id]));
+    expect(updated.roles).toHaveLength(2);
+    await app.close();
+    await prisma.user.update({
+      where: { id: targetUserId },
+      data: { roles: { set: [{ id: plainRole.id }] } },
+    });
+  });
+
   it('denies an admin.write-only actor assigning a wildcard role', async () => {
     const app = buildApp();
     asUser(writeAdminId, ['admin.write']);
