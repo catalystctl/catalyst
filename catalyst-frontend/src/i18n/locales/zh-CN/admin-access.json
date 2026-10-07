@@ -500,6 +500,7 @@
     "rateLimitsDescription": "调整请求次数和时间窗口，在防止滥用的同时保持正常使用。",
     "requireEmailVerification": "登录前要求验证邮箱",
     "requireEmailVerificationAria": "要求邮箱验证",
+    "emailVerificationRequiresSmtp": "请先配置 SMTP 以启用邮箱验证",
     "searchLockouts": "搜索锁定记录…",
     "serverMetrics": "服务器指标 / 秒",
     "serverMetricsTooltip": "每台服务器每秒允许的最大服务器级指标消息数。",

@@ -46,6 +46,7 @@ import {
   getModManagerSettings,
   getSecuritySettings,
   getSmtpSettings,
+  isMailConfigured,
   upsertModManagerSettings,
   upsertSecuritySettings,
   upsertSmtpSettings,
@@ -2999,6 +3000,16 @@ export async function adminRoutes(app: FastifyInstance) {
       const windowFields = [authRateLimitWindowMs, fileRateLimitWindowMs, consoleRateLimitWindowMs, fileTunnelRateLimitWindowMs];
       if (windowFields.some((value) => !Number.isFinite(value) || !isValidTimeWindowMs(Number(value)))) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Time windows must be valid (1000, 60000, 3600000, 86400000, or 2592000000 ms)');
+      }
+
+      // Email verification requires SMTP to be configured
+      if (Boolean(requireEmailVerification) && !(await isMailConfigured())) {
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Email verification cannot be enabled when SMTP is not configured',
+        );
       }
 
       await upsertSecuritySettings({

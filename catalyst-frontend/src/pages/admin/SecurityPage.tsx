@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
@@ -28,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useAuthLockouts, useMcpSettings, useSecuritySettings } from '../../hooks/useAdmin';
+import { useAuthLockouts, useMcpSettings, useSecuritySettings, useSmtpSettings } from '../../hooks/useAdmin';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import type { AuthLockout } from '../../types/admin';
@@ -368,6 +368,8 @@ const MAX_CONSOLE_OUTPUT_BYTES_PER_SECOND = 10 * 1024 * 1024;
 function SecurityPage() {
  const { t } = useTranslation('admin-access');
  const { data: settings } = useSecuritySettings();
+ const { data: smtpSettings } = useSmtpSettings();
+ const smtpConfigured = Boolean(smtpSettings?.host && smtpSettings?.port);
  const [search, setSearch] = useState('');
  const [lockoutPage, setLockoutPage] = useState(1);
  const lockoutPageSize = 20;
@@ -441,6 +443,14 @@ function SecurityPage() {
  setRequireEmailVerification(settings.requireEmailVerification ?? true);
  }
  }
+
+
+  // Force email verification off when SMTP is not configured
+  useEffect(() => {
+    if (!smtpConfigured && requireEmailVerification) {
+      setRequireEmailVerification(false);
+    }
+  }, [smtpConfigured]); // eslint-disable-line react-hooks/exhaustive-deps
 
  // ── Validate time window values ──
  const validTimeWindows = useMemo(() => new Set(TIME_WINDOWS.map((value) => Number(value))), []);
@@ -632,10 +642,16 @@ function SecurityPage() {
  footer={saveButton}
  >
       <div className="flex items-center justify-between gap-4">
-        <p className="text-sm text-foreground">{t('security.requireEmailVerification')}</p>
+        <div>
+          <p className="text-sm text-foreground">{t('security.requireEmailVerification')}</p>
+          {!smtpConfigured && (
+            <p className="text-xs text-muted-foreground mt-0.5">{t('security.emailVerificationRequiresSmtp')}</p>
+          )}
+        </div>
         <Switch
           checked={requireEmailVerification}
           onCheckedChange={setRequireEmailVerification}
+          disabled={!smtpConfigured}
           aria-label={t('security.requireEmailVerificationAria')}
           className="h-5"
         />

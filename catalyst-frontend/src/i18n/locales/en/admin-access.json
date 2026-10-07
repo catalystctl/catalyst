@@ -516,6 +516,7 @@
     "rateLimitsDescription": "Adjust request counts and time windows to prevent abuse while allowing normal usage.",
     "requireEmailVerification": "Require verified email before sign-in",
     "requireEmailVerificationAria": "Require email verification",
+    "emailVerificationRequiresSmtp": "Configure SMTP first to enable email verification",
     "searchLockouts": "Search lockouts…",
     "serverMetrics": "Server metrics / sec",
     "serverMetricsTooltip": "Maximum server-level metric messages per second per server.",
