@@ -86,10 +86,10 @@ function stateTextClass(status: string) {
  *   widest : identity · owner · node · template · state · actions
  */
 const GRID =
- 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
- '@md:grid-cols-[minmax(0,1fr)_auto] ' +
- '@4xl:grid-cols-[minmax(0,1fr)_8rem_6.5rem_8.5rem] ' +
- '@6xl:grid-cols-[minmax(0,1fr)_8rem_8rem_7rem_6.5rem_8.5rem]';
+  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
+  '@md:grid-cols-[minmax(0,1fr)_auto] ' +
+  '@4xl:grid-cols-[minmax(0,1fr)_minmax(0,8rem)_minmax(0,6.5rem)_minmax(0,8.5rem)] ' +
+  '@6xl:grid-cols-[minmax(0,1fr)_minmax(0,8rem)_minmax(0,8rem)_minmax(0,7rem)_minmax(0,6.5rem)_minmax(0,8.5rem)]';
 
 // ── Server Action Label ──
 // Module-level helper, so the namespace is spelled out: this file is inside
@@ -624,7 +624,7 @@ function AdminServersPage() {
                   </div>
 
                   {/* owner */}
-                  <span className="hidden min-w-0 justify-self-end text-right @6xl:block">
+                  <span className="hidden min-w-0 w-full justify-self-end overflow-hidden text-right @6xl:block">
                     <span
                       className="block truncate text-micro text-muted-foreground"
                       title={server.owner ? server.owner.username || server.owner.email : undefined}
@@ -634,17 +634,17 @@ function AdminServersPage() {
                   </span>
 
                   {/* node */}
-                  <span className="hidden min-w-0 justify-self-end text-right @4xl:block">
-                    <span className="block truncate text-micro text-muted-foreground">{server.node.name}</span>
+                  <span className="hidden min-w-0 w-full justify-self-end overflow-hidden text-right @4xl:block">
+                    <span className="block truncate text-micro text-muted-foreground" title={server.node.name}>{server.node.name}</span>
                   </span>
 
                   {/* template */}
-                  <span className="hidden min-w-0 justify-self-end text-right @6xl:block">
-                    <span className="block truncate text-micro text-muted-foreground">{server.template.name}</span>
+                  <span className="hidden min-w-0 w-full justify-self-end overflow-hidden text-right @6xl:block">
+                    <span className="block truncate text-micro text-muted-foreground" title={server.template.name}>{server.template.name}</span>
                   </span>
 
                   {/* state */}
-                  <span className="hidden min-w-0 justify-end overflow-hidden @4xl:flex">
+                  <span className="hidden min-w-0 w-full justify-end overflow-hidden @4xl:flex">
                     <span className={cn('truncate text-micro uppercase', stateTextClass(server.status))}>
                       {serverStatusLabel(t, server.status)}
                     </span>
