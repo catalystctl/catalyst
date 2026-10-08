@@ -8,8 +8,12 @@ const BATCH_SIZE = 1000;
 
 export const startAuditRetention = (prisma: PrismaClient, logger: pino.Logger) => {
   const log = logger.child({ component: 'AuditRetention' });
+  let running = false;
 
   const prune = async () => {
+    if (running) return;
+    running = true;
+    try {
     const settings = await getSecuritySettings();
     const rawDays = settings.auditRetentionDays as number | null | undefined;
     const days = (rawDays === null || rawDays === undefined || !Number.isFinite(rawDays) || rawDays <= 0) ? 30 : rawDays;
@@ -22,6 +26,7 @@ export const startAuditRetention = (prisma: PrismaClient, logger: pino.Logger) =
     while (true) {
       const batch = await prisma.auditLog.findMany({
         where: { timestamp: { lt: cutoff } },
+        orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
         take: BATCH_SIZE,
         select: { id: true },
       });
@@ -37,6 +42,9 @@ export const startAuditRetention = (prisma: PrismaClient, logger: pino.Logger) =
 
     if (totalDeleted > 0) {
       log.info({ count: totalDeleted }, 'Pruned audit logs');
+    }
+    } finally {
+      running = false;
     }
   };
 

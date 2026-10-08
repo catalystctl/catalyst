@@ -258,14 +258,15 @@ function NodeAllocationsPage() {
  }, [allocations, search]);
 
  // Bulk selection only covers available (unassigned) allocations.
- const selectableFilteredIds = useMemo(
- () => filteredAllocations.filter((a) => !a.serverId).map((a) => a.id),
- [filteredAllocations],
- );
- const allFilteredSelected =
- selectableFilteredIds.length > 0 &&
- selectableFilteredIds.every((id) => selectedIds.includes(id));
- const someFilteredSelected = selectableFilteredIds.some((id) => selectedIds.includes(id));
+  const selectableFilteredIds = useMemo(
+  () => filteredAllocations.filter((a) => !a.serverId).map((a) => a.id),
+  [filteredAllocations],
+  );
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allFilteredSelected =
+  selectableFilteredIds.length > 0 &&
+  selectableFilteredIds.every((id) => selectedIdSet.has(id));
+  const someFilteredSelected = selectableFilteredIds.some((id) => selectedIdSet.has(id));
 
  // Drop ids that no longer exist or became assigned.
  useEffect(() => {
@@ -279,16 +280,18 @@ function NodeAllocationsPage() {
  });
  }, [allocations]);
 
- const toggleAllocationSelected = (allocationId: string) => {
- setSelectedIds((prev) =>
- prev.includes(allocationId) ? prev.filter((id) => id !== allocationId) : [...prev, allocationId],
- );
- };
+  const toggleAllocationSelected = (allocationId: string) => {
+  setSelectedIds((prev) =>
+  prev.includes(allocationId) ? prev.filter((id) => id !== allocationId) : [...prev, allocationId],
+  );
+  };
 
  const toggleSelectAllFiltered = () => {
  setSelectedIds((prev) => {
- if (selectableFilteredIds.every((id) => prev.includes(id))) {
- return prev.filter((id) => !selectableFilteredIds.includes(id));
+  const previous = new Set(prev);
+  if (selectableFilteredIds.every((id) => previous.has(id))) {
+  const remove = new Set(selectableFilteredIds);
+  return prev.filter((id) => !remove.has(id));
  }
  return Array.from(new Set([...prev, ...selectableFilteredIds]));
  });
@@ -582,7 +585,7 @@ function NodeAllocationsPage() {
                 </div>
               ) : (
                 filteredAllocations.map((allocation) => {
-                  const isSelected = selectedIds.includes(allocation.id);
+                  const isSelected = selectedIdSet.has(allocation.id);
                   const isAssigned = Boolean(allocation.serverId);
                   return (
                     <div

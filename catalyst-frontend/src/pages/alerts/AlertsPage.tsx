@@ -13,7 +13,6 @@ import {
  Trash2,
  CheckCircle,
  X,
- ChevronRight,
 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -32,12 +31,12 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogToolbar,
   DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { FormSection } from '@/components/ui/form-section';
 
 type LedTone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
 
@@ -221,7 +220,6 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  const [emailTargets, setEmailTargets] = useState<string[]>(['']);
  const [notifyOwner, setNotifyOwner] = useState(false);
  const [cooldownMinutes, setCooldownMinutes] = useState('5');
- const [ruleStep, setRuleStep] = useState<'details' | 'conditions' | 'notifications'>('details');
 
  const resetRuleForm = () => {
  setRuleName('');
@@ -237,7 +235,6 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  setEmailTargets(['']);
  setNotifyOwner(false);
  setCooldownMinutes('5');
- setRuleStep('details');
  };
 
  // Queries
@@ -289,16 +286,11 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  }, [nodes, ruleTarget, serversData, serverId, showAdminTargets]);
 
  const selectedTargetLabel = targetOptions.find((o) => o.id === ruleTargetId)?.label;
- const ruleStepOrder = ['details', 'conditions', 'notifications'] as const;
- const ruleStepIndex = ruleStepOrder.indexOf(ruleStep);
  const detailsValid = Boolean(ruleName.trim() && (ruleTarget === 'global' || ruleTargetId));
  const conditionsValid =
  ruleType === 'resource_threshold'
  ? Boolean(cpuThreshold || memoryThreshold || diskThreshold)
  : ruleType === 'node_offline' ? Boolean(offlineThreshold) : true;
- const ruleStepValidMap = { details: detailsValid, conditions: conditionsValid, notifications: true } as const;
- const canNavigateRuleStep = (targetIndex: number) =>
- targetIndex <= ruleStepIndex || ruleStepOrder.slice(0, targetIndex).every((key) => ruleStepValidMap[key]);
 
  const updateTargetValue = (values: string[], index: number, value: string) =>
  values.map((entry, i) => (i === index ? value : entry));
@@ -398,7 +390,6 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  const openEditRule = (rule: AlertRule) => {
  setEditingRule(rule);
  setShowRuleModal(true);
- setRuleStep('details');
  setRuleName(rule.name);
  setRuleDescription(rule.description ?? '');
  setRuleType(rule.type);
@@ -591,47 +582,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  }
  }}
 >
- <DialogContent size="2xl">
- <DialogHeader icon={<Bell className="h-4 w-4" />}>
+ <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
+ <DialogHeader>
  <DialogTitle>{editingRule ? t('ruleModal.editTitle') : t('ruleModal.createTitle')}</DialogTitle>
  <DialogDescription>{t('ruleModal.description')}</DialogDescription>
  </DialogHeader>
 
- <DialogToolbar>
- <div className="flex gap-4">
- {ruleStepOrder.map((key, index) => {
- const isActive = ruleStep === key;
- const canNav = canNavigateRuleStep(index);
- const labels = {
-   details: t('ruleModal.stepDetails'),
-   conditions: t('ruleModal.stepConditions'),
-   notifications: t('ruleModal.stepNotifications'),
- };
- return (
- <button
- key={key}
- type="button"
- disabled={!canNav}
- onClick={() => canNav && setRuleStep(key)}
- className={`relative flex items-center gap-1.5 px-1 py-2 text-mini font-medium transition-colors ${
- isActive
- ? 'text-foreground'
- : 'text-muted-foreground hover:text-foreground disabled:opacity-40'
- }`}
- >
- {labels[key]}
- {index < ruleStepOrder.length - 1 && (
- <ChevronRight className="h-3 w-3 opacity-40" />
- )}
- {isActive && <span className="absolute inset-x-0 -bottom-px h-[2px] bg-primary" aria-hidden />}
- </button>
- );
- })}
- </div>
- </DialogToolbar>
+ <DialogBody className="min-h-0 p-0">
+ <div className="grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_20rem]">
+ {/* Editor */}
+ <div className="min-w-0 space-y-3 overflow-y-auto p-4">
 
- <DialogBody>
- {ruleStep === 'details' && (
+ <FormSection index={1} title={t('ruleModal.stepDetails')}>
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
  <label className="block space-y-1">
@@ -681,9 +643,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </label>
  </div>
  </div>
- )}
+ </FormSection>
 
- {ruleStep === 'conditions' && (
+ <FormSection index={2} title={t('ruleModal.stepConditions')}>
  <div className="space-y-4">
  {ruleType === 'resource_threshold' && (
  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -713,9 +675,9 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </div>
  )}
  </div>
- )}
+ </FormSection>
 
- {ruleStep === 'notifications' && (
+ <FormSection index={3} title={t('ruleModal.stepNotifications')}>
  <div className="space-y-4">
  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
  <div className="space-y-2">
@@ -762,24 +724,80 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  </label>
  </div>
  </div>
+ </FormSection>
+
+ {(!detailsValid || !conditionsValid) && (
+ <div role="status" className="rounded-sm border border-warning/30 bg-warning/5 p-2.5 text-micro text-warning">
+ <ul className="list-inside list-disc">
+ {!ruleName.trim() && <li key="name">{t('ruleModal.ruleName')}</li>}
+ {ruleTarget !== 'global' && showAdminTargets && !ruleTargetId && <li key="target">{t('ruleModal.selectTarget')}</li>}
+ {!conditionsValid && <li key="conditions">{t('ruleModal.stepConditions')}</li>}
+ </ul>
+ </div>
  )}
+ </div>
+
+ {/* Summary aside */}
+ <aside className="min-w-0 space-y-3 overflow-y-auto border-t border-border/70 bg-surface-1/40 p-4 lg:border-l lg:border-t-0">
+ <BracketLabel tone="muted">{t('ruleModal.editTitle')}</BracketLabel>
+ <div className="overflow-hidden rounded-sm border border-border bg-card">
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <div className="flex items-center gap-2">
+ <Bell className="h-3.5 w-3.5 shrink-0 text-primary" />
+ <span className="truncate text-data font-semibold text-foreground">
+ {ruleName.trim() || '—'}
+ </span>
+ </div>
+ <p className="mt-1 line-clamp-2 text-micro text-muted-foreground">
+ {ruleDescription.trim() || t('ruleModal.descriptionPlaceholder')}
+ </p>
+ </div>
+
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <SummaryRow label={t('ruleModal.ruleType')} value={ruleTypeOptions.find((o) => o.value === ruleType)?.label} />
+ <SummaryRow
+ label={t('ruleModal.target')}
+ value={ruleTarget === 'global' ? t('target.global') : selectedTargetLabel || t('ruleModal.selectTarget')}
+ />
+ </div>
+
+ <div className="border-b border-border/70 px-3 py-2.5">
+ {ruleType === 'resource_threshold' && (
+ <>
+ <SummaryRow label={t('ruleModal.cpuThreshold')} value={cpuThreshold ? `${cpuThreshold}%` : undefined} />
+ <SummaryRow label={t('ruleModal.memoryThreshold')} value={memoryThreshold ? `${memoryThreshold}%` : undefined} />
+ <SummaryRow label={t('ruleModal.diskThreshold')} value={diskThreshold ? `${diskThreshold}%` : undefined} />
+ </>
+ )}
+ {ruleType === 'node_offline' && (
+ <SummaryRow label={t('ruleModal.offlineThreshold')} value={offlineThreshold} />
+ )}
+ {ruleType === 'server_crashed' && (
+ <SummaryRow label={t('ruleModal.ruleType')} value={t('ruleModal.typeServerCrashed')} />
+ )}
+ </div>
+
+ <div className="px-3 py-2.5">
+ <SummaryRow
+ label={t('ruleModal.webhookUrls')}
+ value={webhookTargets.filter((w) => w.trim()).length ? String(webhookTargets.filter((w) => w.trim()).length) : undefined}
+ />
+ <SummaryRow
+ label={t('ruleModal.emailRecipients')}
+ value={emailTargets.filter((e) => e.trim()).length ? String(emailTargets.filter((e) => e.trim()).length) : undefined}
+ />
+ <SummaryRow label={t('ruleModal.notifyOwner')} value={notifyOwner ? '✓' : undefined} />
+ <SummaryRow label={t('ruleModal.cooldown')} value={`${cooldownMinutes} min`} />
+ </div>
+ </div>
+ </aside>
+ </div>
  </DialogBody>
 
  <DialogFooter className="sm:justify-between">
  <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { setShowRuleModal(false); setEditingRule(null); resetRuleForm(); }}>
  {t('common:actions.cancel')}
  </Button>
- <div className="flex items-center gap-2">
- {ruleStepIndex > 0 && (
- <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex - 1])}>
- {t('common:actions.back')}
- </Button>
- )}
- {ruleStepIndex < ruleStepOrder.length - 1 ? (
- <Button size="sm" className="h-8 px-3 text-mini" disabled={!ruleStepValidMap[ruleStep]} onClick={() => setRuleStep(ruleStepOrder[ruleStepIndex + 1])}>
- {t('common:actions.next')}
- </Button>
- ) : (
  <Button
  size="sm"
  className="h-8 px-3 text-mini"
@@ -800,8 +818,6 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
         ? updateRuleMutation.isPending ? t('ruleModal.saving') : t('ruleModal.save')
         : createRuleMutation.isPending ? t('ruleModal.creating') : t('ruleModal.create')}
  </Button>
- )}
- </div>
  </DialogFooter>
  </DialogContent>
  </Dialog>
@@ -822,6 +838,18 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
  }}
  onCancel={() => setDeletingRule(null)}
  />
+ </div>
+ );
+}
+
+/** Label/value line for the rule modal's summary aside; value falls back to a dash. */
+function SummaryRow({ label, value }: { label: string; value?: string | number | null }) {
+ return (
+ <div className="flex items-baseline justify-between gap-2 py-0.5">
+ <span className="type-overline shrink-0 text-muted-foreground">{label}</span>
+ <span className="min-w-0 truncate text-right font-mono text-micro tabular-nums text-foreground">
+ {value ?? '—'}
+ </span>
  </div>
  );
 }

@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufReader};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use tokio::task::spawn_blocking;
 use tracing::{error, info, warn};
 
@@ -51,11 +53,15 @@ async fn secure_buffer_file(path: &Path) {
 
 pub struct StorageManager {
     data_dir: PathBuf,
+    buffer_lock: Arc<Mutex<()>>,
 }
 
 impl StorageManager {
     pub fn new(data_dir: PathBuf) -> Self {
-        Self { data_dir }
+        Self {
+            data_dir,
+            buffer_lock: Arc::new(Mutex::new(())),
+        }
     }
 
     pub async fn ensure_mounted(
@@ -994,6 +1000,7 @@ impl StorageManager {
     }
 
     pub async fn append_buffered_metric(&self, line: &str) -> AgentResult<()> {
+        let _lock = self.buffer_lock.clone().lock_owned().await;
         secure_data_dir(&self.data_dir).await?;
         let path = self.metrics_buffer_path();
         // Rotate if buffer exceeds cap; drop oldest backup
@@ -1036,7 +1043,28 @@ impl StorageManager {
         Ok(out)
     }
 
+    /// Open the metrics buffer for incremental replay. Callers should hold
+    /// `buffer_lock` until replay and acknowledgement are complete.
+    pub async fn open_buffered_metrics(&self) -> AgentResult<Option<BufReader<fs::File>>> {
+        let path = self.metrics_buffer_path();
+        match fs::File::open(path).await {
+            Ok(file) => Ok(Some(BufReader::new(file))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    /// Serialize replay/acknowledgement with appends and rotations.
+    pub async fn lock_buffer(&self) -> OwnedMutexGuard<()> {
+        self.buffer_lock.clone().lock_owned().await
+    }
+
     pub async fn clear_buffered_metrics(&self) -> AgentResult<()> {
+        let _lock = self.buffer_lock.clone().lock_owned().await;
+        self.clear_buffered_metrics_locked().await
+    }
+
+    pub async fn clear_buffered_metrics_locked(&self) -> AgentResult<()> {
         let path = self.metrics_buffer_path();
         if path.exists() {
             fs::remove_file(path).await?;
@@ -1054,6 +1082,7 @@ impl StorageManager {
     }
 
     pub async fn append_buffered_event(&self, line: &str) -> AgentResult<()> {
+        let _lock = self.buffer_lock.clone().lock_owned().await;
         secure_data_dir(&self.data_dir).await?;
         let path = self.events_buffer_path();
         const MAX_EVENT_BUFFER_BYTES: u64 = 4 * 1024 * 1024;
@@ -1100,6 +1129,11 @@ impl StorageManager {
     }
 
     pub async fn clear_buffered_events(&self) -> AgentResult<()> {
+        let _lock = self.buffer_lock.clone().lock_owned().await;
+        self.clear_buffered_events_locked().await
+    }
+
+    pub async fn clear_buffered_events_locked(&self) -> AgentResult<()> {
         let path = self.events_buffer_path();
         if path.exists() {
             fs::remove_file(path).await?;

@@ -46,8 +46,6 @@ vi.mock('@/components/ui/dialog', () => ({
 
 import CreateServerModal from './CreateServerModal';
 
-function next() { fireEvent.click(screen.getByRole('button', { name: 'common:actions.next' })); }
-
 describe('server creation installation recovery', () => {
   beforeEach(() => { create.mockReset().mockResolvedValue({ id: 'created-1' }); install.mockReset().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({}); navigate.mockReset(); setPermissions.current = ['admin.write']; });
   afterEach(cleanup);
@@ -58,7 +56,6 @@ describe('server creation installation recovery', () => {
     fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'my-server' } });
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
-    next(); next(); next();
     fireEvent.click(screen.getByRole('button', { name: 'createServer.submit' }));
     await screen.findByText(/createServer.installFailed/);
     expect(create).toHaveBeenCalledTimes(1);
@@ -78,7 +75,6 @@ describe('server creation installation recovery', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.ownerPlaceholder' }));
-    next(); next(); next();
     fireEvent.click(screen.getByRole('button', { name: 'createServer.submit' }));
     await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'customer-1' })));
   });
@@ -90,8 +86,19 @@ describe('server creation installation recovery', () => {
     fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'my-server' } });
     fireEvent.click(screen.getAllByRole('combobox')[0]);
     fireEvent.click(screen.getAllByRole('combobox')[1]);
-    next(); next();
     await waitFor(() => expect(screen.getByRole('option', { name: '127.0.0.1:25565' })).toBeInTheDocument());
     expect(screen.queryByRole('link', { name: 'createServer.network.newAllocation' })).not.toBeInTheDocument();
+  });
+
+  it('sends the selected node location and refuses to submit without a node', async () => {
+    render(<CreateServerModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.newServer' }));
+    fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'my-server' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
+    const submit = screen.getByRole('button', { name: 'createServer.submit' });
+    expect(submit).toBeDisabled();
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
+    fireEvent.click(submit);
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ locationId: 'location-1' })));
   });
 });

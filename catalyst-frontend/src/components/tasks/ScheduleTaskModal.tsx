@@ -12,6 +12,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { BracketLabel } from '@/components/deck/primitives';
+import { FormSection } from '@/components/ui/form-section';
 import {
   Dialog,
   DialogContent,
@@ -278,15 +280,19 @@ export default function ScheduleTaskModal({
         {isEdit ? t('common:actions.edit') : t('tasks.create.action')}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="lg">
+        <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
           <DialogHeader>
             <DialogTitle>{isEdit ? t('tasks.edit.title') : t('tasks.create.title')}</DialogTitle>
             <DialogDescription>
               {isEdit ? t('tasks.edit.description') : t('tasks.create.description')}
             </DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-3">
-            <div className="space-y-2">
+          <DialogBody className="min-h-0 p-0">
+            <div className="grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_16rem]">
+              {/* Editor */}
+              <div className="min-w-0 space-y-3 overflow-y-auto p-4">
+              <FormSection index={1} title={t('tasks.name')}>
+              <div className="space-y-2">
               <Label htmlFor={`${prefix}-task-name`}>{t('tasks.name')}</Label>
               <Input
                 id={`${prefix}-task-name`}
@@ -306,7 +312,10 @@ export default function ScheduleTaskModal({
               />
             </div>
 
-            <div className="space-y-2">
+              </FormSection>
+
+              <FormSection index={2} title={t('tasks.action')}>
+              <div className="space-y-2">
               <Label htmlFor={`${prefix}-task-action`}>{t('tasks.action')}</Label>
               <select
                 id={`${prefix}-task-action`}
@@ -334,7 +343,10 @@ export default function ScheduleTaskModal({
               </div>
             ) : null}
 
-            <div className="space-y-3 rounded-sm border border-border/50 bg-surface-1/40 p-3">
+              </FormSection>
+
+              <FormSection index={3} title={t('tasks.repeat')}>
+              <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor={`${prefix}-task-repeat`} className="text-mini font-semibold">
                   {t('tasks.repeat')}
@@ -497,22 +509,50 @@ export default function ScheduleTaskModal({
                 <p className="text-micro text-warning">{t('tasks.advancedLocked')}</p>
               ) : null}
 
-              <div className="space-y-1 border-t border-border/50 pt-3">
-                <div className="text-micro text-muted-foreground">{summaryText()}</div>
-                <code
-                  className={cn(
-                    'block break-all font-mono text-mini',
-                    schedule ? 'text-foreground' : 'text-danger',
-                  )}
-                >
-                  {schedule || t('tasks.scheduleRequired')}
-                </code>
-                <span className="text-micro text-muted-foreground">
-                  {timezoneLabel
-                    ? t('tasks.timezone.withLabel', { timezone: timezoneLabel })
-                    : t('tasks.timezone.withoutLabel')}
-                </span>
               </div>
+              </FormSection>
+              </div>
+
+              {/* Summary aside */}
+              <aside className="min-w-0 space-y-3 overflow-y-auto border-t border-border/70 bg-surface-1/40 p-4 lg:border-l lg:border-t-0">
+                <BracketLabel tone="muted">
+                  {isEdit ? t('tasks.edit.title') : t('tasks.create.title')}
+                </BracketLabel>
+                <div className="overflow-hidden rounded-sm border border-border bg-card">
+                  <div className="border-b border-border/70 px-3 py-2.5">
+                    <span className="block truncate text-data font-semibold text-foreground">
+                      {name.trim() || t('tasks.create.namePlaceholder')}
+                    </span>
+                    <p className="mt-1 line-clamp-2 text-micro text-muted-foreground">
+                      {description.trim() || '—'}
+                    </p>
+                  </div>
+
+                  <div className="border-b border-border/70 px-3 py-2.5">
+                    <SummaryRow
+                      label={t('tasks.action')}
+                      value={actionOptions(t).find((option) => option.value === action)?.label}
+                    />
+                    <SummaryRow label={t('tasks.repeat')} value={summaryText()} />
+                  </div>
+
+                  <div className="px-3 py-2.5">
+                    <code
+                      className={cn(
+                        'block break-all font-mono text-micro',
+                        schedule ? 'text-foreground' : 'text-danger',
+                      )}
+                    >
+                      {schedule || t('tasks.scheduleRequired')}
+                    </code>
+                    <span className="mt-1 block text-micro text-muted-foreground">
+                      {timezoneLabel
+                        ? t('tasks.timezone.withLabel', { timezone: timezoneLabel })
+                        : t('tasks.timezone.withoutLabel')}
+                    </span>
+                  </div>
+                </div>
+              </aside>
             </div>
           </DialogBody>
           <DialogFooter>
@@ -536,6 +576,18 @@ export default function ScheduleTaskModal({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+/** Label/value line for the summary aside; value falls back to a dash. */
+function SummaryRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 py-0.5">
+      <span className="type-overline shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-right font-mono text-micro tabular-nums text-foreground">
+        {value ?? '—'}
+      </span>
     </div>
   );
 }

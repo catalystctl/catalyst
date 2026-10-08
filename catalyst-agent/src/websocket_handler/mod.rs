@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 use sysinfo::{Networks, System};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{broadcast, RwLock, Semaphore};
 use tokio_tungstenite::connect_async_with_config;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
@@ -1212,66 +1212,103 @@ impl WebSocketHandler {
         &self,
         write: Arc<tokio::sync::Mutex<WsWrite>>,
     ) -> AgentResult<()> {
-        let buffered = match self.storage_manager.read_buffered_metrics().await {
-            Ok(v) => v,
+        // Hold the storage lock for the whole replay. This prevents an append
+        // from racing the final clear (or a size-triggered rotation) and
+        // losing a metric acknowledged by the panel.
+        let _buffer_lock = self.storage_manager.lock_buffer().await;
+        let Some(mut reader) = (match self.storage_manager.open_buffered_metrics().await {
+            Ok(reader) => reader,
             Err(e) => {
                 warn!("Failed to read buffered metrics: {}", e);
                 return Ok(());
             }
+        }) else {
+            return Ok(());
         };
 
-        if buffered.is_empty() {
-            return Ok(());
-        }
-
-        info!("Flushing {} buffered metrics", buffered.len());
-
-        let batch_size = 500usize;
-        for chunk in buffered.chunks(batch_size) {
-            // If the chunk is a single pre-batched message, send it directly
-            let payload_text = if chunk.len() == 1
-                && chunk[0].get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch")
-            {
-                match serde_json::to_string(&chunk[0]) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!("Failed to serialize metrics: {}", e);
-                        continue;
-                    }
-                }
-            } else {
-                let metrics_value = serde_json::Value::Array(chunk.to_vec());
-                let payload = json!({ "type": "resource_stats_batch", "metrics": metrics_value });
-                payload.to_string()
-            };
-            // Timeout-bounded so a half-open socket can't wedge the flush task,
-            // and released between chunks so control traffic can interleave.
-            let send_result = {
-                let mut w = write.lock().await;
-                tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into())))
-                    .await
-            };
-            match send_result {
-                Ok(Ok(())) => {}
-                Ok(Err(e)) => {
-                    warn!("Failed to send buffered metrics batch: {}", e);
-                    // leave buffer intact - will retry on next connect
-                    return Ok(());
-                }
-                Err(_) => {
-                    warn!("Timed out sending buffered metrics batch; will retry on next connect");
+        const BATCH_SIZE: usize = 500;
+        let mut chunk = Vec::with_capacity(BATCH_SIZE);
+        let mut sent_any = false;
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line).await {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(e) => {
+                    warn!("Failed to read buffered metric line: {}", e);
                     return Ok(());
                 }
             }
-            tokio::task::yield_now().await;
+            if line.trim().is_empty() {
+                continue;
+            }
+            match serde_json::from_str::<Value>(&line) {
+                Ok(value) => chunk.push(value),
+                Err(e) => warn!("Skipping invalid buffered metric line: {}", e),
+            }
+            if chunk.len() < BATCH_SIZE {
+                continue;
+            }
+
+            if !Self::send_buffered_metric_chunk(&write, &chunk).await {
+                return Ok(());
+            }
+            sent_any = true;
+            chunk.clear();
+        }
+        if !chunk.is_empty() {
+            if !Self::send_buffered_metric_chunk(&write, &chunk).await {
+                return Ok(());
+            }
+            sent_any = true;
         }
 
-        // All batches sent successfully - clear buffer
-        if let Err(e) = self.storage_manager.clear_buffered_metrics().await {
+        if sent_any {
+            info!("Flushed buffered metrics");
+        } else {
+            return Ok(());
+        }
+
+        // All batches sent successfully - clear buffer while the same lock is
+        // still held, so new appends cannot be removed by this acknowledgement.
+        if let Err(e) = self.storage_manager.clear_buffered_metrics_locked().await {
             warn!("Failed to clear buffered metrics: {}", e);
         }
-
         Ok(())
+    }
+
+    async fn send_buffered_metric_chunk(
+        write: &Arc<tokio::sync::Mutex<WsWrite>>,
+        chunk: &[Value],
+    ) -> bool {
+        let payload_text = if chunk.len() == 1
+            && chunk[0].get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch")
+        {
+            match serde_json::to_string(&chunk[0]) {
+                Ok(s) => s,
+                Err(e) => {
+                    warn!("Failed to serialize metrics: {}", e);
+                    return true;
+                }
+            }
+        } else {
+            json!({ "type": "resource_stats_batch", "metrics": chunk }).to_string()
+        };
+        let send_result = {
+            let mut w = write.lock().await;
+            tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into()))).await
+        };
+        match send_result {
+            Ok(Ok(())) => true,
+            Ok(Err(e)) => {
+                warn!("Failed to send buffered metrics batch: {}", e);
+                false
+            }
+            Err(_) => {
+                warn!("Timed out sending buffered metrics batch; will retry on next connect");
+                false
+            }
+        }
     }
 
     pub async fn connect_and_listen(&self) -> AgentResult<()> {

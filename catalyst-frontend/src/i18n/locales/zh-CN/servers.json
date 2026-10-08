@@ -240,7 +240,6 @@
     "steps": {
       "details": "详情",
       "network": "网络",
-      "resources": "资源",
       "startup": "启动"
     },
     "submit": "创建服务器",

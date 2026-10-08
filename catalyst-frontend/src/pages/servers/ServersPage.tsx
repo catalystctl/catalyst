@@ -309,11 +309,12 @@ function ServersPage() {
   }, [data, accessFilter, user?.id]);
 
   const filtered = useMemo(() => {
+    const normalizedSearch = search.toLowerCase();
     return accessFiltered.filter((server) => {
       const matchesStatus = status ? server.status === status : true;
-      const matchesSearch = search
-        ? server.name.toLowerCase().includes(search.toLowerCase()) ||
-          server.nodeName?.toLowerCase().includes(search.toLowerCase())
+      const matchesSearch = normalizedSearch
+        ? server.name.toLowerCase().includes(normalizedSearch) ||
+          server.nodeName?.toLowerCase().includes(normalizedSearch)
         : true;
       return matchesStatus && matchesSearch;
     });

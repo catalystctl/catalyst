@@ -15,7 +15,7 @@
  * re-syncs the cache afterwards; only hard failures do.
  */
 import { useEffect, useRef, useState } from 'react';
-import { subscribeSharedStatus, type StreamStatus } from '../services/api/sse-hub';
+import { getSharedStreamSnapshot, subscribeSharedStatus, type StreamStatus } from '../services/api/sse-hub';
 
 const SEVERITY: Record<StreamStatus, number> = {
   error: 3,
@@ -31,20 +31,31 @@ const OUTAGE_SEVERITY = 3;
 export function useStreamAwareInterval(baseMs: number): number | false {
   // Per-URL ledger: each stream's latest status replaces its own previous one,
   // so a recovered stream stops counting (a flat worst-wins merge would latch).
-  const streamsRef = useRef(new Map<string, StreamStatus>());
-  const [outage, setOutage] = useState(false);
+  const streamsRef = useRef<Map<string, StreamStatus> | null>(null);
+  if (streamsRef.current === null) {
+    const streams = new Map<string, StreamStatus>();
+    for (const entry of getSharedStreamSnapshot()) {
+      if (entry.status !== 'closed') streams.set(entry.url, entry.status);
+    }
+    streamsRef.current = streams;
+  }
+  const [outage, setOutage] = useState(() =>
+    [...(streamsRef.current?.values() ?? [])].some((status) => SEVERITY[status] >= OUTAGE_SEVERITY),
+  );
 
   useEffect(
     () =>
       subscribeSharedStatus((url, status) => {
+        const streams = streamsRef.current;
+        if (!streams) return;
         // 'closed' is the hub's intentional-teardown announcement (last
         // subscriber went away, e.g. navigation). Drop the entry instead of
         // recording severity 3, or a torn-down stream would latch outage
         // polling on forever.
-        if (status === 'closed') streamsRef.current.delete(url);
-        else streamsRef.current.set(url, status);
+        if (status === 'closed') streams.delete(url);
+        else streams.set(url, status);
         let worst = 0;
-        for (const s of streamsRef.current.values()) {
+        for (const s of streams.values()) {
           if (SEVERITY[s] > worst) worst = SEVERITY[s];
         }
         setOutage(worst >= OUTAGE_SEVERITY);

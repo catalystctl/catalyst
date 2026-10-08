@@ -18,6 +18,8 @@ interface BulkResult {
   failed: Array<{ id: string; error: string }>;
 }
 
+const BULK_CONCURRENCY = 8;
+
 export async function bulkServerRoutes(app: FastifyInstance) {
   const authenticate = (app as any).authenticate;
 
@@ -81,16 +83,18 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
-      for (const serverId of serverIds) {
+      for (let offset = 0; offset < serverIds.length; offset += BULK_CONCURRENCY) {
+        const batch = serverIds.slice(offset, offset + BULK_CONCURRENCY);
+        await Promise.all(batch.map(async (serverId) => {
         const server = serverMap.get(serverId);
         if (!server) {
           result.failed.push({ id: serverId, error: 'Server not found' });
-          continue;
+          return;
         }
 
         if (server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Already suspended' });
-          continue;
+          return;
         }
 
         try {
@@ -115,14 +119,15 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             }
           }
 
-          // Disable scheduled tasks
+          // Read the affected tasks before updating them, so we only notify the
+          // scheduler about tasks changed by this operation.
+          const tasks = await prisma.scheduledTask.findMany({
+            where: { serverId, enabled: true },
+            select: { id: true },
+          });
           const disabledBulkTasks = await prisma.scheduledTask.updateMany({
             where: { serverId, enabled: true },
             data: { enabled: false },
-          });
-          const tasks = await prisma.scheduledTask.findMany({
-            where: { serverId, enabled: false },
-            select: { id: true },
           });
           for (const task of tasks) {
             if (scheduler) scheduler.unscheduleTask(task.id);
@@ -169,7 +174,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+        }));
       }
+
+      const order = new Map(serverIds.map((id, index) => [id, index]));
+      result.success.sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
+      result.failed.sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 
       if (auditLogs.length > 0) {
         await prisma.auditLog.createMany({ data: auditLogs });
@@ -249,16 +259,18 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
-      for (const serverId of serverIds) {
+      for (let offset = 0; offset < serverIds.length; offset += BULK_CONCURRENCY) {
+        const batch = serverIds.slice(offset, offset + BULK_CONCURRENCY);
+        await Promise.all(batch.map(async (serverId) => {
         const server = serverMap.get(serverId);
         if (!server) {
           result.failed.push({ id: serverId, error: 'Server not found' });
-          continue;
+          return;
         }
 
         if (!server.suspendedAt) {
           result.failed.push({ id: serverId, error: 'Not suspended' });
-          continue;
+          return;
         }
 
         try {
@@ -272,13 +284,22 @@ export async function bulkServerRoutes(app: FastifyInstance) {
             },
           });
 
-          // Re-enable scheduled tasks
-          const reEnabled = await prisma.scheduledTask.updateMany({
+            // Read the affected tasks before updating them, avoiding a second
+            // broad task read and ensuring only tasks changed here are queued.
+            const tasks = await prisma.scheduledTask.findMany({
+              where: { serverId, enabled: false },
+              select: {
+                id: true, serverId: true, name: true, description: true, action: true,
+                payload: true, schedule: true, timeOffset: true, sequenceId: true,
+                enabled: true, lastRunAt: true, nextRunAt: true, lastStatus: true,
+                lastError: true, runCount: true, createdAt: true, updatedAt: true,
+              },
+            });
+            const reEnabled = await prisma.scheduledTask.updateMany({
             where: { serverId, enabled: false },
             data: { enabled: true },
           });
           if (reEnabled.count > 0) {
-            const tasks = await prisma.scheduledTask.findMany({ where: { serverId, enabled: true } });
             for (const task of tasks) {
               if (scheduler) scheduler.scheduleTask(task);
             }
@@ -321,7 +342,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+        }));
       }
+
+      const order = new Map(serverIds.map((id, index) => [id, index]));
+      result.success.sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
+      result.failed.sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 
       if (auditLogs.length > 0) {
         await prisma.auditLog.createMany({ data: auditLogs });
@@ -401,16 +427,18 @@ export async function bulkServerRoutes(app: FastifyInstance) {
       const actorDetails = await resolveActorDetails(userId);
       const auditLogs: Array<{ userId: string; action: string; resource: string; resourceId: string; details: any }> = [];
 
-      for (const serverId of serverIds) {
+      for (let offset = 0; offset < serverIds.length; offset += BULK_CONCURRENCY) {
+        const batch = serverIds.slice(offset, offset + BULK_CONCURRENCY);
+        await Promise.all(batch.map(async (serverId) => {
         const server = serverMap.get(serverId);
         if (!server) {
           result.failed.push({ id: serverId, error: 'Server not found' });
-          continue;
+          return;
         }
 
         if (!deletableStates.has(server.status)) {
           result.failed.push({ id: serverId, error: `Server must be stopped (current: ${server.status})` });
-          continue;
+          return;
         }
 
         try {
@@ -420,7 +448,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
           // Drop provisioned MySQL DBs before cascade-deleting the Server row.
           const serverDatabases = await prisma.serverDatabase.findMany({
             where: { serverId },
-            include: { host: true },
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              host: true,
+            },
           });
           for (const database of serverDatabases) {
             try {
@@ -498,7 +531,12 @@ export async function bulkServerRoutes(app: FastifyInstance) {
         } catch (err: any) {
           result.failed.push({ id: serverId, error: err.message || 'Unknown error' });
         }
+        }));
       }
+
+      const order = new Map(serverIds.map((id, index) => [id, index]));
+      result.success.sort((a, b) => (order.get(a) ?? Number.MAX_SAFE_INTEGER) - (order.get(b) ?? Number.MAX_SAFE_INTEGER));
+      result.failed.sort((a, b) => (order.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (order.get(b.id) ?? Number.MAX_SAFE_INTEGER));
 
       if (auditLogs.length > 0) {
         await prisma.auditLog.createMany({ data: auditLogs });

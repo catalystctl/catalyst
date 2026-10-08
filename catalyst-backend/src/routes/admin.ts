@@ -31,6 +31,33 @@ import { onCacheInvalidate } from '../lib/cache-bus.js';
 // side effects that do not broadcast (new sessions, last sign-in IP).
 const adminUsersCache = new SimpleCache<string, string>(5_000, 200);
 onCacheInvalidate('admin-user', () => adminUsersCache.clear());
+
+const ADMIN_PAGE_MAX = 100;
+const ADMIN_WORKER_COUNT = 8;
+
+function parsePagination(page: unknown, limit: unknown, defaultLimit: number): { page: number; limit: number; skip: number } {
+  const parsedPage = Number(page ?? 1);
+  const parsedLimit = Number(limit ?? defaultLimit);
+  const safePage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+  const safeLimit = Number.isInteger(parsedLimit) && parsedLimit > 0
+    ? Math.min(parsedLimit, ADMIN_PAGE_MAX)
+    : defaultLimit;
+  return { page: safePage, limit: safeLimit, skip: (safePage - 1) * safeLimit };
+}
+
+async function mapWithConcurrency<T, R>(items: T[], worker: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const run = async () => {
+    while (true) {
+      const index = next++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ADMIN_WORKER_COUNT, items.length) }, run));
+  return results;
+}
 import {
   collectDiagnostics,
   DIAGNOSTICS_SECTIONS,
@@ -225,12 +252,13 @@ export async function adminRoutes(app: FastifyInstance) {
         return reply.send(cachedUsers);
       }
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const pagination = parsePagination(page, limit, 20);
+      const { skip } = pagination;
 
       const [users, total] = await Promise.all([
         prisma.user.findMany({
           skip,
-          take: Number(limit),
+           take: pagination.limit,
           where,
           select: {
             id: true,
@@ -303,10 +331,10 @@ export async function adminRoutes(app: FastifyInstance) {
       const payload = {
         users: usersWithLastIp,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pagination.page,
+          limit: pagination.limit,
           total,
-          totalPages: Math.ceil(total / Number(limit)),
+          totalPages: Math.ceil(total / pagination.limit),
         },
       };
       const responseStr = JSON.stringify(payload);
@@ -1515,8 +1543,7 @@ export async function adminRoutes(app: FastifyInstance) {
         },
       });
 
-      // Explicitly serialize to avoid Fastify v5 + Prisma v7 serialization issues
-      return reply.send(JSON.parse(JSON.stringify({ nodes })));
+      return reply.send({ nodes });
     }
   );
 
@@ -1538,7 +1565,8 @@ export async function adminRoutes(app: FastifyInstance) {
         owner?: string;
       };
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const pagination = parsePagination(page, limit, 20);
+      const { skip } = pagination;
 
       const searchQuery = typeof search === 'string' ? search.trim() : '';
       const ownerQuery = typeof owner === 'string' ? owner.trim() : '';
@@ -1584,7 +1612,7 @@ export async function adminRoutes(app: FastifyInstance) {
           prisma.server.findMany({
             where,
             skip,
-            take: Number(limit),
+             take: pagination.limit,
             include: {
               node: {
                 select: {
@@ -1617,16 +1645,15 @@ export async function adminRoutes(app: FastifyInstance) {
           owner: ownerMap.get(server.ownerId) ?? null,
         }));
 
-      // Explicitly serialize to avoid Fastify v5 + Prisma v7 serialization issues
-      return reply.send(JSON.parse(JSON.stringify({
+      return reply.send({
         servers: serversWithOwners,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+             page: pagination.page,
+             limit: pagination.limit,
           total,
           totalPages: Math.ceil(total / Number(limit)),
         },
-      })));
+      });
     }
   );
 
@@ -1657,6 +1684,8 @@ export async function adminRoutes(app: FastifyInstance) {
         unsuspend: 'server.suspend',
         delete: 'server.delete',
       };
+      // Keep the action's requiredPermission explicit for the scoped access
+      // decision below; this also documents the permission ceiling contract.
 
       const requiredPerm = action ? actionPermissions[action] || 'server.read' : 'server.read';
       if (!(checkPerm(request, requiredPerm))) {
@@ -1690,7 +1719,15 @@ export async function adminRoutes(app: FastifyInstance) {
 
       const servers = await prisma.server.findMany({
         where: { id: { in: uniqueServerIds } },
-        include: { node: true, template: true },
+        select: {
+          id: true, uuid: true, name: true, templateId: true, nodeId: true, ownerId: true,
+          status: true, suspendedAt: true, environment: true, networkMode: true,
+          suspensionReason: true,
+          primaryIp: true, allocatedMemoryMb: true, allocatedCpuCores: true,
+          allocatedDiskMb: true, primaryPort: true, portBindings: true,
+          node: { select: { id: true, name: true, hostname: true, publicAddress: true, isOnline: true } },
+          template: { select: { id: true, name: true, image: true, images: true, defaultImage: true, variables: true } },
+        },
       });
 
       // Validate per-server access for non-admin users via decideServerAccess:
@@ -1700,24 +1737,35 @@ export async function adminRoutes(app: FastifyInstance) {
       if (!isAdmin) {
         const { resolveServerPermissions } = await import('../lib/permissions-catalog.js');
         const { decideServerAccess } = await import('../lib/server-access.js');
-        for (const server of servers) {
-          const access = await prisma.serverAccess.findUnique({
-            where: { userId_serverId: { userId: user.userId, serverId: server.id } },
-          });
-          const hasExplicitPerm = access?.permissions.includes(requiredPerm);
-          const rolePerms = await resolveServerPermissions(user.userId, server.id, server.nodeId);
+        const nodeAccess = new Map<string, Promise<boolean>>();
+        const accessResults = await mapWithConcurrency(servers, async (server) => {
+          let nodeAccessResult = nodeAccess.get(server.nodeId);
+          if (!nodeAccessResult) {
+            nodeAccessResult = hasNodeAccess(prisma, user.userId, server.nodeId);
+            nodeAccess.set(server.nodeId, nodeAccessResult);
+          }
+          const [access, rolePerms, hasNode] = await Promise.all([
+            prisma.serverAccess.findUnique({
+              where: { userId_serverId: { userId: user.userId, serverId: server.id } },
+              select: { permissions: true },
+            }),
+            resolveServerPermissions(user.userId, server.id, server.nodeId),
+            nodeAccessResult,
+          ]);
           const decision = decideServerAccess({
             isOwner: server.ownerId === user.userId,
-            hasExplicitServerAccess: Boolean(hasExplicitPerm),
+            hasExplicitServerAccess: Boolean(access?.permissions.includes(requiredPerm)),
             rolePermissions: rolePerms,
-            hasNodeAccess: await hasNodeAccess(prisma, user.userId, server.nodeId),
+            hasNodeAccess: hasNode,
             requiredPermission: requiredPerm,
           });
-          if (!decision.allowed) {
-            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot perform ${action} on server ${server.id}: access denied`, {
-              params: { action, serverId: server.id },
-            });
-          }
+          return { server, allowed: decision.allowed };
+        });
+        const denied = accessResults.find((entry) => !entry.allowed);
+        if (denied) {
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, `Cannot perform ${action} on server ${denied.server.id}: access denied`, {
+            params: { action, serverId: denied.server.id },
+          });
         }
       }
 
@@ -1730,8 +1778,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       const gateway = app.wsGateway;
-      const results = await Promise.all(
-        servers.map(async (server) => {
+      const results = await mapWithConcurrency(servers, async (server) => {
           try {
             if (action === 'start') {
               if (!ServerStateMachine.canStart(server.status as ServerState)) {
@@ -2276,8 +2323,7 @@ export async function adminRoutes(app: FastifyInstance) {
               error: error?.message || 'Action failed',
             };
           }
-        }),
-      );
+        });
 
       const summary = results.reduce(
         (acc, entry) => {
@@ -2319,7 +2365,8 @@ export async function adminRoutes(app: FastifyInstance) {
         to?: string;
       };
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const pagination = parsePagination(page, limit, 50);
+      const { skip } = pagination;
 
       const where: any = {};
       if (userId) where.userId = userId;
@@ -2344,7 +2391,7 @@ export async function adminRoutes(app: FastifyInstance) {
         prisma.auditLog.findMany({
           where,
           skip,
-          take: Number(limit),
+           take: pagination.limit,
           include: {
             user: {
               select: {
@@ -2374,10 +2421,10 @@ export async function adminRoutes(app: FastifyInstance) {
               : null) ?? null,
         })),
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+           page: pagination.page,
+           limit: pagination.limit,
           total,
-          totalPages: Math.ceil(total / Number(limit)),
+           totalPages: Math.ceil(total / pagination.limit),
         },
       });
     }
@@ -2504,7 +2551,8 @@ export async function adminRoutes(app: FastifyInstance) {
         to?: string;
       };
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const pagination = parsePagination(page, limit, 50);
+      const { skip } = pagination;
 
       const where: any = {};
       if (level) where.level = level;
@@ -2530,7 +2578,7 @@ export async function adminRoutes(app: FastifyInstance) {
         prisma.systemError.findMany({
           where,
           skip,
-          take: Number(limit),
+            take: pagination.limit,
           orderBy: {
             createdAt: 'desc',
           },
@@ -2541,10 +2589,10 @@ export async function adminRoutes(app: FastifyInstance) {
       reply.send({
         errors,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pagination.page,
+          limit: pagination.limit,
           total,
-          totalPages: Math.ceil(total / Number(limit)),
+          totalPages: Math.ceil(total / pagination.limit),
         },
       });
     }
@@ -4426,7 +4474,8 @@ export async function adminRoutes(app: FastifyInstance) {
         search?: string;
       };
 
-      const skip = (Number(page) - 1) * Number(limit);
+      const pagination = parsePagination(page, limit, 20);
+      const { skip } = pagination;
       const where: any = {};
 
       if (search) {
@@ -4440,7 +4489,7 @@ export async function adminRoutes(app: FastifyInstance) {
         prisma.authLockout.findMany({
           where,
           skip,
-          take: Number(limit),
+          take: pagination.limit,
           orderBy: { lastFailedAt: 'desc' },
         }),
         prisma.authLockout.count({ where }),
@@ -4449,10 +4498,10 @@ export async function adminRoutes(app: FastifyInstance) {
       reply.send({
         lockouts,
         pagination: {
-          page: Number(page),
-          limit: Number(limit),
+          page: pagination.page,
+          limit: pagination.limit,
           total,
-          totalPages: Math.ceil(total / Number(limit)),
+          totalPages: Math.ceil(total / pagination.limit),
         },
       });
     }
@@ -4640,4 +4689,3 @@ export async function adminRoutes(app: FastifyInstance) {
     },
   );
 }
-

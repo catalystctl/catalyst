@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@/csync';
 import {
   ExternalLink,
+  ChevronDown,
   Loader2,
   PackageCheck,
   Plus,
@@ -10,6 +11,8 @@ import {
   Search,
   Store,
   Trash2,
+  SlidersHorizontal,
+  Tag,
 } from 'lucide-react';
 
 import {
@@ -25,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   addMarketplaceSource,
   deleteMarketplaceSource,
@@ -84,6 +88,12 @@ export function MarketplaceDialog({
 }) {
   const { t } = useTranslation('admin-system');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'installed' | 'updates'>('all');
+  const [sortBy, setSortBy] = useState<'relevance' | 'name' | 'newest'>('relevance');
+  const [tagFilter, setTagFilter] = useState('all');
+  const [manageSourcesOpen, setManageSourcesOpen] = useState(false);
+  const [collapsedSources, setCollapsedSources] = useState<Record<string, boolean>>({});
   const [installingName, setInstallingName] = useState<string | null>(null);
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceLabel, setNewSourceLabel] = useState('');
@@ -204,14 +214,50 @@ export function MarketplaceDialog({
         Boolean(entry.updateAvailable) || isNewerVersion(installedVersion, entry.version);
       return { ...entry, installed, installedVersion, updateAvailable };
     });
-    if (!q) return annotated;
-    return annotated.filter((e) =>
+    const filtered = annotated.filter((e) => {
+      const matchesSource = sourceFilter === 'all' || e.sourceUrl === sourceFilter;
+      const matchesTag = tagFilter === 'all' || (e.tags ?? []).includes(tagFilter);
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'available' && !e.installed) ||
+        (statusFilter === 'installed' && e.installed) ||
+        (statusFilter === 'updates' && e.updateAvailable);
+      const matchesSearch = !q ||
       [e.displayName ?? '', e.name, e.description ?? '', e.author ?? '', ...(e.tags ?? [])]
         .join(' ')
         .toLowerCase()
-        .includes(q),
-    );
-  }, [data?.entries, searchQuery, installedVersions]);
+        .includes(q);
+      return matchesSource && matchesTag && matchesStatus && matchesSearch;
+    });
+    return [...filtered].sort((a, b) => {
+      if (sortBy === 'name') return (a.displayName ?? a.name).localeCompare(b.displayName ?? b.name);
+      if (sortBy === 'newest') return (b.version ?? '').localeCompare(a.version ?? '', undefined, { numeric: true });
+      return Number(b.updateAvailable) - Number(a.updateAvailable) || Number(b.installed) - Number(a.installed);
+    });
+  }, [data?.entries, searchQuery, installedVersions, sourceFilter, tagFilter, statusFilter, sortBy]);
+
+  const availableTags = useMemo(() => {
+    const tags = new Set((data?.entries ?? []).flatMap((entry) => entry.tags ?? []));
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [data?.entries]);
+
+  const entriesBySource = useMemo(() => {
+    const groups = new Map<string, MarketplaceEntry[]>();
+    for (const entry of filteredEntries) {
+      const key = entry.sourceUrl ?? 'unknown';
+      const group = groups.get(key) ?? [];
+      group.push(entry);
+      groups.set(key, group);
+    }
+    return [...groups.entries()];
+  }, [filteredEntries]);
+
+  const counts = useMemo(() => ({
+    all: filteredEntries.length,
+    available: filteredEntries.filter((entry) => !entry.installed).length,
+    installed: filteredEntries.filter((entry) => entry.installed).length,
+    updates: filteredEntries.filter((entry) => entry.updateAvailable).length,
+  }), [filteredEntries]);
 
   const healthByUrl = useMemo(() => {
     const map = new Map<string, { ok: boolean; error?: string; entryCount: number }>();
@@ -237,12 +283,15 @@ export function MarketplaceDialog({
         <DialogBody>
           <div className="space-y-4">
             {/* In-panel source manager: add more marketplaces without env edits. */}
-            <section
-              aria-label={t('pluginsAdmin.marketplaces')}
-              className="deck-panel"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+            <section aria-label={t('pluginsAdmin.marketplaces')} className="border-b border-border/40 pb-3">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between gap-2 py-1 text-left text-muted-foreground hover:text-foreground"
+                onClick={() => setManageSourcesOpen((open) => !open)}
+                aria-expanded={manageSourcesOpen}
+              >
                 <div className="flex items-center gap-2">
+                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${manageSourcesOpen ? '' : '-rotate-90'}`} />
                   <BracketLabel tone="muted">{t('pluginsAdmin.marketplaces')}</BracketLabel>
                   {sources && sources.length > 0 && (
                     <span className="font-mono text-micro tabular-nums text-muted-foreground">
@@ -251,19 +300,19 @@ export function MarketplaceDialog({
                   )}
                 </div>
                 <p className="text-micro text-muted-foreground">{t('pluginsAdmin.browsedTogether')}</p>
-              </div>
-              <div className="p-3">
+              </button>
+              {manageSourcesOpen && <div className="mt-3 space-y-3">
               {sourcesLoading ? (
                 <div className="flex items-center gap-2 py-3 text-mini text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('pluginsAdmin.loadingMarketplaces')}
                 </div>
               ) : sources && sources.length > 0 ? (
-                <ul className="divide-y divide-border/40">
+                <ul className="divide-y divide-border/30">
                   {sources.map((source) => {
                     const health = healthByUrl.get(source.url);
                     const busy = pendingSourceId === source.id;
                     return (
-                      <li key={source.id} className="flex items-center gap-2 py-1.5">
+                      <li key={source.id} className="flex items-center gap-2 py-2">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="max-w-full truncate text-mini font-medium text-foreground">
@@ -373,7 +422,7 @@ export function MarketplaceDialog({
                   {t('pluginsAdmin.add')}
                 </Button>
               </form>
-              </div>
+              </div>}
             </section>
 
             <div className="flex items-center gap-2">
@@ -408,6 +457,65 @@ export function MarketplaceDialog({
               )}
             </div>
 
+            <div className="flex flex-wrap items-center gap-1.5" aria-label={t('pluginsAdmin.filterAria')}>
+              {([
+                ['all', t('pluginsAdmin.filterAll')],
+                ['available', t('pluginsAdmin.install')],
+                ['updates', t('pluginsAdmin.update')],
+                ['installed', t('pluginsAdmin.installed')],
+              ] as const).map(([status, label]) => (
+                <Button
+                  key={status}
+                  type="button"
+                  variant={statusFilter === status ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 rounded-sm px-2.5 text-micro"
+                  onClick={() => setStatusFilter(status)}
+                >
+                  {label}
+                  <span className="ml-1 font-mono tabular-nums text-muted-foreground">{counts[status]}</span>
+                </Button>
+              ))}
+              <select
+                value={sourceFilter}
+                onChange={(event) => setSourceFilter(event.target.value)}
+                aria-label={t('pluginsAdmin.sourceFilterAria')}
+                className="ml-auto h-7 max-w-full rounded-sm border border-border/60 bg-background px-2 text-micro text-foreground"
+              >
+                <option value="all">{t('pluginsAdmin.allMarketplaces')}</option>
+                {(sources ?? []).filter((source) => source.enabled).map((source) => (
+                  <option key={source.url} value={source.url}>
+                    {source.label?.trim() || sourceHostLabel(source.url)}
+                  </option>
+                ))}
+              </select>
+              <Select value={tagFilter} onValueChange={setTagFilter}>
+                <SelectTrigger className="h-7 w-auto min-w-28 rounded-sm px-2 text-micro">
+                  <Tag className="mr-1.5 h-3 w-3 text-muted-foreground" />
+                  <SelectValue placeholder={t('pluginsAdmin.allTags')} />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(18rem,calc(100vh-2rem))] max-w-[calc(100vw-2rem)]">
+                  <SelectItem value="all">{t('pluginsAdmin.allTags')}</SelectItem>
+                  {availableTags.map((tag) => (
+                    <SelectItem key={tag} value={tag} className="whitespace-normal break-words">
+                      {tag}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+                <SelectTrigger className="h-7 w-auto min-w-28 rounded-sm px-2 text-micro">
+                  <SlidersHorizontal className="mr-1.5 h-3 w-3 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="relevance">{t('pluginsAdmin.sortRelevance')}</SelectItem>
+                  <SelectItem value="name">{t('pluginsAdmin.sortName')}</SelectItem>
+                  <SelectItem value="newest">{t('pluginsAdmin.sortNewest')}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {isLoading ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -424,9 +532,28 @@ export function MarketplaceDialog({
                 <p className="text-mini text-muted-foreground">{t('pluginsAdmin.noSearchResults')}</p>
               </div>
             ) : (
-              <ul className="divide-y divide-border/40">
-                {filteredEntries.map((entry) => (
-                  <li key={`${entry.name}:${entry.version ?? ''}`} className="flex items-start gap-3 py-2">
+              <div className="space-y-6">
+                {entriesBySource.map(([sourceUrl, entries]) => {
+                  const source = sources?.find((item) => item.url === sourceUrl);
+                  const collapsed = collapsedSources[sourceUrl] ?? false;
+                  return (
+                    <section key={sourceUrl}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 border-b border-border/50 pb-2 text-left hover:text-primary"
+                        onClick={() => setCollapsedSources((current) => ({ ...current, [sourceUrl]: !collapsed }))}
+                        aria-expanded={!collapsed}
+                      >
+                        <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${collapsed ? '-rotate-90' : ''}`} />
+                        <span className="min-w-0 flex-1 truncate text-mini font-medium text-foreground">
+                          {source?.label?.trim() || sourceHostLabel(sourceUrl)}
+                        </span>
+                        <Badge variant="outline" className="text-micro">{entries.length}</Badge>
+                        {source && <Badge variant="secondary" className="text-micro">{originLabel(source.origin)}</Badge>}
+                      </button>
+                      {!collapsed && <ul className="divide-y divide-border/40">
+                {entries.map((entry) => (
+                  <li key={`${entry.name}:${entry.version ?? ''}`} className="flex min-w-0 items-start gap-4 py-3 transition-colors hover:bg-surface-1/30">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-foreground">
@@ -455,8 +582,8 @@ export function MarketplaceDialog({
                           </Badge>
                         ) : null}
                       </div>
-                      <p className="mt-0.5 line-clamp-2 text-mini leading-relaxed text-muted-foreground">
-                        {entry.description}
+                      <p className="mt-1 line-clamp-2 text-mini leading-relaxed text-muted-foreground">
+                        {entry.description || t('pluginsAdmin.noDescription')}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         {entry.author && (
@@ -488,6 +615,7 @@ export function MarketplaceDialog({
                         )}
                       </div>
                     </div>
+                    <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
                     <Button
                       size="sm"
                       className="h-8 px-3 text-mini"
@@ -510,9 +638,14 @@ export function MarketplaceDialog({
                       )}
                       {entry.updateAvailable ? t('pluginsAdmin.update') : entry.installed ? t('pluginsAdmin.installed') : t('pluginsAdmin.install')}
                     </Button>
+                    </div>
                   </li>
                 ))}
-              </ul>
+                      </ul>}
+                    </section>
+                  );
+                })}
+              </div>
             )}
           </div>
         </DialogBody>

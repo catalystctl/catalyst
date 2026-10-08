@@ -6,14 +6,11 @@
     "noDescription": "No description provided."
   },
   "create": {
-    "assignTitle": "Assign this template to a nest?",
     "availableNow": "Templates are available immediately after creation.",
     "batchHint": "This may take 1–2 minutes. The server is fetching all eggs from GitHub.",
     "chooseFile": "Choose file",
-    "continue": "Continue",
     "createNest": "Create a nest",
     "creating": "Creating...",
-    "descriptionStep1": "Choose a nest to organize this template.",
     "descriptionStep2": "Define runtime images, resources, and startup commands.",
     "errorDetails": "Error details",
     "failedCount": "{{total}} failed",
@@ -34,7 +31,6 @@
     "importedTemplates_one": "Imported {{count}} template",
     "importedTemplates_other": "Imported {{count}} templates",
     "importingAll": "Importing all eggs…",
-    "importTemplateLabel": "Import template (optional)",
     "importTitle": "Import template",
     "invalidJson": "Invalid template JSON",
     "invalidUrl": "Failed to parse — the URL must return valid JSON or YAML.",
@@ -49,14 +45,11 @@
     "readFailed": "Unable to read file",
     "searchNests": "Search nests…",
     "selectNestLabel": "Select a nest (optional)",
-    "skip": "Skip",
     "skipNest": "Skip — no nest",
     "skippedCount": "{{total}} skipped (already exist)",
-    "stepDetails": "Details",
     "stepNest": "Nest",
     "submit": "Create template",
     "success": "Template created",
-    "titleStep1": "New template",
     "titleStep2": "Create template"
   },
   "delete": {

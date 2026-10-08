@@ -1875,6 +1875,8 @@ CATALYST_API_KEY_FILE="$KEY_FILE" "$TMP_SCRIPT" "$BACKEND_HTTP_URL" "$NODE_ID" "
 }
 
 async function shutdown(signal: string) {
+	if (shutdown.started) return;
+	shutdown.started = true;
 	logger.info(`Received ${signal}, shutting down gracefully...`);
 	await app.close();
 	taskScheduler?.stop();
@@ -1893,6 +1895,8 @@ async function shutdown(signal: string) {
 	await prisma.$disconnect();
 	process.exit(0);
 }
+
+shutdown.started = false;
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));

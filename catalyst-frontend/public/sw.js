@@ -1,9 +1,10 @@
-// Catalyst Service Worker v4 — caches static assets for faster loads
+// Catalyst Service Worker v5 — caches static assets for faster loads
 // API/WebSocket/plugin-asset requests are NEVER intercepted (pass through directly)
-// v4: bumped from v3 so marketplace plugin frontend.mjs updates are not
+// v5: keep the cache version explicit when cache policy changes. Marketplace
+// plugin frontend.mjs updates are not
 // served from a stale cache-first JS entry.
 
-const CACHE_NAME = 'catalyst-v4';
+const CACHE_NAME = 'catalyst-v5';
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = ['/index.html', '/favicon.ico'];
@@ -70,14 +71,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For static assets (JS, CSS, fonts, images) — cache-first for near-instant loads
-  const isStaticAsset =
-    /\.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico|webp|avif)$/.test(url.pathname) ||
-    url.pathname.startsWith('/assets/') ||
-    url.pathname.startsWith('/background') ||
-    url.pathname.startsWith('/logo');
+  // Only hashed build assets are safe to cache-first indefinitely. Public
+  // branding files keep their URL across releases and must revalidate.
+  const isHashedAsset = url.pathname.startsWith('/assets/') &&
+    /-[a-zA-Z0-9_-]{8,}\.(js|css|woff2?|ttf|eot|svg|png|jpg|jpeg|gif|ico|webp|avif)$/.test(url.pathname);
 
-  if (isStaticAsset) {
+  if (isHashedAsset) {
     event.respondWith(
       caches.match(request).then((cached) => {
         if (cached) return cached;

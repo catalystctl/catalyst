@@ -31,6 +31,7 @@ const FALLBACK_POLL_MS = 30_000;
 export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) {
   const [metrics, setMetrics] = useState<ServerMetricsType | null>(null);
   const [status, setStatus] = useState<StreamStatus>('connecting');
+  const statusRef = useRef<StreamStatus>('connecting');
 
   const memoryBudget = useMemo(
     () => (allocatedMemoryMb && allocatedMemoryMb > 0 ? allocatedMemoryMb : 0),
@@ -93,7 +94,10 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
         applyMetrics(data);
       },
       // Surface the metrics stream's own status (F10) — not the console's.
-      setStatus,
+       (nextStatus) => {
+         statusRef.current = nextStatus;
+         setStatus(nextStatus);
+       },
     );
 
     return () => {
@@ -109,10 +113,11 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
   // snapshot endpoint instead; it maps onto the same metrics state. `status`
   // is left untouched so consumers can still tell the reading is not live.
   useEffect(() => {
-    if (!serverId || status === 'connected') return;
+    if (!serverId) return;
     let cancelled = false;
 
     const poll = async () => {
+      if (statusRef.current === 'connected') return;
       try {
         const d = await serversApi.stats(serverId);
         if (cancelled || !d || typeof d.cpuPercent !== 'number') return;
@@ -146,7 +151,7 @@ export function useServerMetrics(serverId?: string, allocatedMemoryMb?: number) 
       cancelled = true;
       clearInterval(interval);
     };
-  }, [serverId, status, memoryBudget]);
+  }, [serverId, memoryBudget]);
 
   return { metrics, status } as const;
 }

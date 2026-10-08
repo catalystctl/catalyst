@@ -58,8 +58,10 @@ export async function serverStatsRoutes(app: FastifyInstance) {
           serverId,
           createdAt: { gte: from, lte: to },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: "desc" },
+        take: 10000,
       });
+      stats.reverse();
 
       // Downsample: take one point per interval bucket
       const downsampled: typeof stats = [];

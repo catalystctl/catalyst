@@ -8,6 +8,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@/csync';
 import { qk } from '../lib/queryKeys';
+import { invalidateOnce } from '../lib/invalidateOnce';
 import { backupsApi } from '../services/api/backups';
 import { createServerEventsStream, type ServerEventType } from '../services/api/server-events';
 
@@ -35,12 +36,14 @@ export function useBackups(serverId?: string, options?: { page?: number; limit?:
         if (String(data.serverId ?? serverId) !== serverId) return;
         if (!backupEvents.has(type)) return;
 
-        queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+        // The global server-events listener may receive the same event. Share
+        // the per-tick dedupe with it instead of restarting an active fetch.
+        void invalidateOnce(queryClient, { queryKey: qk.backups(serverId) });
 
         // Follow-up fetch to pick up updated size/metadata after remote upload
         if (type === 'backup_complete') {
           setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+            void queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
           }, 1500);
         }
       },

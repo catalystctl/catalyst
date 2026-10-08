@@ -1964,7 +1964,7 @@ export class WebSocketGateway {
               );
             }
           }
-          pending.chunks?.push(buffer);
+          if (!pending.onChunk) pending.chunks?.push(buffer);
         }
         if (message.done) {
           clearTimeout(pending.timeout);

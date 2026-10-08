@@ -5,9 +5,6 @@ import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
- FolderOpen,
- ArrowRight,
- SkipForward,
  Upload,
  Link as LinkIcon,
  Loader2,
@@ -25,18 +22,17 @@ import {
  Dialog,
  DialogContent,
  DialogHeader,
- DialogToolbar,
  DialogBody,
  DialogFooter,
  DialogTitle,
  DialogDescription,
 } from '@/components/ui/dialog';
+import { FormSection } from '@/components/ui/form-section';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { reportSystemError } from '../../services/api/systemErrors';
 import { describeError } from '../../utils/errors';
 import { BracketLabel } from '../../components/deck/primitives';
-import { cn } from '@/lib/utils';
 
 type VariableDraft = {
  id: string;
@@ -105,7 +101,6 @@ function TemplateCreateModal() {
  const [pluginManagerEnabled, setPluginManagerEnabled] = useState(false);
  const [pluginProviders, setPluginProviders] = useState<string[]>([]);
  const [nestId, setNestId] = useState('');
- const [step, setStep] = useState<1 | 2>(1);
  const [importModalOpen, setImportModalOpen] = useState(false);
  const [importUrl, setImportUrl] = useState('');
  const [importUrlLoading, setImportUrlLoading] = useState(false);
@@ -114,7 +109,7 @@ function TemplateCreateModal() {
  const [batchImportResult, setBatchImportResult] = useState<BatchImportResult | null>(null);
 
  // Re-open this modal when a nests manager sends the user back after creating a nest
- // If a nest was just created, auto-select it and jump to step 2 (preserves imported data)
+ // If a nest was just created, auto-select it (preserves imported data)
  useEffect(() => {
  const handler = (e: Event) => {
  const detail = (e as CustomEvent).detail;
@@ -122,9 +117,6 @@ function TemplateCreateModal() {
  setOpen(true);
  if (createdId) {
  setNestId(createdId);
- setStep(2);
- } else {
- setStep(1);
  }
  };
  window.addEventListener('catalyst:return-to-template-create', handler);
@@ -254,8 +246,8 @@ function TemplateCreateModal() {
  version,
  image,
  images: imageOptions
-  .filter((option) => option.name && option.image)
-  .map(({ name, label, image }) => ({ name, label, image })),
+ .filter((option) => option.name && option.image)
+ .map(({ name, label, image }) => ({ name, label, image })),
  defaultImage: defaultImage || undefined,
  installImage: installImage || undefined,
  startup,
@@ -345,7 +337,7 @@ function TemplateCreateModal() {
  setImportError('');
  },
  onError: (error: unknown) => {
-  notifyError(error, 'templates:create.error');
+   notifyError(error, 'templates:create.error');
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.templates() });
@@ -441,7 +433,6 @@ function TemplateCreateModal() {
  if (!files.length) return;
  setImportError('');
  if (files.length === 1) {
- setStep(1);
  setOpen(true);
  const reader = new FileReader();
  reader.onload = () => {
@@ -527,7 +518,6 @@ function TemplateCreateModal() {
  }
  setImportModalOpen(false);
  setImportUrl('');
- setStep(1);
  setOpen(true);
  applyTemplateImport(parsed);
  } catch (error: any) {
@@ -608,8 +598,13 @@ function TemplateCreateModal() {
  parsedPorts.length,
  allocatedMemoryMb,
  allocatedCpuCores,
-  t,
-]);
+   t,
+ ]);
+
+ // ── Aside summary values ────────────────────────────────────────────
+ const selectedNest = nests.find((nest) => nest.id === nestId);
+ const validImageOptions = imageOptions.filter((option) => option.name && option.image);
+ const definedVariables = buildVariables();
 
  return (
  <div>
@@ -618,7 +613,6 @@ function TemplateCreateModal() {
  className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
  onClick={() => {
  setImportError('');
- setStep(1);
  setOpen(true);
  }}
  >
@@ -649,61 +643,31 @@ function TemplateCreateModal() {
  setOpen(next);
  if (!next) {
  setImportError('');
- setStep(1);
  }
  }}
  >
- <DialogContent size="2xl">
- <DialogHeader icon={<FolderOpen className="h-4 w-4" />}>
- <DialogTitle>{step === 1 ? t('create.titleStep1') : t('create.titleStep2')}</DialogTitle>
+ <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
+ <DialogHeader>
+ <DialogTitle>{t('create.titleStep2')}</DialogTitle>
  <DialogDescription>
- {step === 1
-   ? t('create.descriptionStep1')
-   : t('create.descriptionStep2')}
+ {t('create.descriptionStep2')}
  </DialogDescription>
  </DialogHeader>
- <DialogToolbar>
- <div className="flex items-center gap-0.5">
- {[
- { n: 1, label: t('create.stepNest'), active: step === 1 },
- { n: 2, label: t('create.stepDetails'), active: step === 2 },
- ].map((s) => (
- <div
- key={s.n}
- className={cn(
- 'relative flex h-7 items-center gap-1.5 px-2.5 text-mini transition-colors',
- s.active ? 'text-foreground' : 'text-muted-foreground',
- )}
- >
- <span
- className={cn(
- 'flex h-4 w-4 items-center justify-center rounded-sm font-mono text-micro tabular-nums',
- s.active ? 'bg-primary text-primary-foreground' : 'bg-surface-3 text-muted-foreground',
- )}
- >
- {s.n}
- </span>
- {s.label}
- {s.active && (
- <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
- )}
- </div>
- ))}
- </div>
- </DialogToolbar>
- <DialogBody>
- {/* ── Step 1: Nest Selection ── */}
- {step === 1 && (
- <div className="flex flex-col items-center py-6 text-center">
- <h3 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
- {t('create.assignTitle')}
- </h3>
- <p className="type-meta mt-2 max-w-md leading-relaxed">
-   {t('create.nestsHint')}
+ <DialogBody className="min-h-0 p-0">
+ <div className="grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_20rem]">
+ {/* ── Editor ── */}
+ <div className="min-w-0 space-y-3 overflow-y-auto p-4 lg:pr-5">
+ {importError ? (
+ <p className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-mini text-danger">
+ {importError}
  </p>
+ ) : null}
 
+ {/* 1 — Nest & identity */}
+ <FormSection index={1} title={t('create.stepNest')} eyebrow={t('details.title')}>
+ <div className="flex flex-col gap-3 text-left">
  {nests.length > 0 ? (
- <div className="mt-6 w-full max-w-xs space-y-1.5 text-left">
+ <div className="max-w-md space-y-1.5">
  <span className="type-overline">{t('create.selectNestLabel')}</span>
  <Combobox
  value={nestId || '__none__'}
@@ -737,7 +701,7 @@ function TemplateCreateModal() {
  />
  </div>
  ) : (
- <div className="mt-6 rounded-sm border border-dashed border-border/50 px-4 py-3">
+ <div className="rounded-sm border border-dashed border-border/50 px-4 py-3">
  <p className="type-meta">
  {t('create.noNests')}{' '}
  <button
@@ -745,7 +709,6 @@ function TemplateCreateModal() {
  className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary"
  onClick={() => {
  setOpen(false);
- setStep(1);
  window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal', { detail: { returnTo: 'template-create' } }));
  }}
  >
@@ -755,27 +718,10 @@ function TemplateCreateModal() {
  </p>
  </div>
  )}
-
+ <p className="type-meta">{t('create.nestsHint')}</p>
  </div>
- )}
 
- {/* ── Step 2: Template Form ── */}
- {step === 2 && (
- <div className="space-y-6">
- {importError ? (
- <p className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-mini text-danger">
- {importError}
- </p>
- ) : null}
- {/* Validation summary lives in the form body, not between the footer actions. */}
- {missingFields.length > 0 ? (
- <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-sm border border-warning/30 bg-warning/5 px-3 py-2">
- <span className="type-overline">{t('form.missingFields')}</span>
- <span className="text-micro font-medium text-warning">{missingFields.join(', ')}</span>
- </div>
- ) : (
- <p className="text-micro text-muted-foreground">{t('create.availableNow')}</p>
- )}
+ <div className="mt-3 border-t border-border/60 pt-3">
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.name')}</span>
@@ -813,20 +759,8 @@ function TemplateCreateModal() {
  placeholder="https://example.com/icon.png"
  />
  </label>
- <label className="block space-y-1">
- <span className="type-overline">{t('create.importTemplateLabel')}</span>
- <input
- className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors file:mr-3 file:h-6 file:rounded-sm file:border-0 file:bg-surface-2 file:px-2.5 file:text-mini file:font-medium file:text-muted-foreground hover:file:bg-surface-3"
- type="file"
- accept="application/json,.json,application/x-yaml,.yaml,.yml"
- onChange={handleImportFile}
- />
- {importError ? (
- <p className="text-mini text-danger">{importError}</p>
- ) : null}
- </label>
  </div>
- <label className="block space-y-1">
+ <label className="mt-3 block space-y-1">
  <span className="type-overline">{t('form.description')}</span>
  <textarea
  className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
@@ -836,8 +770,11 @@ function TemplateCreateModal() {
  placeholder={t('form.descriptionPlaceholder')}
  />
  </label>
- <div className="space-y-3">
- <BracketLabel tone="muted">{t('form.runtimeImages')}</BracketLabel>
+ </div>
+ </FormSection>
+
+ {/* 2 — Runtime images */}
+ <FormSection index={2} title={t('form.runtimeImages')} eyebrow={t('image')}>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.containerImage')}</span>
@@ -867,7 +804,7 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-2">
+ <div className="mt-3 space-y-2">
  <div className="flex flex-wrap items-center justify-between gap-2">
  <BracketLabel tone="muted">{t('form.imageVariants')}</BracketLabel>
  <button
@@ -953,9 +890,12 @@ function TemplateCreateModal() {
  </p>
  )}
  </div>
- </div>
+ </FormSection>
+
+ {/* 3 — Commands, config & resources */}
+ <FormSection index={3} title={t('form.commandsConfig')} eyebrow={t('details.runtime')}>
  <div className="space-y-3">
- <BracketLabel tone="muted">{t('form.commandsConfig')}</BracketLabel>
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.configFile')}</span>
  <input
@@ -980,6 +920,7 @@ function TemplateCreateModal() {
  placeholder="/config/server.properties, /config/extra.yml"
  />
  </label>
+ </div>
  <label className="block space-y-1">
  <span className="type-overline">{t('form.startupCommand')}</span>
  <textarea
@@ -1028,8 +969,11 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <div className="space-y-3">
+
+ <div className="mt-3 border-t border-border/60 pt-3">
+ <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
  <BracketLabel tone="muted">{t('form.resourcesPorts')}</BracketLabel>
+ </div>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.ports')}</span>
@@ -1063,8 +1007,11 @@ function TemplateCreateModal() {
  </label>
  </div>
  </div>
- <div className="space-y-3">
- <div className="flex flex-wrap items-center justify-between gap-2">
+ </FormSection>
+
+ {/* 4 — Variables */}
+ <FormSection index={4} title={t('form.variables')} eyebrow={t('details.variables')}>
+ <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
  <BracketLabel tone="muted">{t('form.variables')}</BracketLabel>
  <button
  className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
@@ -1209,9 +1156,10 @@ function TemplateCreateModal() {
  </div>
  </div>
  ))}
- </div>
- <div className="space-y-3">
- <BracketLabel tone="muted">{t('form.advancedFeatures')}</BracketLabel>
+ </FormSection>
+
+ {/* 5 — Advanced features */}
+ <FormSection index={5} title={t('form.advancedFeatures')} eyebrow={t('resources')}>
  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
  <label className="flex items-center gap-2 text-mini text-muted-foreground">
  <input
@@ -1252,7 +1200,7 @@ function TemplateCreateModal() {
  />
  </label>
  </div>
- <label className="block space-y-1">
+ <label className="mt-3 block space-y-1">
  <span className="type-overline">{t('form.backupPaths')}</span>
  <input
  className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
@@ -1261,7 +1209,6 @@ function TemplateCreateModal() {
  placeholder="/world, /plugins, /config"
  />
  </label>
- </div>
  <TemplateProviderEditor
  modManagerEnabled={modManagerEnabled}
  onModManagerEnabledChange={setModManagerEnabled}
@@ -1272,18 +1219,73 @@ function TemplateCreateModal() {
  pluginProviders={pluginProviders}
  onPluginProvidersChange={setPluginProviders}
  />
+ </FormSection>
  </div>
+
+ {/* ── Summary ── */}
+ <aside className="min-w-0 space-y-3 overflow-y-auto border-t border-border/70 bg-surface-1/40 p-4 lg:border-l lg:border-t-0">
+ <BracketLabel tone="muted">{t('details.title')}</BracketLabel>
+
+ <div className="overflow-hidden rounded-sm border border-border bg-card">
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <span className="block truncate text-data font-semibold text-foreground">
+ {name.trim() || '—'}
+ </span>
+ <p className="mt-1 line-clamp-2 text-micro text-muted-foreground">
+ {description.trim() || '—'}
+ </p>
+ </div>
+
+ <SummaryRow label={t('form.nestOptional')}>
+ {selectedNest ? (
+ <span className="flex min-w-0 items-center gap-2">
+ {selectedNest.icon ? (
+ <img
+ src={selectedNest.icon}
+ alt=""
+ className="h-4 w-4 rounded-sm object-cover"
+ />
+ ) : (
+ <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-muted-foreground">
+ {selectedNest.name.slice(0, 2)}
+ </span>
  )}
+ <span className="truncate text-micro text-foreground">{selectedNest.name}</span>
+ </span>
+ ) : (
+ <span className="text-micro text-muted-foreground">{t('state.notAvailable')}</span>
+ )}
+ </SummaryRow>
+
+ <SummaryRow label={t('details.runtime')}>
+ <span className="truncate text-micro text-foreground">
+ {image.trim() || '—'}
+ </span>
+ </SummaryRow>
+
+ <SummaryRow label={t('details.imageVariants')}>
+ <span className="text-micro text-foreground">
+ {validImageOptions.length ? validImageOptions.length : '—'}
+ </span>
+ </SummaryRow>
+
+ <SummaryRow label={t('details.variables')}>
+ <span className="text-micro text-foreground">
+ {definedVariables.length ? definedVariables.length : '—'}
+ </span>
+ </SummaryRow>
+
+ <SummaryRow label={t('details.ports')}>
+ <span className="truncate text-micro text-foreground">
+ {parsedPorts.length ? parsedPorts.join(', ') : '—'}
+ </span>
+ </SummaryRow>
+ </div>
+ </aside>
+ </div>
  </DialogBody>
- <DialogFooter className="sm:justify-between">
- <div className="flex items-center gap-2">
- {step === 2 && (
- <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(1)}>
- {t('common:actions.back')}
- </Button>
- )}
- </div>
- <div className="flex gap-2">
+
+ <DialogFooter className="gap-3 sm:justify-between">
  <Button
  variant="outline"
  size="sm"
@@ -1291,28 +1293,23 @@ function TemplateCreateModal() {
  onClick={() => {
  setOpen(false);
  setImportError('');
- setStep(1);
  }}
  >
  {t('common:actions.cancel')}
  </Button>
- {step === 1 && (
- <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(2)}>
- <SkipForward className="h-3.5 w-3.5" />
- {t('create.skip')}
- </Button>
+ <div className="flex min-w-0 items-center gap-3">
+ {missingFields.length > 0 ? (
+ <p className="min-w-0 truncate text-micro font-medium text-warning">
+ {t('form.missingFields')} {missingFields.join(', ')}
+ </p>
+ ) : (
+ <p className="hidden min-w-0 truncate text-micro text-muted-foreground sm:block">
+ {t('create.availableNow')}
+ </p>
  )}
- {step === 1 && nests.length > 0 && (
- <Button size="sm" className="h-8 px-3 text-mini" onClick={() => setStep(2)}>
- {t('create.continue')}
- <ArrowRight className="h-3.5 w-3.5" />
- </Button>
- )}
- {step === 2 && (
  <Button size="sm" className="h-8 px-3 text-mini" onClick={() => mutation.mutate()} disabled={disableSubmit}>
  {mutation.isPending ? t('create.creating') : t('create.submit')}
  </Button>
- )}
  </div>
  </DialogFooter>
  </DialogContent>
@@ -1500,6 +1497,22 @@ function TemplateCreateModal() {
  </DialogFooter>
  </DialogContent>
  </Dialog>
+ </div>
+ );
+}
+
+/** Aside row: a muted label on the left, the live value on the right. */
+function SummaryRow({
+ label,
+ children,
+}: {
+ label: string;
+ children: React.ReactNode;
+}) {
+ return (
+ <div className="flex items-center justify-between gap-2 border-b border-border/70 px-3 py-2 last:border-b-0">
+ <span className="shrink-0 text-micro text-muted-foreground">{label}</span>
+ <span className="flex min-w-0 items-center justify-end">{children}</span>
  </div>
  );
 }

@@ -531,7 +531,7 @@ export async function alertRoutes(app: FastifyInstance) {
         prisma.alert.findMany({
           where,
           skip,
-          take: Number(limit),
+          take: limitNum,
           include: {
             rule: { select: { id: true, name: true } },
             server: {
@@ -560,9 +560,9 @@ export async function alertRoutes(app: FastifyInstance) {
         ),
         pagination: {
           page: Number(page),
-          limit: Number(limit),
+          limit: limitNum,
           total,
-          totalPages: Math.ceil(total / Number(limit)),
+           totalPages: Math.ceil(total / limitNum),
         },
       });
     }
@@ -708,18 +708,18 @@ export async function alertRoutes(app: FastifyInstance) {
         const serverIds = Array.from(
           new Set(alerts.map((alert) => alert.serverId).filter((serverId): serverId is string => Boolean(serverId))),
         ) as string[];
-        for (const serverId of serverIds) {
-          const server = await ensureServerAccess({
+        const accessChecks = await Promise.all(
+          serverIds.map((serverId) => ensureServerAccess({
             userId: user.userId,
             serverId,
             reply,
             isAdmin,
             requiredPermissions: ['alert.update'],
             actor: request.user,
-          });
-          if (!server) {
-            return;
-          }
+          })),
+        );
+        if (accessChecks.some((server) => !server)) {
+          return;
         }
       }
 

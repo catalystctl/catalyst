@@ -8,8 +8,11 @@ const METRICS_RETENTION_DAYS = Number(process.env.METRICS_RETENTION_DAYS || '30'
 
 export const startMetricsRetention = (prisma: PrismaClient, logger: pino.Logger) => {
   const log = logger.child({ component: 'MetricsRetention' });
+  let running = false;
 
   const prune = async () => {
+    if (running) return;
+    running = true;
     try {
       const cutoff = new Date(Date.now() - METRICS_RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
@@ -19,6 +22,7 @@ export const startMetricsRetention = (prisma: PrismaClient, logger: pino.Logger)
         while (true) {
           const batch = await (prisma[model] as any).findMany({
             where: { timestamp: { lt: cutoff } },
+            orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
             take: BATCH_SIZE,
             select: { id: true },
           });
@@ -39,6 +43,8 @@ export const startMetricsRetention = (prisma: PrismaClient, logger: pino.Logger)
     } catch (err) {
       captureSystemError({ level: 'error', component: 'MetricsRetention', message: 'Failed to prune metrics', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
       log.error({ err }, 'Failed to prune metrics');
+    } finally {
+      running = false;
     }
   };
 

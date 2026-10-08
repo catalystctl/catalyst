@@ -27,12 +27,17 @@ export function startBackupRetention(
   gateway?: WebSocketGateway,
   intervalMs = DEFAULT_INTERVAL_MS,
 ): ReturnType<typeof setInterval> {
+  let running = false;
   const run = async () => {
+    if (running) return;
+    running = true;
     try {
       await enforceRetention(prisma, logger, gateway);
     } catch (err: any) {
       captureSystemError({ level: 'error', component: 'BackupRetention', message: 'Backup retention job failed', stack: err?.stack }).catch(() => {});
       logger.error({ err }, "Backup retention job failed");
+    } finally {
+      running = false;
     }
   };
 
@@ -80,7 +85,7 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
   for (const server of servers) {
     const backups = await prisma.backup.findMany({
       where: { serverId: server.id },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
       select: {
         id: true,
         name: true,
@@ -195,12 +200,17 @@ export function startStuckBackupStateWatchdog(
   gateway?: WebSocketGateway,
   intervalMs = STUCK_BACKUP_STATE_INTERVAL_MS,
 ): ReturnType<typeof setInterval> {
+  let running = false;
   const run = async () => {
+    if (running) return;
+    running = true;
     try {
       await cleanupStuckBackupStates(prisma, logger, gateway);
     } catch (err: any) {
       captureSystemError({ level: 'error', component: 'StuckBackupStateWatchdog', message: 'Stuck backup state cleanup failed', stack: err?.stack }).catch(() => {});
       logger.error({ err }, "Stuck backup state cleanup failed");
+    } finally {
+      running = false;
     }
   };
 

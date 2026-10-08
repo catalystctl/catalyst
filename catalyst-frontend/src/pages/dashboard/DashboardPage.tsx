@@ -17,6 +17,8 @@ import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 
 // Statuses that mean "this server needs an operator" on the fleet wall.
 const DOWN_STATUSES = new Set(['crashed', 'error', 'suspended', 'unhealthy']);
+const MAX_ATTENTION_ITEMS = 8;
+const MAX_SERVER_ATTENTION_ITEMS = MAX_ATTENTION_ITEMS - 2;
 
 interface AttentionItem {
   key: string;
@@ -142,6 +144,7 @@ function DashboardPage() {
   const attentionItems = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
     for (const server of servers) {
+      if (items.length >= MAX_SERVER_ATTENTION_ITEMS) break;
       if (DOWN_STATUSES.has(server.status)) {
         items.push({
           key: server.id,
@@ -171,7 +174,9 @@ function DashboardPage() {
         to: isAdmin ? '/admin/alerts' : '/servers',
       });
     }
-    return items;
+    // Keep the dashboard's operator feed bounded even when a large fleet is
+    // unhealthy, while reserving room for aggregate node/alert entries.
+    return items.slice(0, MAX_ATTENTION_ITEMS);
   }, [servers, nodesTotal, nodesOnline, alertsUnacked, canReadNodes, isAdmin, t]);
 
   const showAlertsTile = isAdmin || alertsUnacked > 0;

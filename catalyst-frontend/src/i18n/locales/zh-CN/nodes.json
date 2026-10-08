@@ -139,14 +139,11 @@
     "memory": "内存"
   },
   "create": {
-    "assignTitle": "将此节点分配到某个位置？",
     "chooseLocation": "选择位置…",
-    "continue": "继续",
     "deployFailed": "无法自动生成部署脚本。",
     "done": "完成",
     "generateManually": "以手动生成部署脚本。",
     "generating": "正在生成部署脚本…",
-    "location": "位置：{{name}}",
     "locationsHint": "位置表示节点所在的物理地点，例如 US-East 或 EU-West。",
     "nodeSettings": "节点设置",
     "noLocationsSuffix": "后才能注册节点。",
@@ -158,12 +155,10 @@
     "runScript": "在 {{hostname}} 上运行以下脚本以安装并注册代理。",
     "selectLocationLabel": "选择位置",
     "sftpPortHint": "SFTP 服务器在此节点上监听的端口。默认：2022",
-    "step1Description": "为此节点选择位置。",
     "step1Title": "注册节点",
     "step2Description": "配置主机名、资源和连接信息。",
     "step2Title": "节点详情",
     "step3Description": "使用以下脚本在节点上安装代理。",
-    "stepDeploy": "部署",
     "stepDetails": "详情",
     "success": "节点已注册"
   },

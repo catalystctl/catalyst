@@ -712,7 +712,6 @@
     "wipeTwoFactor": "清除两步验证"
   },
   "wizard": {
-    "account": "账号",
     "nodeAccess": "节点访问",
     "rolesServers": "角色与服务器",
     "security": "安全"

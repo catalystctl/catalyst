@@ -16,6 +16,7 @@ const activityCache = new SimpleCache<string, string>(5_000, 200);
 // polled every 30s per open dashboard. A shared 10s cache turns N viewers
 // into ~1 query set per interval instead of N.
 let resourcesCache: { data: any; timestamp: number } | null = null;
+let resourcesRequest: Promise<any> | null = null;
 const RESOURCES_CACHE_TTL = 10_000;
 
 function buildCacheKey(user: any): string {
@@ -159,15 +160,21 @@ export async function dashboardRoutes(app: FastifyInstance) {
         return reply.send(cachedActivity);
       }
 
-      // Get recent audit logs as activity
+      // Get recent audit logs as activity. Select only fields used below;
+      // audit details can contain comparatively large JSON payloads.
       const auditWhere = isAdmin ? {} : { userId: user.userId };
 
       const recentLogs = await prisma.auditLog.findMany({
         where: auditWhere,
         take: limit,
         orderBy: { timestamp: 'desc' },
-        include: {
-          user: { select: { username: true } },
+        select: {
+          id: true,
+          action: true,
+          resource: true,
+          resourceId: true,
+          details: true,
+          timestamp: true,
         },
       });
 
@@ -223,75 +230,82 @@ export async function dashboardRoutes(app: FastifyInstance) {
         return reply.send({ data: resourcesCache.data });
       }
 
-      // Get nodes with their latest resource usage metrics.
-      const nodes = await prisma.node.findMany({
-        where: { isOnline: true },
-        select: {
-          maxCpuCores: true,
-          maxMemoryMb: true,
-          metrics: {
+      // Coalesce simultaneous expiry misses so synchronized dashboard polls
+      // share one database request set instead of creating a burst.
+      if (!resourcesRequest) {
+        resourcesRequest = (async () => {
+          // Get nodes with their latest resource usage metrics.
+          const nodes = await prisma.node.findMany({
+            where: { isOnline: true },
             select: {
-              cpuPercent: true,
-              memoryUsageMb: true,
-              memoryTotalMb: true,
-              networkRxBytes: true,
-              networkTxBytes: true,
-              timestamp: true,
+              maxCpuCores: true,
+              maxMemoryMb: true,
+              metrics: {
+                select: {
+                  cpuPercent: true,
+                  memoryUsageMb: true,
+                  memoryTotalMb: true,
+                  networkRxBytes: true,
+                  networkTxBytes: true,
+                  timestamp: true,
+                },
+                orderBy: { timestamp: 'desc' },
+                take: 2,
+              },
             },
-            orderBy: { timestamp: 'desc' },
-            take: 2,
-          },
-        },
-      });
+          });
 
-      // Calculate aggregate utilization
-      let totalCpuUsed = 0;
-      let totalCpuLimit = 0;
-      let totalMemoryUsed = 0;
-      let totalMemoryLimit = 0;
-      // Sum of per-node RX+TX rates (MB/s) derived from the last two
-      // cumulative counters per node. Nodes with <2 samples contribute 0
-      // (unknown, not idle); counter resets clamp at 0.
-      let networkThroughput = 0;
+          // Calculate aggregate utilization
+          let totalCpuUsed = 0;
+          let totalCpuLimit = 0;
+          let totalMemoryUsed = 0;
+          let totalMemoryLimit = 0;
+          // Sum of per-node RX+TX rates (MB/s) derived from the last two
+          // cumulative counters per node. Nodes with <2 samples contribute 0
+          // (unknown, not idle); counter resets clamp at 0.
+          let networkThroughput = 0;
 
-      for (const node of nodes) {
-        const latestMetrics = node.metrics[0];
+          for (const node of nodes) {
+            const latestMetrics = node.metrics[0];
 
-        const cpuLimitCores = node.maxCpuCores ?? 0;
-        const cpuPercent = latestMetrics?.cpuPercent ?? 0;
+            const cpuLimitCores = node.maxCpuCores ?? 0;
+            const cpuPercent = latestMetrics?.cpuPercent ?? 0;
 
-        totalCpuUsed += (cpuPercent / 100) * cpuLimitCores;
-        totalCpuLimit += cpuLimitCores;
+            totalCpuUsed += (cpuPercent / 100) * cpuLimitCores;
+            totalCpuLimit += cpuLimitCores;
 
-        const memoryLimitMb = latestMetrics?.memoryTotalMb ?? node.maxMemoryMb ?? 0;
-        const memoryUsedMb = latestMetrics?.memoryUsageMb ?? 0;
+            const memoryLimitMb = latestMetrics?.memoryTotalMb ?? node.maxMemoryMb ?? 0;
+            const memoryUsedMb = latestMetrics?.memoryUsageMb ?? 0;
 
-        totalMemoryUsed += memoryUsedMb;
-        totalMemoryLimit += memoryLimitMb;
+            totalMemoryUsed += memoryUsedMb;
+            totalMemoryLimit += memoryLimitMb;
 
-        const newest = node.metrics[0];
-        const older = node.metrics[1];
-        if (newest && older) {
-          const elapsedSec = Math.max(1, (newest.timestamp.getTime() - older.timestamp.getTime()) / 1000);
-          const rxDelta = Number(newest.networkRxBytes - older.networkRxBytes) / elapsedSec / (1024 * 1024);
-          const txDelta = Number(newest.networkTxBytes - older.networkTxBytes) / elapsedSec / (1024 * 1024);
-          if (Number.isFinite(rxDelta) && rxDelta > 0) networkThroughput += rxDelta;
-          if (Number.isFinite(txDelta) && txDelta > 0) networkThroughput += txDelta;
-        }
+            const newest = node.metrics[0];
+            const older = node.metrics[1];
+            if (newest && older) {
+              const elapsedSec = Math.max(1, (newest.timestamp.getTime() - older.timestamp.getTime()) / 1000);
+              const rxDelta = Number(newest.networkRxBytes - older.networkRxBytes) / elapsedSec / (1024 * 1024);
+              const txDelta = Number(newest.networkTxBytes - older.networkTxBytes) / elapsedSec / (1024 * 1024);
+              if (Number.isFinite(rxDelta) && rxDelta > 0) networkThroughput += rxDelta;
+              if (Number.isFinite(txDelta) && txDelta > 0) networkThroughput += txDelta;
+            }
+          }
+
+          const cpuUtilization = totalCpuLimit > 0 ? clampPercent((totalCpuUsed / totalCpuLimit) * 100) : 0;
+          const memoryUtilization = totalMemoryLimit > 0 ? clampPercent((totalMemoryUsed / totalMemoryLimit) * 100) : 0;
+          networkThroughput = Math.round(networkThroughput * 100) / 100;
+
+          const payload = { cpuUtilization, memoryUtilization, networkThroughput };
+          resourcesCache = { data: payload, timestamp: Date.now() };
+          return payload;
+        })();
       }
 
-      const cpuUtilization = totalCpuLimit > 0 ? clampPercent((totalCpuUsed / totalCpuLimit) * 100) : 0;
-      const memoryUtilization = totalMemoryLimit > 0 ? clampPercent((totalMemoryUsed / totalMemoryLimit) * 100) : 0;
-      networkThroughput = Math.round(networkThroughput * 100) / 100;
-
-      const payload = {
-        cpuUtilization,
-        memoryUtilization,
-        networkThroughput,
-      };
-      resourcesCache = { data: payload, timestamp: Date.now() };
-
-      return reply.send({ data: payload });
+      try {
+        return reply.send({ data: await resourcesRequest });
+      } finally {
+        resourcesRequest = null;
+      }
     }
   );
 }
@@ -304,6 +318,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
  */
 export function __resetDashboardCachesForTests(): void {
   resourcesCache = null;
+  resourcesRequest = null;
   activityCache.clear();
 }
 

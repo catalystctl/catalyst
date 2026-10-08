@@ -76,7 +76,12 @@ export class TaskScheduler {
   async loadTasks() {
     const tasks = await this.prisma.scheduledTask.findMany({
       where: { enabled: true },
-      include: { server: true },
+      select: {
+        id: true, serverId: true, name: true, action: true, payload: true,
+        schedule: true, timeOffset: true, sequenceId: true, enabled: true,
+        lastRunAt: true, nextRunAt: true, lastStatus: true, lastError: true,
+        runCount: true, createdAt: true, updatedAt: true,
+      },
     });
 
     this.logger.info(`Loading ${tasks.length} scheduled tasks`);
@@ -216,6 +221,7 @@ export class TaskScheduler {
       // Check if server still exists
       const server = await this.prisma.server.findUnique({
         where: { id: task.serverId },
+        select: { id: true },
       });
 
       if (!server) {
@@ -349,6 +355,12 @@ export class TaskScheduler {
           enabled: true,
           nextRunAt: { lte: now },
         },
+        select: {
+          id: true, serverId: true, name: true, action: true, payload: true,
+          schedule: true, timeOffset: true, sequenceId: true, enabled: true,
+          lastRunAt: true, nextRunAt: true, lastStatus: true, lastError: true,
+          runCount: true, createdAt: true, updatedAt: true,
+        },
       });
       for (const task of missedTasks) {
         if (this.runningTasks.has(task.id)) {
@@ -398,6 +410,12 @@ export class TaskScheduler {
             { nextRunAt: { lte: now } },
             { nextRunAt: null },
           ],
+        },
+        select: {
+          id: true, serverId: true, name: true, action: true, payload: true,
+          schedule: true, timeOffset: true, sequenceId: true, enabled: true,
+          lastRunAt: true, nextRunAt: true, lastStatus: true, lastError: true,
+          runCount: true, createdAt: true, updatedAt: true,
         },
       });
 

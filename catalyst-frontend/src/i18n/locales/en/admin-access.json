@@ -747,7 +747,6 @@
     "wipeTwoFactor": "Wipe 2FA"
   },
   "wizard": {
-    "account": "Account",
     "nodeAccess": "Node Access",
     "rolesServers": "Roles & Servers",
     "security": "Security"

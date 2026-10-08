@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Sidebar from './Sidebar';
@@ -11,13 +11,17 @@ import { useProfileSync } from '../../hooks/useProfileSync';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
 import { useCmdK } from '../../hooks/useKeyboardShortcut';
 import { Menu, X, Search } from 'lucide-react';
-import SearchPalette from '../search/SearchPalette';
 import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
 import EnvRestartNotice from './EnvRestartNotice';
 import UploadProgressIndicator from '../files/UploadProgressIndicator';
 import DownloadProgressIndicator from '../files/DownloadProgressIndicator';
 import { showsDemoChrome } from '../../demo/isDemo';
+
+// The palette pulls in cmdk, search data and animation code. Keep it out of
+// the shell's critical path; the first Cmd/Ctrl+K or search-button click
+// loads it on demand.
+const SearchPalette = lazy(() => import('../search/SearchPalette'));
 
 function AppLayout() {
   useServerStateUpdates();
@@ -241,7 +245,11 @@ function AppLayout() {
         </div>
       </main>
 
-      <SearchPalette isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+      {isSearchOpen && (
+        <Suspense fallback={null}>
+          <SearchPalette isOpen onClose={() => setIsSearchOpen(false)} />
+        </Suspense>
+      )}
       <EnvRestartNotice />
       <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2 lg:bottom-6 lg:right-6">
         <UploadProgressIndicator />

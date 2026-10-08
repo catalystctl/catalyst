@@ -782,7 +782,6 @@
     "wipeTwoFactor": "Effacer la 2FA"
   },
   "wizard": {
-    "account": "Compte",
     "nodeAccess": "Accès aux nœuds",
     "rolesServers": "Rôles et serveurs",
     "security": "Sécurité"

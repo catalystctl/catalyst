@@ -145,7 +145,7 @@ export function useServerStateUpdates() {
               : typeof update.data.percent === 'number'
                 ? update.data.percent
                 : undefined;
-          return {
+          const next = {
             ...prev,
             status: update.state,
             portBindings: update.data.portBindings ?? prev.portBindings,
@@ -158,6 +158,13 @@ export function useServerStateUpdates() {
             operationProgress:
               progressPct !== undefined ? progressPct : prev.operationProgress,
           };
+          return next.status === prev.status &&
+            next.portBindings === prev.portBindings &&
+            next.lastExitCode === prev.lastExitCode &&
+            next.operationStage === prev.operationStage &&
+            next.operationProgress === prev.operationProgress
+            ? prev
+            : next;
         },
       );
     }
@@ -187,7 +194,7 @@ export function useServerStateUpdates() {
       (prev: any) => {
         const patchRow = (srv: any) => {
           const update = updates.get(srv.id) || updates.get(srv.uuid);
-          return update ? { ...srv, status: update.state } : srv;
+            return update && srv.status !== update.state ? { ...srv, status: update.state } : srv;
         };
         if (Array.isArray(prev)) return prev.map(patchRow);
         // admin-servers caches { servers, pagination }
@@ -245,7 +252,11 @@ export function useServerStateUpdates() {
       (prev: any) => {
         if (!prev || typeof prev !== 'object' || Array.isArray(prev)) return prev;
         const d = updates.get(prev.id) ?? updates.get(prev.uuid);
-        return d ? { ...prev, ...metricPatch(prev, d) } : prev;
+        if (!d) return prev;
+        const patch = metricPatch(prev, d);
+        return Object.keys(patch).some((key) => prev[key] !== patch[key])
+          ? { ...prev, ...patch }
+          : prev;
       },
     );
   }, [queryClient]);

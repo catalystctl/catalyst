@@ -321,11 +321,16 @@ function AdminNodesPage() {
  const nodes = useMemo(() => data?.nodes ?? [], [data?.nodes]);
 
  // ── Derived data ──
- const onlineNodes = nodes.filter((node) => node.isOnline);
- const offlineNodes = nodes.filter((node) => !node.isOnline);
- const totalServers = nodes.reduce((acc, node) => acc + (node._count?.servers ?? 0), 0);
- const totalCpu = nodes.reduce((acc, node) => acc + (node.maxCpuCores ?? 0), 0);
- const totalMemory = nodes.reduce((acc, node) => acc + (node.maxMemoryMb ?? 0), 0);
+  const { onlineNodes, offlineNodes, totalServers, totalCpu, totalMemory } = useMemo(() => {
+  const result = { onlineNodes: [] as typeof nodes, offlineNodes: [] as typeof nodes, totalServers: 0, totalCpu: 0, totalMemory: 0 };
+  for (const node of nodes) {
+  (node.isOnline ? result.onlineNodes : result.offlineNodes).push(node);
+  result.totalServers += node._count?.servers ?? 0;
+  result.totalCpu += node.maxCpuCores ?? 0;
+  result.totalMemory += node.maxMemoryMb ?? 0;
+  }
+  return result;
+  }, [nodes]);
 
  // Location lookup map
  const locationMap = useMemo(() => {
@@ -409,8 +414,14 @@ function AdminNodesPage() {
  return entries;
  }, [filteredNodes, locationMap]);
 
- const filteredIds = filteredNodes.filter((node) => mayDeleteNode(node.id)).map((node) => node.id);
- const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+  const filteredIds = useMemo(
+  () => filteredNodes
+  .filter((node) => canDeleteAnyNode || Boolean(assignedNodeIds?.has(node.id)))
+  .map((node) => node.id),
+  [filteredNodes, assignedNodeIds, canDeleteAnyNode],
+  );
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIdSet.has(id));
 
  const currentNodeIds = useMemo(() => new Set(nodes.map((n) => n.id)), [nodes]);
  const validSelectedIds = useMemo(
@@ -452,12 +463,12 @@ function AdminNodesPage() {
  const showGroupedView = selectedLocationId === null && locations.length > 0;
 
  // Helper to render node rows (used in both grouped and flat views)
- const renderNodeRows = (groupNodes: NodeInfo[]) =>
- groupNodes.map((node) => (
+  const renderNodeRows = (groupNodes: NodeInfo[]) =>
+  groupNodes.map((node) => (
  <NodeRow
  key={node.id}
  node={node}
- isSelected={selectedIds.includes(node.id)}
+  isSelected={selectedIdSet.has(node.id)}
  canDelete={mayDeleteNode(node.id)}
  setSelectedIds={setSelectedIds}
  handleBulkDelete={handleBulkDelete}
@@ -468,11 +479,13 @@ function AdminNodesPage() {
 
  /** Toggle one grouped section's ids without disturbing other selections. */
  const toggleGroupSelection = (groupNodes: NodeInfo[]) => {
- const ids = groupNodes.filter((node) => mayDeleteNode(node.id)).map((node) => node.id);
+  const ids = groupNodes.filter((node) => mayDeleteNode(node.id)).map((node) => node.id);
  if (!ids.length) return;
  setSelectedIds((prev) => {
- if (ids.every((id) => prev.includes(id))) {
- return prev.filter((id) => !ids.includes(id));
+  const previous = new Set(prev);
+  if (ids.every((id) => previous.has(id))) {
+  const remove = new Set(ids);
+  return prev.filter((id) => !remove.has(id));
  }
  return Array.from(new Set([...prev, ...ids]));
  });
@@ -749,7 +762,7 @@ function AdminNodesPage() {
  groupedByLocation.map(([locationId, groupNodes]) => {
  const location = locationId ? (locationMap.get(locationId) ?? null) : null;
  const deletableGroupNodes = groupNodes.filter((node) => mayDeleteNode(node.id));
- const groupSelected = deletableGroupNodes.length > 0 && deletableGroupNodes.every((n) => selectedIds.includes(n.id));
+  const groupSelected = deletableGroupNodes.length > 0 && deletableGroupNodes.every((n) => selectedIdSet.has(n.id));
  return (
  <div key={locationId ?? '__unassigned__'}>
  <LocationSectionHeader

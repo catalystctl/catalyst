@@ -12,7 +12,6 @@ import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { nodesApi } from '../../services/api/nodes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
@@ -22,15 +21,22 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { FormSection } from '@/components/ui/form-section';
+import { BracketLabel } from '@/components/deck/primitives';
 import { cn } from '@/lib/utils';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
 const fieldClass =
   'h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40';
-/** Labelled block on the dialog surface — never a nested rounded card. */
-const blockClass = 'rounded-sm border border-border/50 bg-surface-1/40 p-3';
-/** 1px separator for stacked fields inside a block. */
-const dividerClass = 'border-t border-border/50 pt-3';
+
+/** Network mode → aside summary label. */
+const NETWORK_MODE_LABELS: Record<string, string> = {
+  bridge: 'networkModes.bridge',
+  host: 'networkModes.host',
+  macvlan: 'networkModes.macvlan',
+  'mc-lan-static': 'networkModes.mcLanStatic',
+  'mc-lan-dynamic': 'networkModes.mcLanDynamic',
+};
 
 type Props = {
   serverId: string;
@@ -39,6 +45,14 @@ type Props = {
   onOpenChange?: (open: boolean) => void;
 };
 
+/**
+ * The server editor.
+ *
+ * One screen, three decisions: what the server is called, the resource and
+ * allocation limits it runs under, and — depending on the node's network
+ * mode — which IP or allocation it is reachable on. The aside mirrors the
+ * form live so the resize consequences stay visible while typing.
+ */
 function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, onOpenChange }: Props) {
   const { t } = useTranslation('servers');
   const [internalOpen, setInternalOpen] = useState(false);
@@ -298,6 +312,21 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     backupAllocationRaw !== '' &&
     (!Number.isFinite(backupAllocationParsed) || backupAllocationParsed < 0);
 
+  // ── Live summary (aside) ─────────────────────────────────────────────
+  const networkModeLabel = server?.networkMode
+    ? NETWORK_MODE_LABELS[server.networkMode]
+      ? t(NETWORK_MODE_LABELS[server.networkMode])
+      : server.networkMode
+    : '—';
+  const selectedAllocation = isBridgeNetwork
+    ? availableAllocations.find((allocation) => allocation.id === allocationId)
+    : undefined;
+  const allocationSummary = selectedAllocation
+    ? `${selectedAllocation.ip}:${selectedAllocation.port}${
+        selectedAllocation.alias ? ` (${selectedAllocation.alias})` : ''
+      }`
+    : '';
+
   const handleSave = () => {
     if (retentionChanged) {
       backupSettingsMutation.mutate(retentionValue);
@@ -319,175 +348,244 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
         </button>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="md">
+        <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
           <DialogHeader>
             <DialogTitle>{t('updateServer.title')}</DialogTitle>
-            <DialogDescription>
-              {t('updateServer.description')}
-            </DialogDescription>
+            <DialogDescription>{t('updateServer.description')}</DialogDescription>
           </DialogHeader>
-          <DialogBody className="space-y-3">
-            <div className={`${blockClass} space-y-3`}>
-              <div className="space-y-1.5">
-                <Label htmlFor="update-server-name" compact>{t('fields.name')}</Label>
-                <Input
-                  id="update-server-name"
-                  className={fieldClass}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="minecraft-01"
-                />
+          <DialogBody className="min-h-0 p-0">
+            <div className="grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_20rem]">
+              {/* ── Editor ── */}
+              <div className="min-w-0 space-y-3 overflow-y-auto p-4 lg:pr-5">
+                {/* 1 — Identity */}
+                <FormSection index={1} title={t('createServer.fields.name')}>
+                  <label className="block space-y-1.5">
+                    <span className="text-micro font-medium text-muted-foreground">
+                      {t('fields.name')}
+                    </span>
+                    <Input
+                      className={fieldClass}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="minecraft-01"
+                    />
+                  </label>
+                </FormSection>
+
+                {/* 2 — Resource & allocation limits */}
+                <FormSection index={2} title={t('createServer.resources.title')}>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('fields.memoryMb')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={memory}
+                        onChange={(e) => setMemory(e.target.value)}
+                        type="number"
+                        min={256}
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('updateServer.cpuCores')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={cpu}
+                        onChange={(e) => setCpu(e.target.value)}
+                        type="number"
+                        min={1}
+                        step={1}
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('fields.diskMb')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={disk}
+                        onChange={(e) => setDisk(e.target.value)}
+                        type="number"
+                        min={1024}
+                        step={1024}
+                      />
+                      {isRunning && isShrink ? (
+                        <span className="text-micro text-warning">
+                          {t('updateServer.shrinkWarning')}
+                        </span>
+                      ) : null}
+                    </label>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-3 border-t border-border/60 pt-3 sm:grid-cols-3">
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('updateServer.databaseAllocation')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={databaseAllocation}
+                        onChange={(e) => setDatabaseAllocation(e.target.value)}
+                        type="number"
+                        min={0}
+                        step={1}
+                      />
+                      <span className="type-meta">
+                        {t('updateServer.databaseAllocationHint')}
+                      </span>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('updateServer.backupAllocation')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={backupAllocationMb}
+                        onChange={(e) => setBackupAllocationMb(e.target.value)}
+                        type="number"
+                        min={0}
+                        step={128}
+                      />
+                      <span className="type-meta">
+                        {t('updateServer.backupAllocationHint')}
+                      </span>
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-micro font-medium text-muted-foreground">
+                        {t('updateServer.backupRetention')}
+                      </span>
+                      <Input
+                        className={cn(fieldClass, 'font-mono tabular-nums')}
+                        value={backupRetentionCount}
+                        onChange={(e) => setBackupRetentionCount(e.target.value)}
+                        type="number"
+                        min={0}
+                        max={1000}
+                        step={1}
+                      />
+                      <span className="type-meta">
+                        {t('updateServer.backupRetentionHint')}
+                      </span>
+                    </label>
+                  </div>
+                </FormSection>
+
+                {/* 3 — Network: which IP / allocation answers for this server */}
+                {(isIpamNetwork || isBridgeNetwork) && (
+                  <FormSection index={3} title={t('cloneServer.networkAllocation')}>
+                    {isIpamNetwork ? (
+                      <div className="space-y-3">
+                        <p className="type-meta">{t('updateServer.primaryIpHint')}</p>
+                        <label className="block space-y-1.5">
+                          <span className="text-micro font-medium text-muted-foreground">
+                            {t('updateServer.primaryIp')}
+                          </span>
+                          <select
+                            className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
+                            value={primaryIp}
+                            onChange={(event) => setPrimaryIp(event.target.value)}
+                            disabled={isRunning}
+                          >
+                            <option value="">{t('fields.autoAssign')}</option>
+                            {server?.primaryIp ? (
+                              <option value={server.primaryIp}>
+                                {t('updateServer.currentIp', { ip: server.primaryIp })}
+                              </option>
+                            ) : null}
+                            {availableIps
+                              .filter((ip) => ip !== server?.primaryIp)
+                              .map((ip) => (
+                                <option key={ip} value={ip}>
+                                  {ip}
+                                </option>
+                              ))}
+                          </select>
+                        </label>
+                        {ipLoadError ? <p className="text-micro text-warning">{ipLoadError}</p> : null}
+                        {!ipLoadError && availableIps.length === 0 ? (
+                          <p className="type-meta">{t('fields.noIps')}</p>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="type-meta">{t('updateServer.primaryAllocationHint')}</p>
+                        <label className="block space-y-1.5">
+                          <span className="text-micro font-medium text-muted-foreground">
+                            {t('updateServer.primaryAllocation')}
+                          </span>
+                          <select
+                            className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
+                            value={allocationId}
+                            onChange={(event) => setAllocationId(event.target.value)}
+                            disabled={isRunning}
+                          >
+                            <option value="">{t('fields.selectAllocation')}</option>
+                            {availableAllocations.map((allocation) => (
+                              <option key={allocation.id} value={allocation.id}>
+                                {allocation.ip}:{allocation.port}
+                                {allocation.alias ? ` (${allocation.alias})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {allocLoadError ? (
+                          <p className="text-micro text-warning">{allocLoadError}</p>
+                        ) : null}
+                        {!allocLoadError && availableAllocations.length === 0 ? (
+                          <p className="type-meta">{t('updateServer.noAllocations')}</p>
+                        ) : null}
+                      </div>
+                    )}
+                  </FormSection>
+                )}
               </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-memory" compact>{t('fields.memoryMb')}</Label>
-                <Input
-                  id="update-server-memory"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={memory}
-                  onChange={(e) => setMemory(e.target.value)}
-                  type="number"
-                  min={256}
-                />
-              </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-cpu" compact>{t('updateServer.cpuCores')}</Label>
-                <Input
-                  id="update-server-cpu"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={cpu}
-                  onChange={(e) => setCpu(e.target.value)}
-                  type="number"
-                  min={1}
-                  step={1}
-                />
-              </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-disk" compact>{t('fields.diskMb')}</Label>
-                <Input
-                  id="update-server-disk"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={disk}
-                  onChange={(e) => setDisk(e.target.value)}
-                  type="number"
-                  min={1024}
-                  step={1024}
-                />
-                {isRunning && isShrink ? (
-                  <span className="text-micro text-warning">
-                    {t('updateServer.shrinkWarning')}
-                  </span>
-                ) : null}
-              </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-db" compact>{t('updateServer.databaseAllocation')}</Label>
-                <Input
-                  id="update-server-db"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={databaseAllocation}
-                  onChange={(e) => setDatabaseAllocation(e.target.value)}
-                  type="number"
-                  min={0}
-                  step={1}
-                />
-                <span className="type-meta">
-                  {t('updateServer.databaseAllocationHint')}
-                </span>
-              </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-backup-allocation" compact>{t('updateServer.backupAllocation')}</Label>
-                <Input
-                  id="update-server-backup-allocation"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={backupAllocationMb}
-                  onChange={(e) => setBackupAllocationMb(e.target.value)}
-                  type="number"
-                  min={0}
-                  step={128}
-                />
-                <span className="type-meta">
-                  {t('updateServer.backupAllocationHint')}
-                </span>
-              </div>
-              <div className={cn('space-y-1.5', dividerClass)}>
-                <Label htmlFor="update-server-backup-retention" compact>{t('updateServer.backupRetention')}</Label>
-                <Input
-                  id="update-server-backup-retention"
-                  className={cn(fieldClass, 'font-mono tabular-nums')}
-                  value={backupRetentionCount}
-                  onChange={(e) => setBackupRetentionCount(e.target.value)}
-                  type="number"
-                  min={0}
-                  max={1000}
-                  step={1}
-                />
-                <span className="type-meta">
-                  {t('updateServer.backupRetentionHint')}
-                </span>
-              </div>
-            </div>
-            {isIpamNetwork ? (
-              <div className={`${blockClass} space-y-3`}>
-                <p className="type-meta">
-                  {t('updateServer.primaryIpHint')}
-                </p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="update-server-ip" compact>{t('updateServer.primaryIp')}</Label>
-                  <select
-                    id="update-server-ip"
-                    className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
-                    value={primaryIp}
-                    onChange={(event) => setPrimaryIp(event.target.value)}
-                    disabled={isRunning}
-                  >
-                    <option value="">{t('fields.autoAssign')}</option>
-                    {server?.primaryIp ? (
-                      <option value={server.primaryIp}>{t('updateServer.currentIp', { ip: server.primaryIp })}</option>
+
+              {/* ── Summary ── */}
+              <aside className="min-w-0 space-y-3 overflow-y-auto border-t border-border/70 bg-surface-1/40 p-4 lg:border-l lg:border-t-0">
+                <BracketLabel tone="muted">{t('cloneServer.review.summaryTitle')}</BracketLabel>
+
+                <div className="overflow-hidden rounded-sm border border-border bg-card">
+                  <div className="border-b border-border/70 px-3 py-2.5">
+                    <span className="block truncate text-data font-semibold text-foreground">
+                      {name.trim() || '—'}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-border/70">
+                    <SummaryRow label={t('fields.memoryMb')} value={memory.trim() || '—'} />
+                    <SummaryRow label={t('updateServer.cpuCores')} value={cpu.trim() || '—'} />
+                    <SummaryRow label={t('fields.diskMb')} value={disk.trim() || '—'} />
+                    <SummaryRow
+                      label={t('updateServer.databaseAllocation')}
+                      value={databaseAllocation.trim() || '—'}
+                    />
+                    <SummaryRow
+                      label={t('updateServer.backupAllocation')}
+                      value={backupAllocationMb.trim() || '—'}
+                    />
+                    <SummaryRow
+                      label={t('updateServer.backupRetention')}
+                      value={backupRetentionCount.trim() || '—'}
+                    />
+                    <SummaryRow label={t('fields.networkMode')} value={networkModeLabel} />
+                    {isIpamNetwork ? (
+                      <SummaryRow
+                        label={t('updateServer.primaryIp')}
+                        value={primaryIp.trim() || t('fields.autoAssign')}
+                      />
+                    ) : isBridgeNetwork ? (
+                      <SummaryRow
+                        label={t('updateServer.primaryAllocation')}
+                        value={allocationSummary || '—'}
+                      />
                     ) : null}
-                    {availableIps
-                      .filter((ip) => ip !== server?.primaryIp)
-                      .map((ip) => (
-                        <option key={ip} value={ip}>
-                          {ip}
-                        </option>
-                      ))}
-                  </select>
+                  </div>
                 </div>
-                {ipLoadError ? <p className="text-micro text-warning">{ipLoadError}</p> : null}
-                {!ipLoadError && availableIps.length === 0 ? (
-                  <p className="type-meta">{t('fields.noIps')}</p>
-                ) : null}
-              </div>
-            ) : isBridgeNetwork ? (
-              <div className={`${blockClass} space-y-3`}>
-                <p className="type-meta">
-                  {t('updateServer.primaryAllocationHint')}
-                </p>
-                <div className="space-y-1.5">
-                  <Label htmlFor="update-server-alloc" compact>{t('updateServer.primaryAllocation')}</Label>
-                  <select
-                    id="update-server-alloc"
-                    className={cn(fieldClass, 'font-mono tabular-nums disabled:opacity-50')}
-                    value={allocationId}
-                    onChange={(event) => setAllocationId(event.target.value)}
-                    disabled={isRunning}
-                  >
-                    <option value="">{t('fields.selectAllocation')}</option>
-                    {availableAllocations.map((allocation) => (
-                      <option key={allocation.id} value={allocation.id}>
-                        {allocation.ip}:{allocation.port}
-                        {allocation.alias ? ` (${allocation.alias})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                {allocLoadError ? <p className="text-micro text-warning">{allocLoadError}</p> : null}
-                {!allocLoadError && availableAllocations.length === 0 ? (
-                  <p className="type-meta">{t('updateServer.noAllocations')}</p>
-                ) : null}
-              </div>
-            ) : null}
+              </aside>
+            </div>
           </DialogBody>
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
             <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => setOpen(false)}>
               {t('common:actions.cancel')}
             </Button>
@@ -510,6 +608,16 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** Aside summary row — muted label, live value. */
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 px-3 py-2">
+      <span className="shrink-0 text-micro text-muted-foreground">{label}</span>
+      <span className="min-w-0 truncate text-micro font-medium text-foreground">{value}</span>
+    </div>
   );
 }
 

@@ -142,39 +142,37 @@ export default function ServerConsoleTab({
     [entries, activeStreams],
   );
 
-  const copyText = useMemo(
-    () => visibleEntries.map((entry) => entry.data).join(''),
-    [visibleEntries],
+  const searchMatchCount = useMemo(
+    () => {
+      if (!searchOpen || !searchQuery) return 0;
+      const normalizedQuery = searchQuery.toLowerCase();
+      return visibleEntries.filter((entry) => entry.data.toLowerCase().includes(normalizedQuery)).length;
+    },
+    [searchOpen, visibleEntries, searchQuery],
   );
 
-  const searchMatchCount = useMemo(
-    () =>
-      searchQuery
-        ? visibleEntries.filter((entry) => entry.data.toLowerCase().includes(searchQuery.toLowerCase())).length
-        : 0,
-    [visibleEntries, searchQuery],
-  );
+  const getCopyText = useCallback(() => visibleEntries.map((entry) => entry.data).join(''), [visibleEntries]);
 
   const handleCopy = useCallback(async () => {
     const selected = xtermRef.current?.getSelection().trim();
     try {
-      await navigator.clipboard.writeText(selected || copyText);
+      await navigator.clipboard.writeText(selected || getCopyText());
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       setCopied(false);
     }
-  }, [copyText]);
+  }, [getCopyText]);
 
   const handleDownload = useCallback(() => {
-    const blob = new Blob([copyText], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([getCopyText()], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `console-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.log`;
     link.click();
     URL.revokeObjectURL(url);
-  }, [copyText]);
+  }, [getCopyText]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -612,4 +610,3 @@ export default function ServerConsoleTab({
     </div>
   );
 }
-

@@ -242,7 +242,6 @@
     "steps": {
       "details": "Details",
       "network": "Network",
-      "resources": "Resources",
       "startup": "Startup"
     },
     "submit": "Create server",

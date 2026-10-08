@@ -140,14 +140,11 @@
     "memory": "Memory"
   },
   "create": {
-    "assignTitle": "Assign this node to a location?",
     "chooseLocation": "Choose a location…",
-    "continue": "Continue",
     "deployFailed": "Failed to generate deployment script automatically.",
     "done": "Done",
     "generateManually": "to generate the deploy script manually.",
     "generating": "Generating deployment script…",
-    "location": "Location: {{name}}",
     "locationsHint": "Locations represent where your nodes physically reside. For example, US-East or EU-West.",
     "nodeSettings": "node settings",
     "noLocationsSuffix": "first before registering a node.",
@@ -159,12 +156,10 @@
     "runScript": "Run the script below on {{hostname}} to install and register the agent.",
     "selectLocationLabel": "Select a location",
     "sftpPortHint": "Port the SFTP server will listen on (on this node). Default: 2022",
-    "step1Description": "Choose a location for this node.",
     "step1Title": "Register node",
     "step2Description": "Configure hostname, resources, and connection details.",
     "step2Title": "Node details",
     "step3Description": "Install the agent on your node using the script below.",
-    "stepDeploy": "Deploy",
     "stepDetails": "Details",
     "success": "Node registered"
   },

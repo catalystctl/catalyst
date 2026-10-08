@@ -9,14 +9,20 @@ const SYSTEM_ERROR_RETENTION_DAYS = 30;
 
 export const startLogRetention = (prisma: PrismaClient, logger: pino.Logger) => {
   const log = logger.child({ component: 'LogRetention' });
+  let serverLogsRunning = false;
+  let systemErrorsRunning = false;
 
   const pruneServerLogs = async () => {
+    if (serverLogsRunning) return;
+    serverLogsRunning = true;
+    try {
     const cutoff = new Date(Date.now() - LOG_RETENTION_DAYS * ONE_DAY_MS);
     let totalDeleted = 0;
 
     while (true) {
       const batch = await prisma.serverLog.findMany({
         where: { timestamp: { lt: cutoff } },
+        orderBy: [{ timestamp: 'asc' }, { id: 'asc' }],
         take: BATCH_SIZE,
         select: { id: true },
       });
@@ -33,15 +39,22 @@ export const startLogRetention = (prisma: PrismaClient, logger: pino.Logger) => 
     if (totalDeleted > 0) {
       log.info({ count: totalDeleted }, 'Pruned old server logs');
     }
+    } finally {
+      serverLogsRunning = false;
+    }
   };
 
   const pruneSystemErrors = async () => {
+    if (systemErrorsRunning) return;
+    systemErrorsRunning = true;
+    try {
     const cutoff = new Date(Date.now() - SYSTEM_ERROR_RETENTION_DAYS * ONE_DAY_MS);
     let totalDeleted = 0;
 
     while (true) {
       const batch = await prisma.systemError.findMany({
         where: { createdAt: { lt: cutoff } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         take: BATCH_SIZE,
         select: { id: true },
       });
@@ -57,6 +70,9 @@ export const startLogRetention = (prisma: PrismaClient, logger: pino.Logger) => 
 
     if (totalDeleted > 0) {
       log.info({ count: totalDeleted }, 'Pruned old system errors');
+    }
+    } finally {
+      systemErrorsRunning = false;
     }
   };
 

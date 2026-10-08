@@ -24,6 +24,17 @@ interface AlertActions {
   cooldownMinutes?: number;
 }
 
+async function runWithConcurrency<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const item = items[next++];
+      await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+}
+
 /**
  * Push the owner-visible `alert` event so non-admin owners see alert changes
  * (U1 / P1.3): the FE handler for `type === 'alert'` invalidates alerts +
@@ -85,6 +96,8 @@ export class AlertService {
   private prisma: PrismaClient;
   private logger: pino.Logger;
   private checkInterval?: ReturnType<typeof setInterval>;
+  private evaluationRunning = false;
+  private retryRunning = false;
 
   constructor(prisma: PrismaClient, logger: pino.Logger) {
     this.prisma = prisma;
@@ -130,6 +143,8 @@ export class AlertService {
    * Evaluate all enabled alert rules
    */
   async evaluateAlerts() {
+    if (this.evaluationRunning) return;
+    this.evaluationRunning = true;
     try {
       // Cross-host singleton: only one backend instance evaluates alerts per
       // cycle when Redis is available. The TTL bounds the tick (25s) so a
@@ -137,11 +152,10 @@ export class AlertService {
       await withDistributedLock('alert-evaluation-tick', 25_000, async () => {
         const rules = await this.prisma.alertRule.findMany({
           where: { enabled: true },
+          select: { id: true, userId: true, type: true, target: true, targetId: true, conditions: true, actions: true },
         });
 
-        for (const rule of rules) {
-          await this.evaluateRule(rule);
-        }
+        await runWithConcurrency(rules, 4, (rule) => this.evaluateRule(rule));
       }, 0);
     } catch (error) {
       // Lock contention ("already held") is expected under multi-host
@@ -152,6 +166,8 @@ export class AlertService {
       }
       captureSystemError({ level: 'error', component: 'AlertService', message: 'Failed to evaluate alerts', stack: error instanceof Error ? error.stack : undefined }).catch(() => {});
       this.logger.error(error, 'Failed to evaluate alerts');
+    } finally {
+      this.evaluationRunning = false;
     }
   }
 
@@ -194,7 +210,10 @@ export class AlertService {
       const metrics = await this.prisma.serverMetrics.findFirst({
         where: { serverId: rule.targetId },
         orderBy: { timestamp: 'desc' },
-        include: { server: true },
+        select: {
+          cpuPercent: true, memoryUsageMb: true, diskUsageMb: true,
+          server: { select: { name: true, allocatedMemoryMb: true, allocatedDiskMb: true } },
+        },
       });
 
       if (!metrics) return;
@@ -285,7 +304,11 @@ export class AlertService {
       const metrics = await this.prisma.nodeMetrics.findFirst({
         where: { nodeId: rule.targetId },
         orderBy: { timestamp: 'desc' },
-        include: { node: true },
+        select: {
+          cpuPercent: true, memoryUsageMb: true, memoryTotalMb: true,
+          diskUsageMb: true, diskTotalMb: true,
+          node: { select: { name: true } },
+        },
       });
 
       if (!metrics) return;
@@ -392,6 +415,7 @@ export class AlertService {
         ],
         ...(rule.targetId ? { id: rule.targetId } : {}),
       },
+      select: { id: true, name: true, lastSeenAt: true },
     });
 
     for (const node of offlineNodes) {
@@ -436,6 +460,7 @@ export class AlertService {
         status: 'crashed',
         ...(rule.targetId ? { id: rule.targetId } : {}),
       },
+      select: { id: true, name: true, crashCount: true, maxCrashCount: true, lastCrashAt: true },
     });
 
     for (const server of crashedServers) {
@@ -819,6 +844,9 @@ export class AlertService {
   }
 
   private async retryFailedDeliveries() {
+    if (this.retryRunning) return;
+    this.retryRunning = true;
+    try {
     const maxAttempts = 3;
     const retryDelayMs = 5 * 60 * 1000;
     const cutoff = new Date(Date.now() - retryDelayMs);
@@ -829,14 +857,16 @@ export class AlertService {
         OR: [{ lastAttemptAt: null }, { lastAttemptAt: { lt: cutoff } }],
       },
       take: 50,
+      orderBy: { id: 'asc' },
+      include: { alert: { select: { id: true, type: true, severity: true, title: true, message: true, metadata: true, createdAt: true } } },
     });
     if (!deliveries.length) {
       return;
     }
-    for (const delivery of deliveries) {
-      const alert = await this.prisma.alert.findUnique({ where: { id: delivery.alertId } });
+    await runWithConcurrency(deliveries, 5, async (delivery) => {
+      const alert = delivery.alert;
       if (!alert) {
-        continue;
+        return;
       }
       const retryContext = {
         alertId: alert.id,
@@ -848,20 +878,23 @@ export class AlertService {
         createdAt: alert.createdAt.toISOString(),
       };
       if (delivery.channel === 'webhook') {
-        await this.retryWebhookDelivery(delivery.id, delivery.target, retryContext);
+        await this.retryWebhookDelivery(delivery.id, delivery.target, retryContext, alert);
       } else if (delivery.channel === 'email') {
         await this.retryEmailDelivery(delivery.id, delivery.target, alert);
       }
+    });
+    } finally {
+      this.retryRunning = false;
     }
   }
 
-  private async retryWebhookDelivery(deliveryId: string, webhookUrl: string, context: any) {
+  private async retryWebhookDelivery(deliveryId: string, webhookUrl: string, context: any, alert?: any) {
     try {
-      const alert = await this.prisma.alert.findUnique({ where: { id: context.alertId } });
-      if (!alert) {
+      const retryAlert = alert ?? await this.prisma.alert.findUnique({ where: { id: context.alertId } });
+      if (!retryAlert) {
         throw new Error('Alert not found for webhook retry');
       }
-      const payload = this.buildWebhookPayload(webhookUrl, context, alert);
+      const payload = this.buildWebhookPayload(webhookUrl, context, retryAlert);
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

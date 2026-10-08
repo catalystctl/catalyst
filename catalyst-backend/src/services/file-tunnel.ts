@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import fs from "fs";
+import { promises as fsp } from "fs";
 import os from "os";
 import path from "path";
 import type { Logger } from "pino";
@@ -60,6 +61,8 @@ export function uploadTransferTimeoutMs(sizeBytes: number): number {
 export class FileTunnelService {
   /** Pending requests waiting for agent response, keyed by requestId */
   private pending = new Map<string, PendingRequest>();
+  /** Admission counts include both queued and in-flight requests. */
+  private pendingByNode = new Map<string, number>();
   /** Queued requests per node waiting for agent to poll */
   private queues = new Map<string, FileTunnelRequest[]>();
   /** Agents currently long-polling, keyed by nodeId */
@@ -73,7 +76,10 @@ export class FileTunnelService {
     this.logger = logger.child({ service: "file-tunnel" });
     this.tempDir = path.join(os.tmpdir(), "catalyst-uploads");
     try {
-      fs.mkdirSync(this.tempDir, { recursive: true });
+      void fsp.mkdir(this.tempDir, { recursive: true }).catch((err) => {
+        captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to create upload temp directory', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
+        this.logger.error({ err }, "Failed to create upload temp directory");
+      });
     } catch (err) {
       captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to create upload temp directory', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
       this.logger.error({ err }, "Failed to create upload temp directory");
@@ -100,9 +106,9 @@ export class FileTunnelService {
     const settings = await getSecuritySettings();
 
     // Check pending request limit per node
-    const pendingCount = Array.from(this.pending.values()).filter(p => p.nodeId === nodeId).length;
+    const pendingCount = this.pendingByNode.get(nodeId) ?? 0;
     const queueLength = this.queues.get(nodeId)?.length ?? 0;
-    if (pendingCount + queueLength >= settings.fileTunnelMaxPendingPerNode) {
+    if (pendingCount >= settings.fileTunnelMaxPendingPerNode) {
       throw new Error(`Too many pending requests for node ${nodeId}`);
     }
 
@@ -164,7 +170,7 @@ export class FileTunnelService {
     } else if (uploadData) {
       const stagedPath = path.join(this.tempDir, `${requestId}.bin`);
       try {
-        fs.writeFileSync(stagedPath, uploadData);
+        await fsp.writeFile(stagedPath, uploadData);
         this.uploads.set(requestId, {
           filePath: stagedPath,
           size: uploadData.length,
@@ -179,10 +185,17 @@ export class FileTunnelService {
       }
     }
 
+    const currentCount = this.pendingByNode.get(nodeId) ?? 0;
+    this.pendingByNode.set(nodeId, currentCount + 1);
     return new Promise<FileTunnelResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        this.uploads.delete(requestId);
+        const uploadEntry = this.uploads.get(requestId);
+        if (uploadEntry) {
+          this.uploads.delete(requestId);
+          void fsp.unlink(uploadEntry.filePath).catch(() => {});
+        }
+        this.decrementPending(nodeId);
         reject(new Error("Agent file operation timed out"));
       }, timeoutMs);
 
@@ -271,7 +284,19 @@ export class FileTunnelService {
       return null;
     }
     try {
-      return { stream: fs.createReadStream(entry.filePath), size: entry.size };
+      const stream = fs.createReadStream(entry.filePath);
+      const remove = () => {
+        stream.removeListener("close", remove);
+        stream.removeListener("error", remove);
+        const current = this.uploads.get(requestId);
+        if (current === entry) {
+          this.uploads.delete(requestId);
+          void fsp.unlink(entry.filePath).catch(() => {});
+        }
+      };
+      stream.once("close", remove);
+      stream.once("error", remove);
+      return { stream, size: entry.size };
     } catch (err) {
       captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to open upload temp file', stack: err instanceof Error ? err.stack : undefined, metadata: { requestId, filePath: entry.filePath } }).catch(() => {});
       this.logger.error({ err, requestId, filePath: entry.filePath }, "Failed to open upload temp file");
@@ -295,10 +320,14 @@ export class FileTunnelService {
     }
     clearTimeout(pending.timer);
     this.pending.delete(requestId);
+    this.decrementPending(nodeId);
     const uploadEntry = this.uploads.get(requestId);
     if (uploadEntry) {
-      try { fs.unlinkSync(uploadEntry.filePath); } catch { /* no-op */ }
-      this.uploads.delete(requestId);
+      // The agent may still be reading a staged upload when it acknowledges
+      // the operation. The read stream owns deletion and removes it on close.
+      if (!this.uploads.has(requestId)) {
+        void fsp.unlink(uploadEntry.filePath).catch(() => {});
+      }
     }
     pending.resolve(response);
     return true;
@@ -316,12 +345,13 @@ export class FileTunnelService {
    * Check if there are pending requests for a node (for diagnostics).
    */
   getPendingCount(nodeId: string): number {
-    const queue = this.queues.get(nodeId) ?? [];
-    let inflight = 0;
-    for (const p of this.pending.values()) {
-      if (p.nodeId === nodeId) inflight++;
-    }
-    return queue.length + inflight;
+    return this.pendingByNode.get(nodeId) ?? 0;
+  }
+
+  private decrementPending(nodeId: string): void {
+    const count = (this.pendingByNode.get(nodeId) ?? 1) - 1;
+    if (count <= 0) this.pendingByNode.delete(nodeId);
+    else this.pendingByNode.set(nodeId, count);
   }
 
   private cleanup() {
@@ -329,7 +359,7 @@ export class FileTunnelService {
     for (const [id, entry] of this.uploads) {
       const expired = now >= entry.expiresAt;
       if (expired) {
-        try { fs.unlinkSync(entry.filePath); } catch { /* no-op */ }
+        void fsp.unlink(entry.filePath).catch(() => {});
         this.uploads.delete(id);
       }
     }
@@ -338,8 +368,9 @@ export class FileTunnelService {
       const limit = uploadEntry ? MAX_UPLOAD_TRANSFER_MS + 60_000 : REQUEST_TIMEOUT_MS * 2;
       if (now - pending.createdAt > limit) {
         this.pending.delete(id);
+        this.decrementPending(pending.nodeId);
         if (uploadEntry) {
-          try { fs.unlinkSync(uploadEntry.filePath); } catch { /* no-op */ }
+          void fsp.unlink(uploadEntry.filePath).catch(() => {});
           this.uploads.delete(id);
         }
       }
@@ -354,6 +385,7 @@ export class FileTunnelService {
       pending.reject(new Error("File tunnel service destroyed"));
     }
     this.pending.clear();
+    this.pendingByNode.clear();
     // Resolve all pollers with empty arrays
     for (const [, pollerList] of this.pollers) {
       for (const poller of pollerList) {
@@ -365,10 +397,10 @@ export class FileTunnelService {
     this.queues.clear();
     // Clean up temp files
     for (const [, entry] of this.uploads) {
-      try { fs.unlinkSync(entry.filePath); } catch { /* no-op */ }
+      void fsp.unlink(entry.filePath).catch(() => {});
     }
     this.uploads.clear();
     // Attempt to remove temp directory
-    try { fs.rmSync(this.tempDir, { recursive: true, force: true }); } catch { /* no-op */ }
+    void fsp.rm(this.tempDir, { recursive: true, force: true }).catch(() => {});
   }
 }

@@ -68,9 +68,13 @@ export class QueryCache {
     } else {
       query.queryKey = options.queryKey;
       query.queryHash = hash;
-      if (options.queryFn) {
+      // A new fetch may provide a new queryFn, but never replace the function
+      // while another observer's request is in flight.
+      if (options.queryFn && !query.promise) {
         (query.options as { queryFn: unknown }).queryFn = options.queryFn;
-        if (options.meta !== undefined) (query.options as { meta: unknown }).meta = options.meta;
+        if (options.meta !== undefined) {
+          (query.options as { meta: unknown }).meta = options.meta;
+        }
       }
     }
     return query;
@@ -687,6 +691,28 @@ export class QueryClient {
       query.refetchTimer = null;
     }
     if (!query.hasEnabledObserver() && (query.options.enabled ?? true) === false) return;
+    const hasDynamicInterval = [...query.observerEntries.values()].some(
+      (entry) => typeof entry.options.refetchInterval === 'function',
+    );
+    if (hasDynamicInterval) {
+      const scheduleDynamic = (): void => {
+        if (query.observers <= 0 || !query.hasEnabledObserver()) return;
+        const ms = query.effectiveRefetchInterval();
+        if (ms === undefined || ms === false || ms <= 0) return;
+        query.refetchTimer = setTimeout(() => {
+          query.refetchTimer = null;
+          if (query.observers <= 0 || !query.hasEnabledObserver()) return;
+          if (typeof document === 'undefined' || document.visibilityState !== 'hidden') {
+            if (query.options.queryFn) {
+              void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
+            }
+          }
+          scheduleDynamic();
+        }, ms);
+      };
+      scheduleDynamic();
+      return;
+    }
     // Use per-observer effective interval
     const effective = query.effectiveRefetchInterval();
     if (effective === undefined || effective === false) {
@@ -738,21 +764,28 @@ export class QueryClient {
     }
 
     if (typeof raw === 'function') {
-      let last = Date.now();
-      query.refetchTimer = setInterval(() => {
-        if (query.observers <= 0) return;
-        if (!query.hasEnabledObserver()) return;
-        if (shouldSkipBackground()) return;
+      // A fixed 500ms interval turns a dynamic interval into a permanent
+      // timer, even when it resolves to false. Schedule the next wake-up from
+      // the current result instead; this also applies interval changes without
+      // polling the query hundreds of times per minute.
+      const schedule = (): void => {
+        if (query.observers <= 0 || !query.hasEnabledObserver()) return;
         const ms = resolveMs();
         if (ms === false || ms === undefined || ms <= 0) return;
-        const now = Date.now();
-        if (now - last >= ms) {
-          last = now;
+        query.refetchTimer = setInterval(() => {
+          if (query.observers <= 0 || !query.hasEnabledObserver()) return;
+          if (shouldSkipBackground()) return;
           if (query.options.queryFn) {
             void this.fetchQuery({ ...query.options, queryKey: query.queryKey, enabled: true } as unknown as QueryOptions<unknown, unknown>, { force: true }).catch(() => {});
           }
-        }
-      }, 500);
+          if (query.refetchTimer) {
+            clearInterval(query.refetchTimer);
+            query.refetchTimer = null;
+          }
+          schedule();
+        }, ms);
+      };
+      schedule();
     }
   }
 

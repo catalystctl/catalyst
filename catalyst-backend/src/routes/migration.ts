@@ -76,25 +76,31 @@ export async function migrationRoutes(app: FastifyInstance) {
         orderBy: { name: "asc" },
       });
 
-      const nodesWithUsage = await Promise.all(
-        nodes.map(async (node) => {
-          const servers = await prisma.server.findMany({
-            where: { nodeId: node.id },
-            select: SERVER_CGROUP_MEMORY_SELECT,
-          });
-          return {
-            id: node.id,
-            name: node.name,
-            hostname: node.hostname,
-            isOnline: node.isOnline,
-            lastSeenAt: node.lastSeenAt?.toISOString() ?? null,
-            maxMemoryMb: node.maxMemoryMb,
-            usedMemoryMb: sumCgroupMemoryMb(servers),
-            serverCount: node.servers.length,
-            locationName: node.location?.name,
-          };
-        })
-      );
+      const servers = await prisma.server.findMany({
+        where: { nodeId: { in: nodes.map((node) => node.id) } },
+        select: { nodeId: true, ...SERVER_CGROUP_MEMORY_SELECT },
+      });
+      const serversByNode = new Map<string, typeof servers>();
+      for (const server of servers) {
+        const nodeServers = serversByNode.get(server.nodeId) ?? [];
+        nodeServers.push(server);
+        serversByNode.set(server.nodeId, nodeServers);
+      }
+
+      const nodesWithUsage = nodes.map((node) => {
+        const nodeServers = serversByNode.get(node.id) ?? [];
+        return {
+          id: node.id,
+          name: node.name,
+          hostname: node.hostname,
+          isOnline: node.isOnline,
+          lastSeenAt: node.lastSeenAt?.toISOString() ?? null,
+          maxMemoryMb: node.maxMemoryMb,
+          usedMemoryMb: sumCgroupMemoryMb(nodeServers),
+          serverCount: node.servers.length,
+          locationName: node.location?.name,
+        };
+      });
 
       reply.send(serialize(nodesWithUsage));
     } catch (err: any) {

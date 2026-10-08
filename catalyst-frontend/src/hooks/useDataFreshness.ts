@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { queryClient } from '@/lib/queryClient';
-import type { QueryKey } from '@/csync';
+import { partialMatchKey, type QueryKey } from '@/csync';
 import {
   getSharedStreamSnapshot,
   subscribeSharedStatus,
@@ -78,9 +78,15 @@ export function useQueryFreshness(queryKey?: QueryKey): QueryFreshness {
   const [state, setState] = useState(read);
 
   useEffect(() => {
-    const sync = () => setState(read());
+    const sync = (event?: { query?: { queryKey?: QueryKey } }) => {
+      if (queryKey && event?.query?.queryKey && !partialMatchKey(event.query.queryKey, queryKey)) return;
+      setState((previous) => {
+        const next = read();
+        return previous.updatedAt === next.updatedAt && previous.isFetching === next.isFetching ? previous : next;
+      });
+    };
     sync();
-    return queryClient.getQueryCache().subscribe(sync);
+    return queryClient.getQueryCache().subscribe(sync as (event: import('@/csync/types').QueryCacheNotifyEvent) => void);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- read() is stable via queryKey identity
   }, [queryKey]);
 

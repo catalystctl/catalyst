@@ -780,7 +780,12 @@ impl WebSocketHandler {
         }
 
         let sem = Arc::new(Semaphore::new(10));
-        let mut handles = Vec::new();
+        // Keep the number of spawned futures bounded as well as the number of
+        // concurrent runtime calls. A large node can otherwise accumulate one
+        // waiting Tokio task per container on every polling tick.
+        const TASK_BATCH_SIZE: usize = 10;
+        let mut handles = Vec::with_capacity(TASK_BATCH_SIZE);
+        let mut metrics: Vec<ResourceStatsEntry> = Vec::new();
 
         for container in containers {
             if !container.status.contains("Up") || !container.managed {
@@ -861,9 +866,16 @@ impl WebSocketHandler {
                 })
             });
             handles.push(handle);
+
+            if handles.len() == TASK_BATCH_SIZE {
+                for handle in handles.drain(..) {
+                    if let Ok(Some(entry)) = handle.await {
+                        metrics.push(entry);
+                    }
+                }
+            }
         }
 
-        let mut metrics: Vec<ResourceStatsEntry> = Vec::new();
         for handle in handles {
             if let Ok(Some(entry)) = handle.await {
                 metrics.push(entry);

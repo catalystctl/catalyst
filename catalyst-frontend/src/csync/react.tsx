@@ -108,10 +108,11 @@ export function useQuery<TData = unknown, TError = Error>(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- hashed key, not array identity
   }, [client, queryKeyHash]);
 
-  // Per-observer ownership: share queryFn/meta via query.options, keep enabled/interval/select/placeholder
-  // on the observer entry so two hooks on same key don't clobber. Never write enabled/interval to shared query.
-  (query.options as { queryFn: unknown }).queryFn = options.queryFn;
-  (query.options as { meta: unknown }).meta = options.meta;
+  // queryFn/meta are shared query execution options. Do not overwrite a live
+  // query during render: another observer may currently own the fetch that is
+  // in flight, and render order must not decide which function it uses.
+  // Query construction/build already installs these options; subsequent
+  // observers use the existing query function.
 
   const observerOptionsRef = useRef<QueryOptions<TData, TError>>(options as QueryOptions<TData, TError>);
   observerOptionsRef.current = {

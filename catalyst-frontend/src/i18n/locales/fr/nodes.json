@@ -141,14 +141,11 @@
     "memory": "Mémoire"
   },
   "create": {
-    "assignTitle": "Attribuer ce nœud à un emplacement ?",
     "chooseLocation": "Choisir un emplacement…",
-    "continue": "Continuer",
     "deployFailed": "Impossible de générer automatiquement le script de déploiement.",
     "done": "Terminé",
     "generateManually": "pour générer le script de déploiement manuellement.",
     "generating": "Génération du script de déploiement…",
-    "location": "Emplacement : {{name}}",
     "locationsHint": "Les emplacements représentent l’endroit où vos nœuds sont physiquement hébergés. Par exemple, US-East ou EU-West.",
     "nodeSettings": "les paramètres du nœud",
     "noLocationsSuffix": "d’abord avant d’enregistrer un nœud.",
@@ -160,12 +157,10 @@
     "runScript": "Exécutez le script ci-dessous sur {{hostname}} pour installer et enregistrer l’agent.",
     "selectLocationLabel": "Sélectionner un emplacement",
     "sftpPortHint": "Port d’écoute du serveur SFTP (sur ce nœud). Par défaut : 2022",
-    "step1Description": "Choisissez un emplacement pour ce nœud.",
     "step1Title": "Enregistrer un nœud",
     "step2Description": "Configurez le nom d’hôte, les ressources et les détails de connexion.",
     "step2Title": "Détails du nœud",
     "step3Description": "Installez l’agent sur votre nœud à l’aide du script ci-dessous.",
-    "stepDeploy": "Déployer",
     "stepDetails": "Détails",
     "success": "Nœud enregistré"
   },

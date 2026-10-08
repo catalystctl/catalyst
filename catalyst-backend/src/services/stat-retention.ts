@@ -7,8 +7,11 @@ const BATCH_SIZE = 1000;
 
 export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) => {
   const log = logger.child({ component: 'StatRetention' });
+  let running = false;
 
   const retain = async () => {
+    if (running) return;
+    running = true;
     try {
       const cutoff = new Date(Date.now() - MAX_RETENTION);
       let totalDeleted = 0;
@@ -16,6 +19,7 @@ export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) =>
       while (true) {
         const batch = await prisma.serverStat.findMany({
           where: { createdAt: { lt: cutoff } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
           take: BATCH_SIZE,
           select: { id: true },
         });
@@ -35,6 +39,8 @@ export const startStatRetention = (prisma: PrismaClient, logger: pino.Logger) =>
     } catch (err) {
       captureSystemError({ level: 'error', component: 'StatRetention', message: 'Failed to prune server stats', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
       log.error({ err }, 'Failed to prune server stats');
+    } finally {
+      running = false;
     }
   };
 

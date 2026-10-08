@@ -6,14 +6,11 @@
     "noDescription": "未提供描述。"
   },
   "create": {
-    "assignTitle": "将此模板分配到某个 Nest？",
     "availableNow": "模板创建后立即可用。",
     "batchHint": "这可能需要 1–2 分钟。服务器正在从 GitHub 获取所有 egg。",
     "chooseFile": "选择文件",
-    "continue": "继续",
     "createNest": "创建 Nest",
     "creating": "正在创建…",
-    "descriptionStep1": "选择 Nest 以归类此模板。",
     "descriptionStep2": "定义运行时镜像、资源和启动命令。",
     "errorDetails": "错误详情",
     "failedCount": "{{total}} 个失败",
@@ -32,7 +29,6 @@
     "importedCount": "已导入 {{total}} 个",
     "importedTemplates_other": "已导入 {{count}} 个模板",
     "importingAll": "正在导入所有 egg…",
-    "importTemplateLabel": "导入模板（可选）",
     "importTitle": "导入模板",
     "invalidJson": "模板 JSON 无效",
     "invalidUrl": "解析失败——该 URL 必须返回有效的 JSON 或 YAML。",
@@ -47,14 +43,11 @@
     "readFailed": "无法读取文件",
     "searchNests": "搜索 Nest…",
     "selectNestLabel": "选择 Nest（可选）",
-    "skip": "跳过",
     "skipNest": "跳过——不使用 Nest",
     "skippedCount": "已跳过 {{total}} 个（已存在）",
-    "stepDetails": "详情",
     "stepNest": "Nest",
     "submit": "创建模板",
     "success": "模板已创建",
-    "titleStep1": "新建模板",
     "titleStep2": "创建模板"
   },
   "delete": {

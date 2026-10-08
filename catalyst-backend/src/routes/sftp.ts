@@ -284,14 +284,17 @@ export async function sftpRoutes(app: FastifyInstance) {
 				userId,
 			).filter((t) => canManageTokens || t.userId === userId);
 
-			// Enrich tokens with user info
-			const enriched = await Promise.all(
-				tokens.map(async (t) => {
-					const user = await prisma.user.findUnique({
-						where: { id: t.userId },
-						select: { email: true, username: true },
-					});
-					return {
+            // Enrich tokens with user info in one query instead of one query
+            // per token.
+            const userIds = [...new Set(tokens.map((token) => token.userId))];
+            const users = await prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { id: true, email: true, username: true },
+            });
+            const usersById = new Map(users.map((user) => [user.id, user]));
+            const enriched = tokens.map((t) => {
+                const user = usersById.get(t.userId);
+                return {
 						userId: t.userId,
 						email: user?.email ?? t.userId,
 						username: user?.username ?? null,
@@ -301,9 +304,8 @@ export async function sftpRoutes(app: FastifyInstance) {
 						// Raw token values are visible to their owner only.
 						...(t.isSelf ? { token: t.token } : {}),
 						isSelf: t.isSelf,
-					};
-				}),
-			);
+                };
+            });
 
 			reply.send({ success: true, data: enriched });
 		},

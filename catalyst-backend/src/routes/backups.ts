@@ -636,7 +636,10 @@ export async function backupRoutes(app: FastifyInstance) {
       }
       const stream = new PassThrough();
       let bytesWritten = 0;
+      let finalized = false;
       const finalize = (error?: Error) => {
+        if (finalized) return;
+        finalized = true;
         if (error) {
           request.log.error({ err: error, serverId, backupId }, "Backup download failed");
           captureSystemError({
@@ -647,11 +650,11 @@ export async function backupRoutes(app: FastifyInstance) {
             metadata: { serverId, backupId },
           }).catch(() => {});
         }
-        if (!reply.raw.writableEnded) {
-          stream.end();
-        }
+        stream.destroy(error);
       };
-      request.raw.on("close", () => finalize());
+      request.raw.on("close", () => {
+        if (!reply.raw.writableEnded) finalize(new Error("Backup download client disconnected"));
+      });
 
       reply.header("Content-Type", "application/gzip");
       reply.header(
@@ -684,7 +687,9 @@ export async function backupRoutes(app: FastifyInstance) {
           },
           (chunk: Buffer) => {
             bytesWritten += chunk.length;
-            stream.write(chunk);
+            if (!stream.write(chunk)) {
+              throw new Error("Backup download consumer is too slow");
+            }
           },
         );
         if (bytesWritten === 0) {

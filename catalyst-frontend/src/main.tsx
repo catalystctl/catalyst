@@ -66,8 +66,22 @@ function renderApp(): void {
   );
 }
 
-// Resolve the instance default language first: rendering before it lands
-// would show a first-time visitor one frame of the wrong language. The
-// helper never rejects — an unreachable backend just renders with the
-// device language.
-void bootstrapSystemLocale().finally(renderApp);
+// Render immediately with the device language. The instance default is a
+// secondary preference and must not hold the app hostage to a slow/unavailable
+// backend on startup. `applyLocale` updates i18next (and therefore the UI)
+// once the setting is available.
+renderApp();
+// Let auth/session restoration and the first paint get ahead of this optional
+// request. This also keeps a saved user locale from being needlessly replaced
+// while the session is being hydrated.
+const scheduleLocaleBootstrap = (): void => {
+  const requestIdleCallback = (window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  if (requestIdleCallback) {
+    requestIdleCallback(() => void bootstrapSystemLocale(), { timeout: 2000 });
+  } else {
+    window.setTimeout(() => void bootstrapSystemLocale(), 0);
+  }
+};
+scheduleLocaleBootstrap();

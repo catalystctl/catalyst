@@ -6,14 +6,11 @@
     "noDescription": "Aucune description fournie."
   },
   "create": {
-    "assignTitle": "Assigner ce modèle à un nid ?",
     "availableNow": "Les modèles sont disponibles immédiatement après leur création.",
     "batchHint": "Cela peut prendre 1 à 2 minutes. Le serveur récupère tous les œufs depuis GitHub.",
     "chooseFile": "Choisir un fichier",
-    "continue": "Continuer",
     "createNest": "Créer un nid",
     "creating": "Création…",
-    "descriptionStep1": "Choisissez un nid pour organiser ce modèle.",
     "descriptionStep2": "Définissez les images d’exécution, les ressources et les commandes de démarrage.",
     "errorDetails": "Détails de l’erreur",
     "failedCount": "{{total}} en échec",
@@ -36,7 +33,6 @@
     "importedTemplates_many": "{{count}} modèles importés",
     "importedTemplates_other": "{{count}} modèles importés",
     "importingAll": "Importation de tous les œufs…",
-    "importTemplateLabel": "Importer un modèle (facultatif)",
     "importTitle": "Importer un modèle",
     "invalidJson": "JSON de modèle non valide",
     "invalidUrl": "Échec de l’analyse — l’URL doit renvoyer du JSON ou du YAML valide.",
@@ -51,14 +47,11 @@
     "readFailed": "Impossible de lire le fichier",
     "searchNests": "Rechercher des nids…",
     "selectNestLabel": "Sélectionner un nid (facultatif)",
-    "skip": "Ignorer",
     "skipNest": "Ignorer — aucun nid",
     "skippedCount": "{{total}} ignorés (existent déjà)",
-    "stepDetails": "Détails",
     "stepNest": "Nid",
     "submit": "Créer le modèle",
     "success": "Modèle créé",
-    "titleStep1": "Nouveau modèle",
     "titleStep2": "Créer un modèle"
   },
   "delete": {

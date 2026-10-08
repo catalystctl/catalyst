@@ -24,8 +24,6 @@ import {
  Unlink,
  Globe,
  Clock,
- ChevronRight,
- ChevronLeft,
  Check,
  Server,
  Pencil,
@@ -69,61 +67,14 @@ import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogToolbar,
   DialogBody,
   DialogFooter,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { FormSection } from '@/components/ui/form-section';
 
 const pageSize = 20;
-
-// ── Wizard Step Indicator ──
-function StepIndicator({ steps, currentStep, onStepClick, canNavigate }: {
- steps: { label: string; icon: typeof User }[];
- currentStep: number;
- onStepClick: (i: number) => void;
- canNavigate: boolean[];
-}) {
- return (
- <div className="flex items-center justify-center gap-1">
- {steps.map((step, i) => {
- const Icon = step.icon;
- const isActive = i === currentStep;
- const isComplete = i < currentStep;
- const canClick = canNavigate[i];
-
- return (
- <div key={step.label} className="flex items-center">
- <button
- onClick={() => canClick && onStepClick(i)}
- disabled={!canClick}
- className={`relative flex items-center gap-1.5 rounded-sm px-3 py-2 text-mini font-medium transition-colors duration-200 ${
- isActive
- ? 'text-foreground'
- : isComplete
- ? 'text-primary'
- : canClick
- ? 'text-muted-foreground hover:text-foreground hover:bg-surface-2'
- : 'text-muted-foreground/40 cursor-not-allowed'
- }`}
- >
- {isActive && (
- <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
- )}
- <Icon className="h-3 w-3" />
- <span className="hidden sm:inline">{step.label}</span>
- {isComplete && <Check className="h-2.5 w-2.5" />}
- </button>
- {i < steps.length - 1 && (
- <ChevronRight className={`mx-1 h-3 w-3 ${i < currentStep ? 'text-primary' : 'text-muted-foreground/30'}`} />
- )}
- </div>
- );
- })}
- </div>
- );
-}
 
 // ── Role Chip ──
 function RoleChip({ role, selected, onToggle }: { role: { id: string; name: string }; selected: boolean; onToggle: () => void }) {
@@ -161,6 +112,32 @@ function ServerChip({ server, selected, onToggle }: { server: { id: string; name
  {selected && <Check className="h-2.5 w-2.5" />}
  {server.name}
  </button>
+ );
+}
+
+/** First few names plus a "+N more" line, so the aside stays short. */
+function SummaryList({ names, moreLabel, limit = 5 }: {
+ names: string[];
+ moreLabel?: (count: number) => string;
+ limit?: number;
+}) {
+ if (names.length === 0) {
+ return <p className="text-micro italic text-muted-foreground/70">—</p>;
+ }
+ return (
+ <ul className="space-y-1">
+ {names.slice(0, limit).map((name, index) => (
+ <li key={`${index}-${name}`} className="flex items-start gap-1.5 text-micro leading-snug text-muted-foreground">
+ <span aria-hidden className="mt-1 h-1 w-1 shrink-0 rounded-full bg-primary" />
+ <span className="min-w-0">{name}</span>
+ </li>
+ ))}
+ {names.length > limit && moreLabel && (
+ <li className="pl-2.5 text-micro text-muted-foreground/70">
+ {moreLabel(names.length - limit)}
+ </li>
+ )}
+ </ul>
  );
 }
 
@@ -363,10 +340,6 @@ function UsersPage() {
  const [editRoleSearch, setEditRoleSearch] = useState('');
  const [editServerSearch, setEditServerSearch] = useState('');
  const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
-
- // Wizard state
- const [wizardStep, setWizardStep] = useState(0);
- const [, setWizardDirection] = useState(1);
 
  // Delete/ban confirmation state
  const [deletingUser, setDeletingUser] = useState<{ id: string; username: string } | null>(null);
@@ -746,7 +719,6 @@ function UsersPage() {
  setCreateServerIds([]);
  setRoleSearch('');
  setServerSearch('');
- setWizardStep(0);
  }, []);
 
  const resetEditForm = useCallback(() => {
@@ -754,7 +726,6 @@ function UsersPage() {
  setEditRoleSearch('');
  setEditServerSearch('');
  setSelectedNodeIds([]);
- setWizardStep(0);
  }, []);
 
  const startView = (user: AdminUser) => {
@@ -775,7 +746,6 @@ function UsersPage() {
  setEditServerIds([]);
  setEditRoleSearch('');
  setEditServerSearch('');
- setWizardStep(0);
 
  adminApi
  .getUserServers(nextId)
@@ -844,45 +814,45 @@ function UsersPage() {
  });
  };
 
- // ── Wizard logic ──
- const createSteps = [
- { label: t('wizard.account'), icon: User },
- { label: t('wizard.rolesServers'), icon: Shield },
- { label: t('wizard.nodeAccess'), icon: Server },
- ];
- const editSteps = [
- { label: t('wizard.account'), icon: User },
- { label: t('wizard.rolesServers'), icon: Shield },
- { label: t('wizard.nodeAccess'), icon: Server },
- { label: t('wizard.security'), icon: Lock },
- ];
-
- const currentSteps = editingUserId ? editSteps : createSteps;
-
- const canNavigateCreateStep = [
- true,
- !!(createEmail.trim() && createUsername.trim() && createPassword.trim().length >= 8),
- !!(createEmail.trim() && createUsername.trim() && createPassword.trim().length >= 8),
- ];
-
- const canNavigateEditStep = [
- true,
- !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
- !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
- !!(editEmail.trim() && editUsername.trim() && (!editPassword || editPassword.length >= 8)),
- ];
-
- const canNavigateStep = editingUserId ? canNavigateEditStep : canNavigateCreateStep;
-
- const goToStep = (step: number) => {
- if (step < 0 || step >= currentSteps.length) return;
- if (!canNavigateStep[step]) return;
- setWizardDirection(step > wizardStep ? 1 : -1);
- setWizardStep(step);
- };
-
  const isModalOpen = isCreateOpen || !!editingUserId;
  const editingUser = editingUserId ? users.find((u) => u.id === editingUserId) : null;
+
+ // ── Create/edit dialog: live summary + submit-time requirements ──
+ const activeRoleIds = editingUserId ? editRoleIds : createRoleIds;
+ const activeServerIds = editingUserId ? editServerIds : createServerIds;
+ const activeRoleNames = useMemo(
+ () =>
+ activeRoleIds.flatMap((id) => {
+ const role = roles.find((r) => r.id === id);
+ return role ? [roleLabel(t, role.name)] : [];
+ }),
+ [activeRoleIds, roles, t],
+ );
+ const activeServerNames = useMemo(
+ () =>
+ activeServerIds.flatMap((id) => {
+ const server = servers.find((s) => s.id === id);
+ return server ? [server.name] : [];
+ }),
+ [activeServerIds, servers],
+ );
+ const selectedNodeNames = useMemo(
+ () => selectedNodeIds.map((node) => node.nodeName),
+ [selectedNodeIds],
+ );
+
+ const accountRequirements: { ok: boolean; label: string }[] = [
+ { ok: !!(editingUserId ? editEmail : createEmail).trim(), label: t('users.emailSet') },
+ { ok: !!(editingUserId ? editUsername : createUsername).trim(), label: t('users.usernameSet') },
+ ];
+ // Password is mandatory on create; on edit it is optional — surface the
+ // length rule only once a new password has been typed.
+ if (!editingUserId || editPassword.length > 0) {
+ accountRequirements.push({
+ ok: editingUserId ? editPassword.length >= 8 : createPassword.trim().length >= 8,
+ label: t('users.characters8'),
+ });
+ }
 
  return (
  <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -1382,7 +1352,7 @@ function UsersPage() {
  </div>}
  </div>
 
- {/* ── Create/Edit User Wizard Modal ── */}
+ {/* ── Create/Edit User Dialog ── */}
 <Dialog
  open={isModalOpen}
  onOpenChange={(open) => {
@@ -1393,13 +1363,8 @@ function UsersPage() {
  }
  }}
 >
- <DialogContent size="2xl">
- <DialogHeader
- icon={editingUserId ? <Pencil className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
- iconClassName={editingUserId
- ? 'border-warning/20 bg-warning/10 text-warning'
- : 'border-primary/20 bg-primary/10 text-primary'}
- >
+ <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
+ <DialogHeader>
  <DialogTitle>{editingUserId ? t('users.editTitle') : t('users.createTitle')}</DialogTitle>
  <DialogDescription>
  {editingUserId
@@ -1408,23 +1373,13 @@ function UsersPage() {
  </DialogDescription>
  </DialogHeader>
 
- <DialogToolbar className="overflow-x-auto">
- <StepIndicator
- steps={currentSteps}
- currentStep={wizardStep}
- onStepClick={goToStep}
- canNavigate={canNavigateStep}
- />
- </DialogToolbar>
+ <DialogBody className="min-h-0 p-0">
+ <div className="grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_20rem]">
+ {/* ── Editor ── */}
+ <div className="min-w-0 space-y-3 overflow-y-auto p-4 lg:pr-5">
 
- <DialogBody>
- {/* Step 0: Account Details */}
- {wizardStep === 0 && (
- <div
- key="step-account"
- className="space-y-5"
- >
- <BracketLabel tone="muted">{t('users.accountCredentials')}</BracketLabel>
+ {/* 1 — Account credentials */}
+ <FormSection index={1} title={t('users.accountCredentials')}>
  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
  <label className="block space-y-1.5">
  <span className="type-overline">
@@ -1462,32 +1417,11 @@ function UsersPage() {
  </label>
  </div>
 
- {/* Validation hints */}
- {!editingUserId && (
- <div className="flex flex-wrap gap-2">
- <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createEmail.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
- {createEmail.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- {t('users.emailSet')}
- </div>
- <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createUsername.trim() ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
- {createUsername.trim() ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- {t('users.usernameSet')}
- </div>
- <div className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${createPassword.trim().length >= 8 ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}>
- {createPassword.trim().length >= 8 ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
- {t('users.characters8')}
- </div>
- </div>
- )}
- </div>
- )}
+ </FormSection>
 
- {/* Step 1: Roles & Servers */}
- {wizardStep === 1 && (
- <div
- key="step-roles-servers"
- className="space-y-6"
- >
+ {/* 2 — Roles & servers */}
+ <FormSection index={2} title={t('wizard.rolesServers')}>
+ <div className="space-y-6">
  {/* Roles section */}
  <div>
  <div className="flex items-center justify-between mb-3">
@@ -1568,27 +1502,21 @@ function UsersPage() {
  </div>
  </div>
  </div>
- )}
+ </FormSection>
 
- {/* Step 2: Node Access */}
- {wizardStep === 2 && (
- <div
- key="step-nodes"
- >
+ {/* 3 — Node access */}
+ <FormSection index={3} title={t('wizard.nodeAccess')}>
  <NodeAssignmentsSelector
  userId={editingUserId ?? undefined}
  selectedNodes={selectedNodeIds}
  onSelectionChange={setSelectedNodeIds}
  disabled={createMutation.isPending || updateMutation.isPending}
  />
- </div>
- )}
+ </FormSection>
 
- {/* Step 3: Security (edit only) */}
- {wizardStep === 3 && editingUserId && editingUser && (
- <div
- key="step-security"
- >
+ {/* 4 — Security (existing users only) */}
+ {editingUserId && editingUser && (
+ <FormSection index={4} title={t('wizard.security')}>
  <SecuritySection
  user={editingUser}
  onWipePasskeys={() => setWipePasskeyTarget({ id: editingUser.id, username: editingUser.username, count: editingUser.passkeys?.length ?? 0 })}
@@ -1597,34 +1525,80 @@ function UsersPage() {
  onUnlink={(accountId, providerId) => setUnlinkTarget({ userId: editingUser.id, username: editingUser.username, accountId, providerId })}
  loading={wipePasskeysMutation.isPending || wipe2faMutation.isPending || enforce2faMutation.isPending || unlinkAccountMutation.isPending}
  />
- </div>
+ </FormSection>
  )}
+ </div>
+
+ {/* ── Summary ── */}
+ <aside className="min-w-0 space-y-3 overflow-y-auto border-t border-border/70 bg-surface-1/40 p-4 lg:border-l lg:border-t-0">
+ <BracketLabel tone="muted">{t('users.viewTitle')}</BracketLabel>
+
+ <div className="overflow-hidden rounded-sm border border-border bg-card">
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <div className="flex items-center gap-2">
+ <User className="h-3.5 w-3.5 shrink-0 text-primary" />
+ <span className="truncate text-data font-semibold text-foreground">
+ {(editingUserId ? editUsername : createUsername).trim() || '—'}
+ </span>
+ </div>
+ <p className="mt-1 truncate text-micro text-muted-foreground">
+ {(editingUserId ? editEmail : createEmail).trim() || '—'}
+ </p>
+ </div>
+
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <div className="mb-1.5 flex items-center justify-between gap-2">
+ <span className="type-overline text-muted-foreground">{t('users.rolesHeading')}</span>
+ <Badge variant="secondary" className="text-micro tabular-nums">
+ {activeRoleIds.length}
+ </Badge>
+ </div>
+ <SummaryList names={activeRoleNames} moreLabel={(count) => t('roles.creator.moreCount', { count })} />
+ </div>
+
+ <div className="border-b border-border/70 px-3 py-2.5">
+ <div className="mb-1.5 flex items-center justify-between gap-2">
+ <span className="type-overline text-muted-foreground">{t('users.serverAccess')}</span>
+ <Badge variant="secondary" className="text-micro tabular-nums">
+ {activeServerIds.length}
+ </Badge>
+ </div>
+ <SummaryList names={activeServerNames} moreLabel={(count) => t('roles.creator.moreCount', { count })} />
+ </div>
+
+ <div className="px-3 py-2.5">
+ <div className="mb-1.5 flex items-center justify-between gap-2">
+ <span className="type-overline text-muted-foreground">{t('wizard.nodeAccess')}</span>
+ <Badge variant="secondary" className="text-micro tabular-nums">
+ {selectedNodeIds.length}
+ </Badge>
+ </div>
+ <SummaryList names={selectedNodeNames} moreLabel={(count) => t('roles.creator.moreCount', { count })} />
+ </div>
+ </div>
+ </aside>
+ </div>
  </DialogBody>
 
- <DialogFooter className="sm:justify-between">
- <div className="text-mini text-muted-foreground">
- {wizardStep === 0 && !editingUserId && t('users.allFieldsRequired')}
- {wizardStep === 0 && editingUserId && t('users.leavePasswordBlank')}
- </div>
- <div className="flex items-center gap-2">
- {wizardStep > 0 && (
- <Button variant="outline" size="sm" onClick={() => goToStep(wizardStep - 1)} className="gap-1">
- <ChevronLeft className="h-3.5 w-3.5" />
- {t('common:actions.back')}
+ <DialogFooter className="gap-3 sm:justify-between">
+ <Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
+ {t('common:actions.cancel')}
  </Button>
- )}
- {wizardStep < currentSteps.length - 1 && (
- <Button
- size="sm"
- onClick={() => goToStep(wizardStep + 1)}
- disabled={!canNavigateStep[wizardStep + 1]}
- className="gap-1"
+ <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+ <span className="hidden truncate text-micro text-muted-foreground md:inline">
+ {editingUserId ? t('users.leavePasswordBlank') : t('users.allFieldsRequired')}
+ </span>
+ <div className="flex flex-wrap items-center gap-1.5">
+ {accountRequirements.map((req) => (
+ <div
+ key={req.label}
+ className={`flex items-center gap-1.5 rounded-sm px-2 py-1 text-micro ${req.ok ? 'text-success bg-success/5' : 'text-muted-foreground bg-surface-2'}`}
  >
- {t('common:actions.next')}
- <ChevronRight className="h-3.5 w-3.5" />
- </Button>
- )}
- {wizardStep === currentSteps.length - 1 && (
+ {req.ok ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+ {req.label}
+ </div>
+ ))}
+ </div>
  <Button
  size="sm"
  disabled={editingUserId ? !canSubmitEdit || updateMutation.isPending : !canSubmitCreate || createMutation.isPending}
@@ -1642,10 +1616,6 @@ function UsersPage() {
  : editingUserId
  ? t('saveChanges')
  : t('users.createTitle')}
- </Button>
- )}
- <Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
- {t('common:actions.cancel')}
  </Button>
  </div>
  </DialogFooter>
