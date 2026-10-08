@@ -95,7 +95,7 @@ export async function authRoutes(app: FastifyInstance) {
   // global limiter is per-process. DB lockout remains the enforcement SoT.
   app.post(
     "/register",
-    { config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } },
+    { schema: { summary: "Register a user account", tags: ["Auth"], body: { type: "object", required: ["email", "username", "password"], properties: { email: { type: "string", format: "email" }, username: { type: "string", minLength: 2, maxLength: 32 }, password: { type: "string", minLength: 8 } }, additionalProperties: false }, response: { 200: { type: "object" }, 400: { type: "object" }, 403: { type: "object" } } }, config: { rateLimit: { max: 20, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Validate all registration fields using the pre-built schema
       const regValidation = userRegistrationSchema.safeParse(request.body);
@@ -218,7 +218,7 @@ export async function authRoutes(app: FastifyInstance) {
   // Per-route cap; DB-backed brute-force lockout remains the enforcement SoT.
   app.post(
     "/login",
-    { config: { rateLimit: { max: 30, timeWindow: '15 minutes' } } },
+    { schema: { summary: "Sign in", tags: ["Auth"], body: { type: "object", required: ["email", "password"], properties: { email: { type: "string", format: "email" }, password: { type: "string" } }, additionalProperties: false }, response: { 200: { type: "object" }, 400: { type: "object" }, 401: { type: "object" }, 429: { type: "object" } } }, config: { rateLimit: { max: 30, timeWindow: '15 minutes' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       // Validate login fields using the pre-built schema
       const loginValidation = userLoginSchema.safeParse(request.body);
@@ -922,4 +922,3 @@ export async function authRoutes(app: FastifyInstance) {
     }
   );
 }
-

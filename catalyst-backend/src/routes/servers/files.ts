@@ -103,7 +103,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/files",
-    {
+    { schema: { summary: "Manage server files", description: "Manage server files.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -147,7 +147,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Get valid game version tags for a provider (used for autocomplete)
   app.get(
     "/:serverId/files/download",
-    {
+    { schema: { summary: "Download a file", description: "Download a file.", tags: ["Files"], produces: ["application/octet-stream"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/octet-stream" }, 400: { type: "object" }, 403: { type: "object" }, 404: { type: "object" }, 503: { type: "object" }, 504: { type: "object" } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -194,7 +194,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Upload server file
   app.post(
     "/:serverId/files/upload",
-    {
+    { schema: { summary: "Upload files", description: "Upload files.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       bodyLimit: uploadBodyLimit,
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
@@ -289,7 +289,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Create file or directory
   app.post(
     "/:serverId/files/create",
-    {
+    { schema: { summary: "Create a file", description: "Create a file.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -343,7 +343,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Compress files
   app.post(
     "/:serverId/files/compress",
-    {
+    { schema: { summary: "Compress files", description: "Compress files.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -396,7 +396,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Decompress archive
   app.post(
     "/:serverId/files/decompress",
-    {
+    { schema: { summary: "Decompress files", description: "Decompress files.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -448,7 +448,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // List archive contents (without extracting)
   app.post(
     "/:serverId/files/archive-contents",
-    {
+    { schema: { summary: "List archive contents", description: "List archive contents.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -501,7 +501,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Get server logs
   app.get(
     "/:serverId/logs",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "View agent logs", description: "View agent logs.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -573,7 +573,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Write/update file content
   app.post(
     "/:serverId/files/write",
-    {
+    { schema: { summary: "Write a file", description: "Write a file.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -637,7 +637,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Update file permissions
   app.post(
     "/:serverId/files/permissions",
-    {
+    { schema: { summary: "View server permissions", description: "View server permissions.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
@@ -707,7 +707,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Delete file or directory
   app.delete(
     "/:serverId/files/delete",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
+    { schema: { summary: "Delete files", description: "Delete files.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -761,7 +761,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Rename / move file or directory
   app.post(
     "/:serverId/files/rename",
-    {
+    { schema: { summary: "Rename a file", description: "Rename a file.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },

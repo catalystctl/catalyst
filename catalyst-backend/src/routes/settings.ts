@@ -29,7 +29,7 @@ onCacheInvalidate('config', () => {
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     '/locale',
-    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    { schema: { summary: 'Get public localization settings', tags: ['Settings'], response: { 200: { type: 'object' } } }, config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (_request: FastifyRequest, reply: FastifyReply) => {
       let body = localeBody;
       if (body === null) {

@@ -186,7 +186,7 @@ function powerFailureStatus(result: PowerSendResult): number {
 export async function serverPowerRoutes(app: FastifyInstance) {
   app.post(
     "/:serverId/install",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Install a server", description: "Install the selected server image and files.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
 
@@ -283,7 +283,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Reinstall server (stops server, wipes data, runs install script)
   app.post(
     "/:serverId/reinstall",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Reinstall a server", description: "Reinstall a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
 
@@ -380,7 +380,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // the server can be reinstalled). Only valid from `installing`.
   app.post(
     "/:serverId/cancel-install",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Cancel installation", description: "Cancel installation.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -483,7 +483,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Respond to EULA prompt (accept or decline)
   app.post(
     "/eula",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Manage the EULA", description: "Manage the EULA.", tags: ["Power"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, accepted } = request.body as {
         serverId: string;
@@ -548,7 +548,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Rebuild server (stops server, re-runs the template install script, preserves data)
   app.post(
     "/:serverId/rebuild",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Rebuild a server", description: "Rebuild a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
 
@@ -704,7 +704,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Start server (sends start command to agent)
   app.post(
     "/:serverId/start",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Start a server", description: "Start a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -750,7 +750,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       // Automatically add SERVER_DIR to environment
       const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
       const fullServerDir = `${serverDir}/${server.uuid}`;
-      
+
       const templateVariables = (server.template.variables as any[]) || [];
       const templateDefaults = templateVariables.reduce((acc, variable) => {
         if (variable?.name && variable?.default !== undefined) {
@@ -905,7 +905,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Stop server (sends stop command to agent)
   app.post(
     "/:serverId/stop",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Stop a server", description: "Stop a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1041,7 +1041,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Kill server (force stop command to agent)
   app.post(
     "/:serverId/kill",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Force-stop a server", description: "Force-stop a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1174,7 +1174,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Restart server (stop then start)
   app.post(
     "/:serverId/restart",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Restart the agent", description: "Restart the agent.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1234,7 +1234,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       // Start after a delay (agent will handle the actual timing)
       const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
       const fullServerDir = `${serverDir}/${server.uuid}`;
-      
+
       const environment: Record<string, string> = {
         ...(server.environment as Record<string, string>),
         SERVER_DIR: fullServerDir,
@@ -1349,7 +1349,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // List port allocations
   app.post(
     "/:serverId/suspend",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Suspend a server", description: "Suspend a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1525,7 +1525,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Unsuspend server
   app.post(
     "/:serverId/unsuspend",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Unsuspend a server", description: "Unsuspend a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

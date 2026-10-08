@@ -23,7 +23,7 @@ export async function locationRoutes(app: FastifyInstance) {
 	// List all locations (with node count)
 	app.get(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ onRequest: [app.authenticate], schema: { summary: "List locations", description: "List locations with node counts.", tags: ["Locations"], response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "array", items: { type: "object", additionalProperties: true } } } } } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensureAnyPermission(request, reply, ["location.read"])) return;
 
@@ -48,7 +48,7 @@ export async function locationRoutes(app: FastifyInstance) {
 	// Get single location (with nodes)
 	app.get(
 		"/:locationId",
-		{ onRequest: [app.authenticate] },
+		{ onRequest: [app.authenticate], schema: { summary: "Get a location", description: "Get a location and its nodes.", tags: ["Locations"], params: { type: "object", required: ["locationId"], properties: { locationId: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			// location.read is the catalog read; admin bits pass via hasGrant.
 			// Node secrets stay node.read-gated (the nodes routes omit them).
@@ -77,7 +77,7 @@ export async function locationRoutes(app: FastifyInstance) {
 	// Create location (admin only)
 	app.post(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ onRequest: [app.authenticate], schema: { summary: "Create a location", description: "Create a location.", tags: ["Locations"], body: {}, response: { 201: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensureAnyPermission(request, reply, ["location.create"]))
 				return;
@@ -125,7 +125,7 @@ export async function locationRoutes(app: FastifyInstance) {
 	// Update location (admin only)
 	app.put(
 		"/:locationId",
-		{ onRequest: [app.authenticate] },
+		{ onRequest: [app.authenticate], schema: { summary: "Update a location", description: "Update a location.", tags: ["Locations"], params: { type: "object", required: ["locationId"], properties: { locationId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, description: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensureAnyPermission(request, reply, ["location.update"]))
 				return;
@@ -181,7 +181,7 @@ export async function locationRoutes(app: FastifyInstance) {
 	// Delete location (admin only)
 	app.delete(
 		"/:locationId",
-		{ onRequest: [app.authenticate] },
+		{ onRequest: [app.authenticate], schema: { summary: "Delete a location", description: "Delete a location.", tags: ["Locations"], params: { type: "object", required: ["locationId"], properties: { locationId: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" } } } } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensureAnyPermission(request, reply, ["location.delete"]))
 				return;

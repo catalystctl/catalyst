@@ -122,6 +122,13 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
     '/:serverId/events',
     {
       config: { rateLimit: false },
+      schema: {
+        summary: 'Stream server events',
+        tags: ['Events'],
+        produces: ['text/event-stream'],
+        params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
+        response: { 200: { type: 'string' }, 401: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 503: { type: 'object' } },
+      },
     },
     async (request, reply) => {
       const { serverId } = request.params;

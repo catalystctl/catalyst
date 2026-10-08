@@ -33,7 +33,7 @@ const allocationSchema = z
 export async function serverNetworkRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/allocations",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Network"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -110,7 +110,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
     // server.network | role server.network | node access + node.server_manage |
     // admin.write/*) is enforced in-handler below, same as DELETE and /primary.
     // API keys additionally act within their own scope.
-    { onRequest: [app.authenticate], preHandler: [validateRequestBody(allocationSchema)] },
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(allocationSchema)], schema: { summary: "Add a server allocation", description: "Add a network allocation to a server.", tags: ["Network"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const body = request.body as z.infer<typeof allocationSchema>;
@@ -352,7 +352,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   // Remove allocation (hot-remove supported for running servers)
   app.delete(
     "/:serverId/allocations/:containerPort",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Network"], params: { type: "object", required: ['serverId', 'containerPort'], properties: { serverId: { type: "string" }, containerPort: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, containerPort } = request.params as {
         serverId: string;
@@ -484,7 +484,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   // Set primary allocation (allowed when running — no firewall change needed, just metadata swap)
   app.post(
     "/:serverId/allocations/primary",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Retrieve primary for allocations", description: "Retrieve primary for allocations.", tags: ["Network"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { containerPort } = request.body as { containerPort: number };

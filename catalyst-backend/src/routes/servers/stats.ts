@@ -8,7 +8,7 @@ import { ErrorCodes } from "../../shared-types";
 export async function serverStatsRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/stats/history",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Retrieve history for stats", description: "Retrieve history for stats.", tags: ["Stats"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -110,7 +110,7 @@ export async function serverStatsRoutes(app: FastifyInstance) {
   // Server activity log (audit trail, paginated)
   app.get(
     "/:serverId/activity",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Retrieve activity", description: "Retrieve activity.", tags: ["Stats"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

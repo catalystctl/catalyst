@@ -30,7 +30,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   // Get dashboard statistics
   app.get(
     '/stats',
-    { preHandler: authenticate },
+    { preHandler: authenticate, schema: { summary: 'Get dashboard statistics', description: 'Get permission-scoped dashboard counts.', tags: ['Dashboard'], response: { 200: { type: 'object', properties: { data: { type: 'object', properties: { servers: { type: 'integer' }, serversOnline: { type: 'integer' }, nodes: { type: 'integer' }, nodesOnline: { type: 'integer' }, alerts: { type: 'integer' }, alertsUnacknowledged: { type: 'integer' } } } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const cacheKey = buildCacheKey(user);
@@ -146,7 +146,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   // Get recent activity
   app.get(
     '/activity',
-    { preHandler: authenticate },
+    { preHandler: authenticate, schema: { summary: 'Get recent activity', description: 'Get recent permission-scoped audit activity.', tags: ['Dashboard'], querystring: { type: 'object', properties: { limit: { type: 'string' } } }, response: { 200: { type: 'object', properties: { data: { type: 'array', items: { type: 'object', additionalProperties: true } } } } } } },
     async (request: FastifyRequest<{ Querystring: { limit?: string } }>, reply: FastifyReply) => {
       const user = request.user;
       const limit = Math.min(20, parseInt(request.query.limit || '5', 10));
@@ -205,7 +205,7 @@ export async function dashboardRoutes(app: FastifyInstance) {
   // Get resource utilization (aggregated across nodes)
   app.get(
     '/resources',
-    { preHandler: authenticate },
+    { preHandler: authenticate, schema: { summary: 'Get resource utilization', description: 'Get aggregated resource utilization across accessible nodes.', tags: ['Dashboard'], response: { 200: { type: 'object', additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const perms: string[] = user?.permissions ?? [];

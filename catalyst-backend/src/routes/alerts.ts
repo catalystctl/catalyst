@@ -128,7 +128,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Create an alert rule
   app.post(
     '/alert-rules',
-    { preHandler: authenticate },
+    { schema: { summary: "Create an alert rule", description: "Create an alert rule for a server, node, or global scope.", tags: ["Alerts"], response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request, 'admin.write');
@@ -247,7 +247,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // List alert rules
   app.get(
     '/alert-rules',
-    { preHandler: authenticate },
+    { schema: { summary: "List alert rules", description: "List alert rules visible to the authenticated user.", tags: ["Alerts"], response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { type, enabled, scope, target, targetId } = request.query as {
@@ -285,7 +285,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Get a specific alert rule
   app.get(
     '/alert-rules/:ruleId',
-    { preHandler: authenticate },
+    { schema: { summary: "Get an alert rule", description: "Retrieve an alert rule by ID.", tags: ["Alerts"], params: { type: "object", required: ['ruleId'], properties: { ruleId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request);
@@ -311,7 +311,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Update an alert rule
   app.put(
     '/alert-rules/:ruleId',
-    { preHandler: authenticate },
+    { schema: { summary: "Update an alert rule", description: "Update an alert rule by ID.", tags: ["Alerts"], params: { type: "object", required: ['ruleId'], properties: { ruleId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request, 'admin.write');
@@ -381,7 +381,7 @@ export async function alertRoutes(app: FastifyInstance) {
   );
   app.delete(
     '/alert-rules/:ruleId',
-    { preHandler: authenticate },
+    { schema: { summary: "Delete an alert rule", description: "Delete an alert rule by ID.", tags: ["Alerts"], params: { type: "object", required: ['ruleId'], properties: { ruleId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request, 'admin.write');
@@ -424,7 +424,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Get alert deliveries for an alert
   app.get(
     '/alerts/:alertId/deliveries',
-    { preHandler: authenticate },
+    { schema: { summary: "List alert deliveries", description: "List alert deliveries.", tags: ["Alerts"], params: { type: "object", required: ['alertId'], properties: { alertId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request);
@@ -466,7 +466,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // List alerts
   app.get(
     '/alerts',
-    { preHandler: authenticate },
+    { schema: { summary: "List alerts", description: "List alerts with filtering and pagination.", tags: ["Alerts"], response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const {
@@ -571,7 +571,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Get a specific alert
   app.get(
     '/alerts/:alertId',
-    { preHandler: authenticate },
+    { schema: { summary: "Get an alert", description: "Retrieve an alert and its delivery history by ID.", tags: ["Alerts"], params: { type: "object", required: ['alertId'], properties: { alertId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request);
@@ -624,7 +624,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Resolve an alert
   app.post(
     '/alerts/:alertId/resolve',
-    { preHandler: authenticate },
+    { schema: { summary: "Resolve an alert", description: "Resolve an alert.", tags: ["Alerts"], params: { type: "object", required: ['alertId'], properties: { alertId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request, 'admin.write');
@@ -686,7 +686,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Bulk resolve alerts
   app.post(
     '/alerts/bulk-resolve',
-    { preHandler: authenticate },
+    { schema: { summary: "Resolve alerts in bulk", description: "Resolve alerts in bulk.", tags: ["Alerts"], response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const isAdmin = isAdminUser(request, 'admin.write');
@@ -759,7 +759,7 @@ export async function alertRoutes(app: FastifyInstance) {
   // Get alert statistics
   app.get(
     '/alerts/stats',
-    { preHandler: authenticate },
+    { schema: { summary: "Get alert statistics", description: "Get counts of alerts by status, severity, and type.", tags: ["Alerts"], response: { 200: { type: "object", additionalProperties: true } } },  preHandler: authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { scope } = request.query as { scope?: 'mine' | 'all' };

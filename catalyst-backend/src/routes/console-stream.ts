@@ -35,6 +35,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
     {
       onRequest: [(app as any).authenticate],
       config: { rateLimit: false }, // SSE streams are long-lived; per-user rate limits are checked via auth
+      schema: {
+        summary: 'Stream server console output',
+        tags: ['Console'],
+        produces: ['text/event-stream'],
+        params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
+        response: { 200: { type: 'string' }, 401: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 503: { type: 'object' } },
+      },
     },
     async (request, reply) => {
       const { serverId } = request.params;
@@ -160,6 +167,13 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
     '/:serverId/console/command',
     {
       onRequest: [(app as any).authenticate],
+      schema: {
+        summary: 'Send a console command',
+        tags: ['Console'],
+        params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
+        body: { type: 'object', required: ['command'], properties: { command: { type: 'string', minLength: 1, maxLength: 4096 } } },
+        response: { 202: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 500: { type: 'object' } },
+      },
     },
     async (request, reply) => {
       const { serverId } = request.params;

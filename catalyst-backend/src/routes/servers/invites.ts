@@ -38,7 +38,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/permissions",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "View server permissions", description: "View server permissions.", tags: ["Invites"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -77,7 +77,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // List pending server invites
   app.get(
     "/:serverId/invites",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Manage server invites", description: "Manage server invites.", tags: ["Invites"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -113,7 +113,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Create invite
   app.post(
     "/:serverId/invites",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server invites", description: "Manage server invites.", tags: ["Invites"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -248,7 +248,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // the original link was lost or SMTP was not configured at creation time.
   app.post(
     "/:serverId/invites/:inviteId/regenerate",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Regenerate an invite", description: "Regenerate an invite.", tags: ["Invites"], params: { type: "object", required: ['serverId', 'inviteId'], properties: { serverId: { type: "string" }, inviteId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, inviteId } = request.params as {
         serverId: string;
@@ -332,7 +332,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Cancel invite
   app.delete(
     "/:serverId/invites/:inviteId",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server invites", description: "Manage server invites.", tags: ["Invites"], params: { type: "object", required: ['serverId', 'inviteId'], properties: { serverId: { type: "string" }, inviteId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, inviteId } = request.params as { serverId: string; inviteId: string };
       const userId = request.user.userId;
@@ -455,7 +455,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite (authenticated)
   app.post(
     "/invites/accept",
-    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'invite acceptance is gated by the bearer invite token itself, not a permission' }},
+    { schema: { summary: "Retrieve accept for invites", description: "Retrieve accept for invites.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { keyScopeExemptReason: 'invite acceptance is gated by the bearer invite token itself, not a permission' }},
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { token } = request.body as { token?: string };
@@ -476,7 +476,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite + register
   app.post(
     "/invites/register",
-    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { schema: { summary: "Retrieve register for invites", description: "Retrieve register for invites.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token, username, password } = request.body as {
         token?: string;
@@ -617,7 +617,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Invite preview (for invite signup flow)
   app.get(
     "/invites/:token",
-    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    { schema: { summary: "Manage server invites", description: "Manage server invites.", tags: ["Invites"], params: { type: "object", required: ['token'], properties: { token: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token } = request.params as { token: string };
       if (!token) {
@@ -666,7 +666,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Add or update server access
   app.post(
     "/:serverId/access",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server access", description: "Manage server access.", tags: ["Invites"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -751,7 +751,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Remove server access
   app.delete(
     "/:serverId/access/:targetUserId",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server access", description: "Manage server access.", tags: ["Invites"], params: { type: "object", required: ['serverId', 'targetUserId'], properties: { serverId: { type: "string" }, targetUserId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, targetUserId } = request.params as {
         serverId: string;

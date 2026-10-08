@@ -9,7 +9,7 @@ import { ErrorCodes } from "../../shared-types";
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
     "/:serverId/variables",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Manage server variables", description: "Manage server variables.", tags: ["Variables"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -71,7 +71,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
 
   app.patch(
     "/:serverId/variables",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server variables", description: "Manage server variables.", tags: ["Variables"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

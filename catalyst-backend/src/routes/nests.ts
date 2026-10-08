@@ -25,7 +25,7 @@ export async function nestRoutes(app: FastifyInstance) {
   // List all nests (with template count)
   app.get(
     "/",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "List nests", description: "List nests with template counts.", tags: ["Nests"], response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "array", items: { type: "object", additionalProperties: true } } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!ensureAnyPermission(request, reply, ["template.read"])) return;
 
@@ -50,7 +50,7 @@ export async function nestRoutes(app: FastifyInstance) {
   // Get single nest (with templates)
   app.get(
     "/:nestId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "Get a nest", description: "Get a nest and its templates.", tags: ["Nests"], params: { type: "object", required: ["nestId"], properties: { nestId: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!ensureAnyPermission(request, reply, ["template.read"])) return;
 
@@ -76,7 +76,7 @@ export async function nestRoutes(app: FastifyInstance) {
   // Create nest (admin only)
   app.post(
     "/",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "Create a nest", description: "Create a template nest.", tags: ["Nests"], body: {}, response: { 201: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!ensureAnyPermission(request, reply, ["template.create"])) return;
 
@@ -127,7 +127,7 @@ export async function nestRoutes(app: FastifyInstance) {
   // Update nest (admin only)
   app.put(
     "/:nestId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "Update a nest", description: "Update a template nest.", tags: ["Nests"], params: { type: "object", required: ["nestId"], properties: { nestId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, description: { type: "string" }, icon: { type: "string" }, author: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!ensureAnyPermission(request, reply, ["template.update"])) return;
 
@@ -185,7 +185,7 @@ export async function nestRoutes(app: FastifyInstance) {
   // Delete nest (admin only, sets templates' nestId to null)
   app.delete(
     "/:nestId",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "Delete a nest", description: "Delete a nest and detach its templates.", tags: ["Nests"], params: { type: "object", required: ["nestId"], properties: { nestId: { type: "string" } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" } } } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       if (!ensureAnyPermission(request, reply, ["template.delete"])) return;
 

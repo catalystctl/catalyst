@@ -299,7 +299,7 @@ async function runCloneFileCopy(args: {
 export async function serverCoreRoutes(app: FastifyInstance) {
   app.post(
     "/",
-    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCreateSchema)] },
+    { schema: { summary: "Retrieve core", description: "Retrieve core.", tags: ["Core"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCreateSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const {
         name,
@@ -906,7 +906,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
   app.post(
     "/:serverId/clone/preflight",
-    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverClonePreflightSchema)] },
+    { schema: { summary: "Check clone prerequisites", description: "Check clone prerequisites.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], preHandler: [validateRequestBody(serverClonePreflightSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const body = request.body as any;
@@ -974,7 +974,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
   app.post(
     "/:serverId/clone",
-    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCloneSchema)] },
+    { schema: { summary: "Clone a server", description: "Clone a server.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], preHandler: [validateRequestBody(serverCloneSchema)] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const body = request.body as any;
@@ -1327,7 +1327,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // server itself is the target; the source comes from recorded provenance.
   app.post(
     "/:serverId/clone/:cloneId/retry",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Retry a clone", description: "Retry a clone.", tags: ["Core"], params: { type: "object", required: ['serverId', 'cloneId'], properties: { serverId: { type: "string" }, cloneId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, cloneId } = request.params as { serverId: string; cloneId: string };
       const userId = request.user.userId;
@@ -1448,7 +1448,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Supports ?limit &offset &withMetrics=1 (default limit 50, max 500, metrics off)
   app.get(
     "/",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Retrieve core", description: "Retrieve core.", tags: ["Core"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const query = request.query as { limit?: string; offset?: string; withMetrics?: string; metrics?: string };
@@ -1733,7 +1733,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Get server details
   app.get(
     "/:serverId",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "Retrieve core", description: "Retrieve core.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -1833,7 +1833,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
     // Validate the body: without this, allocatedCpuCores bypassed the
     // 1..128 integer bounds (floats reached Prisma's Int column as 500s,
     // out-of-range values reached the agent's CFS quota math).
-    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverUpdateSchema)] },
+    { onRequest: [app.authenticate], preHandler: [validateRequestBody(serverUpdateSchema)], schema: { summary: "Update a server", description: "Update server configuration.", tags: ["Core"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -2277,7 +2277,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Resize server storage (grow online, shrink requires stop)
   app.post(
     "/:serverId/storage/resize",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.storage" } },
+    { schema: { summary: "Resize server storage", description: "Resize server storage.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.storage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { allocatedDiskMb } = request.body as { allocatedDiskMb?: number };
@@ -2434,7 +2434,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Delete server (drops databases + releases allocations first)
   app.delete(
     "/:serverId",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.delete" } },
+    { schema: { summary: "Retrieve core", description: "Retrieve core.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.delete" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

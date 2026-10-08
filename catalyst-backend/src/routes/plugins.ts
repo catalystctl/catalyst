@@ -240,6 +240,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.get(
     '/api/plugins/marketplace',
     {
+      schema: { summary: 'Browse plugin marketplaces', tags: ['Plugins'], querystring: { type: 'object', properties: { forceRefresh: { type: 'string', enum: ['true', 'false'] } } }, response: { 200: { type: 'object' }, 403: { type: 'object' } } },
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
@@ -268,6 +269,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.get(
     '/api/plugins/marketplace/sources',
     {
+      schema: { summary: 'List plugin marketplace sources', tags: ['Plugins'], response: { 200: { type: 'object' }, 403: { type: 'object' } } },
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
@@ -290,6 +292,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.post(
     '/api/plugins/marketplace/sources',
     {
+      schema: { summary: 'Add a plugin marketplace source', tags: ['Plugins'], body: {}, response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' }, 409: { type: 'object' } } },
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
@@ -337,6 +340,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
   app.patch(
     '/api/plugins/marketplace/sources/:id',
     {
+      schema: { summary: 'Enable or disable a plugin marketplace source', tags: ['Plugins'], params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } }, body: {}, response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' } } },
       onRequest: [app.authenticate],
     },
     async (request, reply) => {

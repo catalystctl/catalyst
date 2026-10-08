@@ -21,7 +21,7 @@ export async function metricsRoutes(app: FastifyInstance) {
   // Get server metrics
   app.get(
     "/servers/:serverId/metrics",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" }, schema: { summary: "Get server metrics history", description: "Get bucketed server metrics for a bounded time window.", tags: ["Metrics"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, querystring: { type: "object", properties: { hours: { type: "string" }, limit: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -281,7 +281,7 @@ export async function metricsRoutes(app: FastifyInstance) {
   // Get current server stats (latest only)
   app.get(
     "/servers/:serverId/stats",
-    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" } },
+    { onRequest: [app.authenticate], config: { requiredPermission: "server.read" }, schema: { summary: "Get current server stats", description: "Get the latest available server metrics.", tags: ["Metrics"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -408,7 +408,7 @@ export async function metricsRoutes(app: FastifyInstance) {
   // Get node metrics
   app.get(
     "/nodes/:nodeId/metrics",
-    { onRequest: [app.authenticate] },
+    { onRequest: [app.authenticate], schema: { summary: "Get node metrics history", description: "Get bucketed node metrics for a bounded time window.", tags: ["Metrics"], params: { type: "object", required: ["nodeId"], properties: { nodeId: { type: "string" } } }, querystring: { type: "object", properties: { hours: { type: "string" }, limit: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const perms: string[] = request.user?.permissions ?? [];
       // hasGrant admits node.view_stats (the targeted permission for node

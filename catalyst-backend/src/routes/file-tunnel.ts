@@ -67,6 +67,7 @@ export function fileTunnelRoutes(
   app.get(
     "/api/internal/file-tunnel/poll",
     {
+      schema: { summary: "Poll pending file-tunnel requests", tags: ["File tunnel"], response: { 200: { type: "object", properties: { requests: { type: "array", items: { type: "object" } } } }, 401: { type: "object" }, 500: { type: "object" } } },
       config: {
         rateLimit: {
           max: async () => {
@@ -107,6 +108,7 @@ export function fileTunnelRoutes(
   app.post(
     "/api/internal/file-tunnel/response/:requestId",
     {
+      schema: { summary: "Submit a file-tunnel response", tags: ["File tunnel"], params: { type: "object", required: ["requestId"], properties: { requestId: { type: "string" } } }, body: { type: "object", properties: { success: { type: "boolean" }, data: {}, error: { type: "string" }, contentType: { type: "string" } } }, response: { 200: { type: "object" }, 401: { type: "object" }, 404: { type: "object" } } },
       config: {
         rateLimit: {
           max: async () => {
@@ -150,6 +152,7 @@ export function fileTunnelRoutes(
   app.post(
     "/api/internal/file-tunnel/response/:requestId/stream",
     {
+      schema: { summary: "Submit streamed file-tunnel data", tags: ["File tunnel"], params: { type: "object", required: ["requestId"], properties: { requestId: { type: "string" } } }, response: { 200: { type: "object" }, 401: { type: "object" }, 404: { type: "object" }, 413: { type: "object" } } },
       preHandler: async (request: FastifyRequest, reply: FastifyReply) => {
         // Dynamically enforce the admin-configurable upload size limit.
         // This ensures changes to the security setting take effect without restart.
@@ -209,6 +212,7 @@ export function fileTunnelRoutes(
   app.get(
     "/api/internal/file-tunnel/upload/:requestId",
     {
+      schema: { summary: "Fetch file-tunnel upload data", tags: ["File tunnel"], params: { type: "object", required: ["requestId"], properties: { requestId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/octet-stream" }, 401: { type: "object" }, 404: { type: "object" } } },
       config: {
         rateLimit: {
           max: async () => {

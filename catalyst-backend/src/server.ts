@@ -759,6 +759,14 @@ async function bootstrap() {
 		};
 		const healthConfig = {
 			config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+			schema: {
+				summary: "Check panel liveness",
+				tags: ["Health"],
+				response: {
+					200: { type: "object", required: ["status", "redis"], properties: { status: { type: "string", const: "ok" }, redis: { type: "string" } } },
+					503: { type: "object", required: ["status"], properties: { status: { type: "string", const: "unhealthy" } } },
+				},
+			},
 		};
 		app.get("/health", healthConfig, healthHandler);
 		app.get("/api/health", healthConfig, healthHandler);
@@ -965,6 +973,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.get(
 			"/api/agent/version",
 			{
+				schema: { summary: "Get the installed agent version", tags: ["Agent"], response: { 200: { type: "object", required: ["version", "agentVersion", "releaseRepo"], properties: { version: { type: ["string", "null"] }, agentVersion: { type: ["string", "null"] }, releaseRepo: { type: "string" } } } } },
 				preHandler: [(app as any).authenticate],
 				config: { rateLimit: { max: 60, timeWindow: "1 minute" }, keyScopeExemptReason: 'auth-only informational: agent version constant' },
 			},
@@ -984,6 +993,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.get(
 			"/api/agent/download",
 			{
+				schema: { summary: "Download the node agent", tags: ["Agent"], querystring: { type: "object", properties: { arch: { type: "string", enum: ["x86_64", "aarch64", "arm64", "amd64"] }, version: { type: "string", pattern: "^v?[0-9]+\\.[0-9]+\\.[0-9]+" } } }, response: { 200: { type: "string", format: "binary", contentMediaType: "application/octet-stream" }, 400: { type: "object", properties: { error: { type: "string" } } }, 502: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
@@ -1065,6 +1075,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.get(
 			"/api/agent/download-checksum",
 			{
+				schema: { summary: "Download the node agent checksum", tags: ["Agent"], querystring: { type: "object", properties: { arch: { type: "string", enum: ["x86_64", "aarch64", "arm64", "amd64"] }, version: { type: "string", pattern: "^v?[0-9]+\\.[0-9]+\\.[0-9]+" } } }, response: { 200: { type: "string", contentMediaType: "text/plain" }, 400: { type: "object", properties: { error: { type: "string" } } }, 502: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
@@ -1110,6 +1121,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.get(
 			"/api/agent/deploy-script",
 			{
+				schema: { summary: "Download the agent deployment script", tags: ["Agent"], response: { 200: { type: "string", contentMediaType: "text/x-shellscript" }, 404: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (_request, reply) => {
@@ -1138,6 +1150,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.get(
 			"/api/deploy/:token",
 			{
+				schema: { summary: "Fetch a single-use node deployment script", tags: ["Agent"], params: { type: "object", required: ["token"], properties: { token: { type: "string" } } }, headers: { type: "object", properties: { authorization: { type: "string", description: "Bearer node API key." } } }, response: { 200: { type: "string", contentMediaType: "text/plain" }, 400: { type: "object", properties: { error: { type: "string" } } }, 401: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
@@ -1229,6 +1242,9 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// internals to the agent.
 		app.post(
 			"/api/agent/sftp/validate-token",
+			{
+				schema: { summary: "Validate an agent SFTP token", tags: ["Agent"], headers: { type: "object", required: ["x-catalyst-node-id", "x-catalyst-node-token"], properties: { "x-catalyst-node-id": { type: "string" }, "x-catalyst-node-token": { type: "string" } } }, body: { type: "object", required: ["token", "serverId"], properties: { token: { type: "string" }, serverId: { type: "string" } } }, response: { 200: { type: "object", required: ["success", "data"], properties: { success: { type: "boolean" }, data: { type: "object", required: ["valid"], properties: { valid: { type: "boolean" }, userId: { type: "string" }, serverId: { type: "string" }, serverUuid: { type: "string" }, permissions: { type: "array", items: { type: "string" } } } } } }, 400: { type: "object", properties: { error: { type: "string" } } }, 401: { type: "object", properties: { error: { type: "string" } } }, 404: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object" } } } } },
+			},
 			async (request, reply) => {
 				// Agent auth: verify x-catalyst-node-id + x-catalyst-node-token
 				const headerNodeId =
@@ -1363,7 +1379,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// so new server permissions appear in both automatically.
 		app.get(
 			"/api/permissions/server",
-			{ preHandler: [authenticate], config: { keyScopeExemptReason: 'auth-only: server-scoped permission list for the subuser UI checklist' }},
+			{ schema: { summary: "List server permissions", tags: ["Permissions"], response: { 200: { type: "object", required: ["success", "data"], properties: { success: { type: "boolean" }, data: { type: "array", items: { type: "string" } } } } } }, preHandler: [authenticate], config: { keyScopeExemptReason: 'auth-only: server-scoped permission list for the subuser UI checklist' }},
 			async (_request, reply) => {
 				const { ALL_SERVER_PERMISSIONS } = await import(
 					"./lib/permissions-catalog.js"
@@ -1374,7 +1390,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 
 
 		// Update status (authenticated; restart probe uses /health for liveness).
-		app.get("/api/update/check", { preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
+		app.get("/api/update/check", { schema: { summary: "Check for a panel update", tags: ["Updates"], response: { 200: { type: "object", required: ["currentVersion", "latestVersion", "updateAvailable", "isDocker"], properties: { currentVersion: { type: "string" }, latestVersion: { type: ["string", "null"] }, updateAvailable: { type: "boolean" }, isDocker: { type: "boolean" } } } } }, preHandler: [(app as any).authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (request, reply) => {
 			// Panel update state is admin-only information (admin.read tier).
 			const perms: string[] = request.user?.permissions ?? [];
 			if (!hasGrant(perms, "admin.read")) {
@@ -1401,7 +1417,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// Public theme settings endpoint (unauthenticated, display fields only).
 		// The computed public payload is cached (L1 process-local + L2 Redis);
 		// the raw DB row is NOT cached because metadata holds OIDC secrets.
-		app.get("/api/theme-settings/public", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (_request, reply) => {
+		app.get("/api/theme-settings/public", { schema: { summary: "Get public theme settings", tags: ["Theme"], response: { 200: { type: "object", required: ["success", "data"], properties: { success: { type: "boolean" }, data: { type: "object", additionalProperties: true } } } } }, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (_request, reply) => {
 			const data = await cachedConfig("theme_default", async () => {
 				const settings = await prisma.themeSettings.findUnique({
 					where: { id: "default" },
@@ -1458,7 +1474,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// just id/label/authorize URL.
 		app.get(
 			"/api/auth/oauth-providers",
-			{ config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+			{ schema: { summary: "List configured OAuth providers", tags: ["Auth"], response: { 200: { type: "object", required: ["success", "providers"], properties: { success: { type: "boolean" }, providers: { type: "array", items: { type: "object", additionalProperties: true } } } } } }, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
 			async (_request, reply) => {
 				const providers = collectAuthProviders(
 					pluginLoader.getRegistry().getAll(),
@@ -1472,6 +1488,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.post(
 			"/api/system-errors/report",
 			{
+				schema: { summary: "Report a frontend system error", tags: ["Diagnostics"], body: { type: "object", required: ["component", "message"], properties: { level: { type: "string", enum: ["error", "warn", "critical"] }, component: { type: "string", minLength: 1, maxLength: 128 }, message: { type: "string", minLength: 1, maxLength: 2000 }, stack: { type: "string", maxLength: 10000 }, metadata: {} } }, response: { 200: { type: "object", properties: { success: { type: "boolean" } } }, 400: { type: "object", properties: { error: { type: "string" } } }, 500: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {
@@ -1546,6 +1563,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		app.post(
 			"/api/client-errors",
 			{
+				schema: { summary: "Report a client-side error", tags: ["Diagnostics"], body: { type: "object", required: ["message"], properties: { message: { type: "string", minLength: 1, maxLength: 2000 }, stack: { type: "string", maxLength: 10000 }, component: { type: "string", maxLength: 128 }, url: { type: "string", maxLength: 2048 }, level: { type: "string", enum: ["error", "warn", "critical"] } } }, response: { 200: { type: "object", properties: { success: { type: "boolean" } } }, 400: { type: "object", properties: { error: { type: "string" } } } } },
 				config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
 			},
 			async (request, reply) => {

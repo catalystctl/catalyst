@@ -57,6 +57,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // Returns the full list of permission categories + individual permissions.
   // Used by the frontend to render the permission selector.
   app.get("/api/admin/api-keys/permissions-catalog", {
+    schema: { summary: "List API-key permissions", tags: ["API keys"], response: { 200: { type: "object" } } },
     preHandler: [authenticate, requireApiKeyRead],
   }, async (_request, reply) => {
     return reply.send({ success: true, data: PERMISSION_CATEGORIES });
@@ -66,6 +67,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // Returns the current user's effective permissions (resolved from roles).
   // Used by the frontend to cap what permissions can be granted to an API key.
   app.get("/api/admin/api-keys/my-permissions", {
+    schema: { summary: "Get effective API-key permissions", tags: ["API keys"], response: { 200: { type: "object" } } },
     preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     const permissions: string[] = request.user.permissions ?? [];
@@ -75,6 +77,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // ── POST / ──
   // Create a new API key with optional permission scoping.
   app.post("/api/admin/api-keys", {
+    schema: { summary: "Create an API key", tags: ["API keys"], body: {}, response: { 200: { type: "object" }, 403: { type: "object" }, 500: { type: "object" } } },
     preHandler: [authenticate, requireApiKeyWrite],
   }, async (request: any, reply) => {
     try {
@@ -167,6 +170,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // apikey.manage are scoped to their own keys to prevent enumeration of
   // other users' keys.
   app.get("/api/admin/api-keys", {
+    schema: { summary: "List API keys", tags: ["API keys"], response: { 200: { type: "object" }, 500: { type: "object" } } },
     preHandler: [authenticate, requireApiKeyRead],
   }, async (request: any, reply) => {
     try {

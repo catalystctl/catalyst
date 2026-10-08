@@ -47,7 +47,7 @@ export async function bulkServerRoutes(app: FastifyInstance) {
    */
   app.post(
     '/bulk/suspend',
-    { onRequest: [authenticate], config: { requiredPermission: 'server.suspend' } },
+    { schema: { summary: 'Suspend multiple servers', tags: ['Bulk servers'], body: { type: 'object', required: ['serverIds'], properties: { serverIds: { type: 'array', minItems: 1, maxItems: 100, items: { type: 'string' } }, reason: { type: 'string' }, stopServer: { type: 'boolean' } } }, response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' } } }, onRequest: [authenticate], config: { requiredPermission: 'server.suspend' } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { serverIds, reason, stopServer } = request.body as {

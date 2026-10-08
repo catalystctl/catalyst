@@ -324,7 +324,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// POST /:nodeId/agent/update.
 	app.patch(
 		"/auto-update",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage automatic updates", description: "Manage automatic updates.", tags: ["Nodes"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.update")) return;
 
@@ -405,7 +405,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Create node
 	app.post(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve nodes", description: "Retrieve nodes.", tags: ["Nodes"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.create")) return;
 			const {
@@ -617,7 +617,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// List nodes
 	app.get(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve nodes", description: "Retrieve nodes.", tags: ["Nodes"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 
@@ -679,7 +679,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get node details
 	app.get(
 		"/:nodeId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve nodes", description: "Retrieve nodes.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -715,7 +715,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Generate deployment token
 	app.post(
 		"/:nodeId/deployment-token",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Generate a deployment token", description: "Generate a deployment token.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.server_manage")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -816,7 +816,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Check if API key exists for agent
 	app.get(
 		"/:nodeId/api-key",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage the node API key", description: "Manage the node API key.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -877,7 +877,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Generate API key for agent
 	app.post(
 		"/:nodeId/api-key",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage the node API key", description: "Manage the node API key.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.server_manage")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1023,7 +1023,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Update node configuration
 	app.put(
 		"/:nodeId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve nodes", description: "Retrieve nodes.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.update")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1166,7 +1166,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get node statistics
 	app.get(
 		"/:nodeId/stats",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "View node statistics", description: "View node statistics.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.view_stats")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1296,7 +1296,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Update node status (called by agent via heartbeat)
 	app.post(
 		"/:nodeId/heartbeat",
-		{ config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+		{ schema: { summary: "Record a node heartbeat", description: "Record a node heartbeat.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const { nodeId } = request.params as { nodeId: string };
 			const { health } = request.body as {
@@ -1436,7 +1436,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Delete node
 	app.delete(
 		"/:nodeId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve nodes", description: "Retrieve nodes.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.delete")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1520,7 +1520,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// List IP pools (macvlan interfaces) for a node
 	app.get(
 		"/:nodeId/ip-pools",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List IP pools", description: "List IP pools.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1564,7 +1564,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// List available IPs from IPAM pool for a node/network
 	app.get(
 		"/:nodeId/ip-availability",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Check IP availability", description: "Check IP availability.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1606,7 +1606,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Node allocations (Pterodactyl-style)
 	app.get(
 		"/:nodeId/allocations",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, ["node.read", "node.manage_allocation"])) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1681,7 +1681,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 	app.post(
 		"/:nodeId/allocations",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1747,7 +1747,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 	app.patch(
 		"/:nodeId/allocations/:allocationId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Nodes"], params: { type: "object", required: ['nodeId', 'allocationId'], properties: { nodeId: { type: "string" }, allocationId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
 			const { nodeId, allocationId } = request.params as {
@@ -1789,7 +1789,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 	app.delete(
 		"/:nodeId/allocations/:allocationId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage allocations", description: "Manage allocations.", tags: ["Nodes"], params: { type: "object", required: ['nodeId', 'allocationId'], properties: { nodeId: { type: "string" }, allocationId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
 			const { nodeId, allocationId } = request.params as {
@@ -1821,7 +1821,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 	app.post(
 		"/:nodeId/allocations/bulk-delete",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Delete allocations in bulk", description: "Delete allocations in bulk.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.manage_allocation")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -1881,7 +1881,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get all assignments for a node
 	app.get(
 		"/:nodeId/assignments",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List assignments", description: "List assignments.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, ["node.read", "node.assign"])) return;
 
@@ -1910,7 +1910,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Assign node to user or role
 	app.post(
 		"/:nodeId/assign",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Assign a resource", description: "Assign a resource.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.assign")) return;
 
@@ -2038,7 +2038,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Remove a node assignment
 	app.delete(
 		"/:nodeId/assignments/:assignmentId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List assignments", description: "List assignments.", tags: ["Nodes"], params: { type: "object", required: ['nodeId', 'assignmentId'], properties: { nodeId: { type: "string" }, assignmentId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.assign")) return;
 
@@ -2117,7 +2117,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// This endpoint is used by the frontend to populate node selection dropdowns
 	app.get(
 		"/accessible",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List accessible nodes", description: "List accessible nodes.", tags: ["Nodes"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const userId = request.user.userId;
 
@@ -2170,7 +2170,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get unregistered containers discovered on a node (containers without DB server records)
 	app.get(
 		"/:nodeId/unregistered-containers",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List unregistered containers", description: "List unregistered containers.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -2222,7 +2222,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Suggest template match for an unregistered container
 	app.get(
 		"/:nodeId/unregistered-containers/:containerId/suggest-template",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Suggest a template", description: "Suggest a template.", tags: ["Nodes"], params: { type: "object", required: ['nodeId', 'containerId'], properties: { nodeId: { type: "string" }, containerId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId, containerId } = request.params as { nodeId: string; containerId: string };
@@ -2358,7 +2358,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Import a discovered container as a server
 	app.post(
 		"/:nodeId/import-server",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Import a server", description: "Import a server.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const { nodeId } = request.params as { nodeId: string };
 
@@ -2565,7 +2565,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Assign all nodes (wildcard) to user or role
 	app.post(
 		"/assign-wildcard",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Assign wildcard access", description: "Assign wildcard access.", tags: ["Nodes"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.assign")) return;
 
@@ -2694,7 +2694,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Remove wildcard assignment from user or role
 	app.delete(
 		"/assign-wildcard/:targetType/:targetId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Assign wildcard access", description: "Assign wildcard access.", tags: ["Nodes"], params: { type: "object", required: ['targetType', 'targetId'], properties: { targetType: { type: "string" }, targetId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.assign")) return;
 
@@ -2775,7 +2775,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get detailed agent status
 	app.get(
 		"/:nodeId/agent/status",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "View status", description: "View status.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -2871,7 +2871,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get agent logs (initial batch)
 	app.get(
 		"/:nodeId/agent/logs",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "View agent logs", description: "View agent logs.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -2916,7 +2916,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Agents do not open a dedicated log socket; this is the true stream surface.
 	app.get(
 		"/:nodeId/agent/logs/stream",
-		{
+		{ schema: { summary: "Stream agent logs", description: "Stream agent logs.", tags: ["Nodes"], produces: ["text/event-stream"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "string" }, 403: { type: "object" }, 404: { type: "object" }, 503: { type: "object" } } },
 			onRequest: [app.authenticate],
 			config: { rateLimit: false },
 		},
@@ -3048,7 +3048,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Restart agent
 	app.post(
 		"/:nodeId/agent/restart",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Restart the agent", description: "Restart the agent.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3100,7 +3100,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Trigger agent update
 	app.post(
 		"/:nodeId/agent/update",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Retrieve update for agent", description: "Retrieve update for agent.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3185,7 +3185,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get agent update status
 	app.get(
 		"/:nodeId/agent/update-status",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "View update status", description: "View update status.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3244,7 +3244,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Ping agent
 	app.post(
 		"/:nodeId/agent/ping",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Ping the agent", description: "Ping the agent.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3289,7 +3289,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Get agent config
 	app.get(
 		"/:nodeId/agent/config",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage agent configuration", description: "Manage agent configuration.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3333,7 +3333,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Update agent config
 	app.put(
 		"/:nodeId/agent/config",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Manage agent configuration", description: "Manage agent configuration.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };
@@ -3417,7 +3417,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// using networkMode "host" can start without an agent restart.
 	app.post(
 		"/:nodeId/host-network",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "View host networking", description: "View host networking.", tags: ["Nodes"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.agent_control")) return;
 			const { nodeId } = request.params as { nodeId: string };

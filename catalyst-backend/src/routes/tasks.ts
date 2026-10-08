@@ -158,7 +158,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Create a scheduled task
   app.post(
     '/:serverId/tasks',
-    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' }, schema: { summary: 'Create a scheduled task', description: 'Create a scheduled server task.', tags: ['Tasks'], params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } }, body: { type: 'object', required: ['name', 'action', 'schedule'], properties: { name: { type: 'string' }, description: { type: 'string' }, action: { type: 'string', enum: ['restart', 'stop', 'start', 'backup', 'command'] }, payload: {}, schedule: { type: 'string' } } }, response: { 200: { type: 'object', additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
@@ -263,7 +263,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // subusers and admin.read roles out of viewing their own tasks).
   app.get(
     '/:serverId/tasks',
-    { preHandler: authenticate, config: { requiredPermission: 'server.read' } },
+    { preHandler: authenticate, config: { requiredPermission: 'server.read' }, schema: { summary: 'List scheduled tasks', description: 'List scheduled tasks for a server.', tags: ['Tasks'], params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } }, response: { 200: { type: 'object', additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
@@ -282,7 +282,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Get a specific task
   app.get(
     '/:serverId/tasks/:taskId',
-    { preHandler: authenticate, config: { requiredPermission: 'server.read' } },
+    { preHandler: authenticate, config: { requiredPermission: 'server.read' }, schema: { summary: 'Get a scheduled task', description: 'Get a scheduled task for a server.', tags: ['Tasks'], params: { type: 'object', required: ['serverId', 'taskId'], properties: { serverId: { type: 'string' }, taskId: { type: 'string' } } }, response: { 200: { type: 'object', additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };
@@ -307,7 +307,7 @@ export async function taskRoutes(app: FastifyInstance) {
   // Update a scheduled task
   app.put(
     '/:serverId/tasks/:taskId',
-    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' } },
+    { preHandler: authenticate, config: { requiredPermission: 'server.schedule' }, schema: { summary: 'Update a scheduled task', description: 'Update a scheduled task.', tags: ['Tasks'], params: { type: 'object', required: ['serverId', 'taskId'], properties: { serverId: { type: 'string' }, taskId: { type: 'string' } } }, body: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, action: { type: 'string', enum: ['restart', 'stop', 'start', 'backup', 'command'] }, payload: {}, schedule: { type: 'string' }, enabled: { type: 'boolean' } } }, response: { 200: { type: 'object', additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId, taskId } = request.params as { serverId: string; taskId: string };

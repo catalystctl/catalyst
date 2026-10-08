@@ -43,6 +43,13 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
     {
       onRequest: [(app as any).authenticate],
       config: { rateLimit: false },
+      schema: {
+        summary: 'Stream server metrics',
+        tags: ['Metrics'],
+        produces: ['text/event-stream'],
+        params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
+        response: { 200: { type: 'string' }, 401: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 503: { type: 'object' } },
+      },
     },
     async (request, reply) => {
       const { serverId } = request.params;

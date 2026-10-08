@@ -157,6 +157,7 @@ export async function mcpRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/mcp",
     {
+      schema: { summary: 'Handle an MCP JSON-RPC request', tags: ['MCP'], consumes: ['application/json'], response: { 200: { type: 'object' }, 202: { type: 'null' }, 401: { type: 'object' } } },
       // Tool arguments are small JSON (even write_file content is bounded by
       // model context in practice); 2MB stops abuse while direct REST stays
       // available for large transfers.
@@ -201,6 +202,7 @@ export async function mcpRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/mcp",
     {
+      schema: { summary: 'Open the MCP keep-alive stream', tags: ['MCP'], produces: ['text/event-stream'], response: { 401: { type: 'object' }, 503: { type: 'object' } } },
       // Long-lived like the console/metrics SSE routes; excluded from the
       // global rate limiter so an open stream is not counted per minute.
       config: { rateLimit: false },
@@ -243,7 +245,7 @@ export async function mcpRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ── DELETE /api/mcp — no sessions exist in stateless mode ───────────────
-  app.delete("/mcp", async (request: FastifyRequest, reply: FastifyReply) => {
+  app.delete("/mcp", { schema: { summary: 'Close an MCP session', tags: ['MCP'], response: { 401: { type: 'object' }, 404: { type: 'object' } } } }, async (request: FastifyRequest, reply: FastifyReply) => {
     const identity = await authenticateMcp(request, reply);
     if (!identity) return;
     apiError(reply, 404, ErrorCodes.NOT_FOUND, "Not Found");

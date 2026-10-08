@@ -113,7 +113,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Create a backup
   app.post(
     "/:serverId/backups",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { name } = request.body as { name?: string };
@@ -179,7 +179,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // List backups for a server
   app.get(
     "/:serverId/backups",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "List server backups", description: "List backups for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, querystring: { type: "object", properties: { limit: { type: "string" }, page: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { limit = "50", page = "1" } = request.query as {
@@ -268,7 +268,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Get a specific backup
   app.get(
     "/:serverId/backups/:backupId",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Get a server backup", description: "Get a specific backup.", tags: ["Backups"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -311,7 +311,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Restore from backup
   app.post(
     "/:serverId/backups/:backupId/restore",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Restore a server backup", description: "Start restoring a server from a backup.", tags: ["Backups"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -470,7 +470,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Delete a backup
   app.delete(
     "/:serverId/backups/:backupId",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Delete a server backup", description: "Delete a backup.", tags: ["Backups"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -542,7 +542,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Download a backup
   app.get(
     "/:serverId/backups/:backupId/download",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Download a server backup", tags: ["Backups"], produces: ["application/gzip"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/gzip" }, 401: { type: "object" }, 403: { type: "object" }, 404: { type: "object" }, 423: { type: "object" }, 500: { type: "object" } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;

@@ -82,7 +82,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// When no limit is provided, returns all templates (backwards-compatible with frontend list view).
 	app.get(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "List server templates", description: "List available server templates with optional pagination and nest filtering.", tags: ["Templates"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const query = request.query as { limit?: string; offset?: string; nestId?: string; full?: string };
 			const hasLimitParam = query.limit !== undefined && query.limit !== '';
@@ -156,7 +156,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Get template details
 	app.get(
 		"/:templateId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Get a server template", description: "Retrieve a server template by ID.", tags: ["Templates"], params: { type: "object", required: ['templateId'], properties: { templateId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,
@@ -186,7 +186,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Create template (admin only)
 	app.post(
 		"/",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Create a server template", description: "Create a server template from its configuration and installation settings.", tags: ["Templates"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,
@@ -305,7 +305,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Update template
 	app.put(
 		"/:templateId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Update a server template", description: "Update a server template by ID.", tags: ["Templates"], params: { type: "object", required: ['templateId'], properties: { templateId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,
@@ -438,7 +438,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Delete template
 	app.delete(
 		"/:templateId",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Delete a server template", description: "Delete a server template by ID when it is not in use.", tags: ["Templates"], params: { type: "object", required: ['templateId'], properties: { templateId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,
@@ -476,7 +476,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Import Pterodactyl egg (single) — uses structured error-returning API
 	app.post(
 		"/import-pterodactyl",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Import a Pterodactyl template", description: "Import a Pterodactyl template.", tags: ["Templates"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,
@@ -592,7 +592,7 @@ export async function templateRoutes(app: FastifyInstance) {
 	// Import all Pterodactyl game eggs from GitHub (batch with partial-failure)
 	app.post(
 		"/import-pterodactyl-batch",
-		{ onRequest: [app.authenticate] },
+		{ schema: { summary: "Import Pterodactyl templates", description: "Import Pterodactyl templates.", tags: ["Templates"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			const has = ensurePermission(
 				request,

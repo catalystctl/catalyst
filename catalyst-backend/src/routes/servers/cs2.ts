@@ -203,7 +203,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // List available CS2 frameworks and their install state
   app.get(
     "/:serverId/cs2/frameworks",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "List CS2 frameworks", description: "List CS2 frameworks.", tags: ["Cs2"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
@@ -237,7 +237,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // List releases for a framework (paginated)
   app.get(
     "/:serverId/cs2/frameworks/:frameworkId/releases",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" } },
+    { schema: { summary: "List framework releases", description: "List framework releases.", tags: ["Cs2"], params: { type: "object", required: ['serverId', 'frameworkId'], properties: { serverId: { type: "string" }, frameworkId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const { page, perPage, query } = request.query as { page?: string; perPage?: string; query?: string };
@@ -274,7 +274,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // Install a framework release
   app.post(
     "/:serverId/cs2/frameworks/:frameworkId/install",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
+    { schema: { summary: "Install a CS2 framework", description: "Install a CS2 framework release on a server.", tags: ["Cs2"], params: { type: "object", required: ['serverId', 'frameworkId'], properties: { serverId: { type: "string" }, frameworkId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const { tag, allowDependencyInstall } = request.body as { tag?: string; allowDependencyInstall?: boolean };
@@ -380,7 +380,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // Uninstall framework (removes known paths)
   app.post(
     "/:serverId/cs2/frameworks/:frameworkId/uninstall",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
+    { schema: { summary: "Uninstall a CS2 framework", description: "Remove an installed CS2 framework from a server.", tags: ["Cs2"], params: { type: "object", required: ['serverId', 'frameworkId'], properties: { serverId: { type: "string" }, frameworkId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, frameworkId } = request.params as { serverId: string; frameworkId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
@@ -460,7 +460,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // CS2 plugins: list installed plugins from addons/counterstrikesharp/plugins
   app.get(
     "/:serverId/cs2/plugins",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
+    { schema: { summary: "List plugins", description: "List plugins.", tags: ["Cs2"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { requiredPermission: "server.read" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = (request as unknown as { user: { userId: string } }).user.userId;
@@ -491,7 +491,7 @@ export async function serverCs2Routes(app: FastifyInstance) {
   // CS2 plugins: uninstall a plugin folder/file under addons/counterstrikesharp/plugins
   app.post(
     "/:serverId/cs2/plugins/uninstall",
-    { onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" } },
+    { schema: { summary: "Uninstall a CS2 plugin", description: "Remove an installed CS2 plugin from a server.", tags: ["Cs2"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [(app as unknown as { authenticate: (req: unknown, reply: unknown) => Promise<void> }).authenticate], config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { filename } = request.body as { filename?: string };

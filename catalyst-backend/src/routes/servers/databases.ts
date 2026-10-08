@@ -9,7 +9,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
   // Static path — must not be captured by GET /:serverId
   app.get(
     "/database-hosts",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "List database hosts", description: "List database hosts.", tags: ["Databases"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = (request as any).user?.userId;
       const { hasGrant } = await import("../../lib/permissions.js");
@@ -57,7 +57,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/databases",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage databases", description: "Manage databases.", tags: ["Databases"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -110,7 +110,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
   // Create server database
   app.post(
     "/:serverId/databases",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage databases", description: "Manage databases.", tags: ["Databases"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -289,7 +289,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
   // Rotate server database password
   app.post(
     "/:serverId/databases/:databaseId/rotate",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Rotate database credentials", description: "Rotate database credentials.", tags: ["Databases"], params: { type: "object", required: ['serverId', 'databaseId'], properties: { serverId: { type: "string" }, databaseId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, databaseId } = request.params as {
         serverId: string;
@@ -401,7 +401,7 @@ export async function serverDatabasesRoutes(app: FastifyInstance) {
   // Delete server database
   app.delete(
     "/:serverId/databases/:databaseId",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage databases", description: "Manage databases.", tags: ["Databases"], params: { type: "object", required: ['serverId', 'databaseId'], properties: { serverId: { type: "string" }, databaseId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, databaseId } = request.params as {
         serverId: string;

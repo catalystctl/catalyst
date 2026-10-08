@@ -13,7 +13,7 @@ import { serialize } from "../utils/serialize";
 export async function providerKeyRoutes(app: FastifyInstance) {
   app.get(
     "/status",
-    { onRequest: [app.authenticate], config: { keyScopeExemptReason: 'mod-provider key status booleans for server-detail tabs; any authenticated user by design' }},
+    { schema: { summary: "Get configured provider-key status", tags: ["Provider keys"], response: { 200: { type: "object", properties: { success: { type: "boolean" }, data: { type: "object", properties: { modrinth: { type: "boolean" }, curseforge: { type: "boolean" } } } } } } }, onRequest: [app.authenticate], config: { keyScopeExemptReason: 'mod-provider key status booleans for server-detail tabs; any authenticated user by design' }},
     async (_request: FastifyRequest, reply: FastifyReply) => {
       const settings = await getModManagerSettings();
       reply.send(

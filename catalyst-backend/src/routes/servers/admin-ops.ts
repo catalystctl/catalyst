@@ -46,7 +46,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
 
   app.patch(
     "/:id/restart-policy",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage restart policy", description: "Manage restart policy.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { restartPolicy, maxCrashCount } = request.body as {
@@ -109,7 +109,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Reset crash count
   app.post(
     "/:id/reset-crash-count",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Reset the crash count", description: "Reset the crash count.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
 
@@ -152,7 +152,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Update backup settings
   app.patch(
     "/:id/backup-settings",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Manage backup settings", description: "Manage backup settings.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const {
@@ -375,7 +375,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Transfer server to another node
   app.post(
     "/:id/transfer",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Retrieve transfer", description: "Retrieve transfer.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { targetNodeId } = request.body as {
@@ -706,7 +706,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Search users eligible as transfer-ownership targets (owner or admin.write)
   app.get(
     "/:serverId/transfer-candidates",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    { schema: { summary: "List transfer candidates", description: "List transfer candidates.", tags: ["Admin Ops"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -760,7 +760,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Transfer ownership
   app.post(
     "/:serverId/transfer-ownership",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Transfer server ownership", description: "Transfer server ownership.", tags: ["Admin Ops"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -877,7 +877,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Archive server
   app.post(
     "/:serverId/archive",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Archive a server", description: "Archive a server.", tags: ["Admin Ops"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -947,7 +947,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Restore server from archive
   app.post(
     "/:serverId/restore",
-    { onRequest: [app.authenticate] },
+    { schema: { summary: "Restore a server", description: "Restore a server.", tags: ["Admin Ops"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;

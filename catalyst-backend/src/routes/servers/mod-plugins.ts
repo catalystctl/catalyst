@@ -49,7 +49,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/mod-manager/game-versions",
-    {
+    { schema: { summary: "List game versions", description: "List game versions.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { requiredPermission: "server.read" },
     },
@@ -111,7 +111,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/mod-manager/search",
-    {
+    { schema: { summary: "Search mod packages", description: "Search available mod packages for a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -257,7 +257,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/mod-manager/versions",
-    {
+    { schema: { summary: "List versions", description: "List versions.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -319,7 +319,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.post(
     "/:serverId/mod-manager/install",
-    {
+    { schema: { summary: "Install a mod package", description: "Install a selected mod package on a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
@@ -480,7 +480,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Get valid game version tags for a provider (used for autocomplete)
   app.get(
     "/:serverId/plugin-manager/game-versions",
-    {
+    { schema: { summary: "List game versions", description: "List game versions.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { requiredPermission: "server.read" },
     },
@@ -537,7 +537,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/plugin-manager/search",
-    {
+    { schema: { summary: "Search plugin packages", description: "Search available plugin packages for a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -662,7 +662,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/plugin-manager/versions",
-    {
+    { schema: { summary: "List versions", description: "List versions.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -724,7 +724,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.post(
     "/:serverId/plugin-manager/install",
-    {
+    { schema: { summary: "Install a plugin package", description: "Install a selected plugin package on a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
@@ -923,7 +923,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // List installed mods/plugins in a target directory
   app.get(
     "/:serverId/mod-manager/installed",
-    {
+    { schema: { summary: "List installed items", description: "List installed items.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -973,7 +973,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
 
   app.get(
     "/:serverId/plugin-manager/installed",
-    {
+    { schema: { summary: "List installed items", description: "List installed items.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -1022,7 +1022,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Uninstall (delete) a mod from the server
   app.post(
     "/:serverId/mod-manager/uninstall",
-    {
+    { schema: { summary: "Uninstall a mod package", description: "Remove an installed mod package from a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
@@ -1087,7 +1087,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Uninstall (delete) a plugin from the server
   app.post(
     "/:serverId/plugin-manager/uninstall",
-    {
+    { schema: { summary: "Uninstall a plugin package", description: "Remove an installed plugin package from a server.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
@@ -1149,7 +1149,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Check for updates on installed mods
   app.post(
     "/:serverId/mod-manager/check-updates",
-    {
+    { schema: { summary: "Check for updates", description: "Check for updates.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -1266,7 +1266,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Check for updates on installed plugins
   app.post(
     "/:serverId/plugin-manager/check-updates",
-    {
+    { schema: { summary: "Check for updates", description: "Check for updates.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: 15, timeWindow: fileRateLimitWindowMs }, requiredPermission: "server.read" },
     },
@@ -1373,7 +1373,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Update a specific mod to its latest version
   app.post(
     "/:serverId/mod-manager/update",
-    {
+    { schema: { summary: "Retrieve update for mod manager", description: "Retrieve update for mod manager.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "mods.manage" },
     },
@@ -1514,7 +1514,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
   // Update a specific plugin to its latest version
   app.post(
     "/:serverId/plugin-manager/update",
-    {
+    { schema: { summary: "Retrieve update for plugin manager", description: "Retrieve update for plugin manager.", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs }, requiredPermission: "plugins.manage" },
     },
