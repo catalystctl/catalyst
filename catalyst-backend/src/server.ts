@@ -95,6 +95,8 @@ import {
 	resolveLocalAgentBinary,
 	resolveLocalAgentChecksum,
 } from "./lib/agent-binary";
+import { initializeMetrics, registerMetricsEndpoint, getMetrics } from "./services/metrics-exporter";
+import { requestIdMiddleware } from "./middleware/request-id";
 
 // Resolve API_KEY_SECRET early (falls back to BETTER_AUTH_SECRET). Fail fast if
 // neither is set so deployment-token / API-key routes never 500 mid-request.
@@ -457,6 +459,31 @@ function getPanelVersion(): string {
 async function bootstrap() {
 	try {
 		logger.info(`Catalyst Backend v${getPanelVersion()}`);
+		
+		// Initialize Prometheus metrics exporter
+		const metricsExporter = initializeMetrics();
+		
+		// Add request ID middleware for distributed tracing
+		app.addHook("onRequest", requestIdMiddleware);
+		
+		// Track HTTP request duration and count for Prometheus
+		app.addHook("onRequest", async (request) => {
+			(request as any).startTime = process.hrtime.bigint();
+		});
+		app.addHook("onResponse", async (request, reply) => {
+			const startTime = (request as any).startTime;
+			if (startTime && metricsExporter) {
+				const durationNs = process.hrtime.bigint() - startTime;
+				const durationSeconds = Number(durationNs) / 1_000_000_000;
+				metricsExporter.recordHttpRequest(
+					request.method,
+					request.url,
+					reply.statusCode,
+					durationSeconds,
+				);
+			}
+		});
+		
 		// Register security plugins
 		// Response compression — gzip/br/deflate for smaller payloads
 		// Enabled by default; set ENABLE_COMPRESSION=false to disable.
@@ -972,6 +999,9 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 		// Panel-hosted MCP (Streamable HTTP, stateless). Bearer-key only,
 		// master switch in MCP settings; 404s while disabled.
 		await app.register(mcpRoutes, { prefix: "/api" });
+
+		// Prometheus metrics endpoint (unauthenticated, for scraping)
+		registerMetricsEndpoint(app);
 
 		// Panel + agent version (authenticated; bootstrap uses AGENT_VERSION env or default binary).
 		app.get(

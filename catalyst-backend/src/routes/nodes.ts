@@ -13,6 +13,7 @@ import { getCurrentVersion } from "../lib/panel-version";
 import { createAuditLog } from "../middleware/audit.js";
 import { openSseStream } from "../utils/sse.js";
 import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
+import { parsePaginationParams, buildPaginationMeta } from "../lib/pagination.js";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 import { config } from "../config.js";
@@ -685,9 +686,8 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
 			const { page, limit } = request.query as { page?: number | string; limit?: number | string };
-			const paginated = page !== undefined || limit !== undefined;
-			const pageNumber = Math.max(1, Number(page ?? 1) || 1);
-			const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
+			// Use standardized pagination helper (page/limit pattern with max 100)
+			const { pageNumber, pageSize, skip, paginated } = parsePaginationParams(page, limit);
 
 			// Admin bits see every node; everyone else needs node access.
 			if (!(await hasNodeScope(request, nodeId, "read"))) {
@@ -699,7 +699,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				omit: { secret: true },
 				include: {
 					servers: {
-						...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
+						...(paginated ? { skip, take: pageSize } : {}),
 						select: {
 							id: true,
 							uuid: true,
@@ -718,7 +718,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				success: true,
 				data: node,
 				...(paginated
-					? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+					? { pagination: buildPaginationMeta(pageNumber, pageSize, total) }
 					: {}),
 			}));
 		},
@@ -1629,11 +1629,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
-			const { serverId, search, limit, offset } = request.query as {
+			const { serverId, search, page, limit } = request.query as {
 				serverId?: string;
 				search?: string;
+				page?: string;
 				limit?: string;
-				offset?: string;
 			};
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
@@ -1666,9 +1666,9 @@ export async function nodeRoutes(app: FastifyInstance) {
 					: {}),
 			};
 
-			// Add pagination with reasonable defaults (max 1000)
-			const take = Math.min(Number(limit) || 1000, 1000);
-			const skip = Math.max(0, Number(offset) || 0);
+			// Use standardized pagination helper (page/limit pattern with max 100)
+			const { pageNumber, pageSize, skip } = parsePaginationParams(page, limit);
+			const take = pageSize;
 
 			const [allocations, total] = await Promise.all([
 				prisma.nodeAllocation.findMany({
@@ -1698,7 +1698,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				prisma.nodeAllocation.count({ where }),
 			]);
 
-			reply.send(serialize({ success: true, data: allocations, pagination: { limit: take, offset: skip, total } }));
+			reply.send(serialize({ success: true, data: allocations, pagination: buildPaginationMeta(pageNumber, pageSize, total) }));
 		},
 	);
 

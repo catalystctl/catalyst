@@ -20,6 +20,7 @@ import { captureSystemError } from "../services/error-logger";
 import { isNodeAutoUpdateEnabled } from "../services/node-update-policy";
 import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
+import { getMetrics } from "../services/metrics-exporter";
 import {
   DEFAULT_RELAY_FLOW_CONFIG,
   evaluateRelayFlow,
@@ -1010,6 +1011,17 @@ export class WebSocketGateway {
   }
 
   /**
+   * Update Prometheus metrics with current WebSocket connection counts.
+   */
+  private updateConnectionMetrics(): void {
+    const metrics = getMetrics();
+    if (metrics) {
+      const totalConnections = this.agents.size + this.clients.size;
+      metrics.setActiveWebSocketConnections(totalConnections);
+    }
+  }
+
+  /**
    * Deliver a command from a sibling instance if (and only if) the agent
    * socket is local. Returns true when delivered.
    */
@@ -1166,6 +1178,8 @@ export class WebSocketGateway {
         }
         this.agents.delete(agentKey());
         this.agentUpdateSent.delete(agentKey());
+        // Update WebSocket connection count metric
+        this.updateConnectionMetrics();
         // Fail-fast any commands still awaiting an ack from this agent instead
         // of letting them hang until their per-request timeout (15-60s).
         this.failPendingRequestsForNode(nodeId, `Agent ${nodeId} disconnected`);
@@ -1420,6 +1434,8 @@ export class WebSocketGateway {
         consoleSubscriptions: new Set<string>(),
       };
       this.clients.set(clientId, client);
+      // Update WebSocket connection count metric
+      this.updateConnectionMetrics();
       this.logger.info(`Client connected (pending auth): ${clientId}`);
 
       // Try to authenticate immediately via cookies from upgrade request
@@ -1436,6 +1452,8 @@ export class WebSocketGateway {
             this.logger.warn({ userId: session.user.id, current: userConnections }, 'User connection limit reached');
             socket.send(JSON.stringify({ type: 'error', error: 'Too many connections for this user', code: ErrorCodes.RATE_LIMITED }));
             this.clients.delete(clientId);
+          this.updateConnectionMetrics();
+            this.updateConnectionMetrics();
             socket.close();
             return;
           }
@@ -1467,6 +1485,7 @@ export class WebSocketGateway {
         if (pending && !pending.authenticated) {
           pending.socket.close();
           this.clients.delete(clientId);
+          this.updateConnectionMetrics();
           this.logger.warn({ clientId }, "Client handshake timeout");
         }
       }, 3000);  // Reduced from 5s to 3s
@@ -3541,6 +3560,7 @@ export class WebSocketGateway {
           this.logger.warn({ clientId }, "client_handshake missing token and no cookie auth");
           client.socket.close();
           this.clients.delete(clientId);
+          this.updateConnectionMetrics();
           return;
         }
         const session = await auth.api.getSession({
@@ -3550,6 +3570,7 @@ export class WebSocketGateway {
           this.logger.warn({ clientId }, "client_handshake invalid session");
           client.socket.close();
           this.clients.delete(clientId);
+          this.updateConnectionMetrics();
           return;
         }
         // Enforce the same per-user connection cap as the cookie path so the
@@ -3565,6 +3586,7 @@ export class WebSocketGateway {
           );
           client.socket.close();
           this.clients.delete(clientId);
+          this.updateConnectionMetrics();
           return;
         }
         client.userId = session.user.id;

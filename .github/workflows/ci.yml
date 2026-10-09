@@ -136,9 +136,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
-          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          # Optimized key: only hash lockfile and workspace config.
+          # package.json files don't affect store integrity (only lockfile does).
+          key: pnpm-store-v3-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
           restore-keys: |
-            pnpm-store-v2-${{ runner.os }}-
+            pnpm-store-v3-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -333,9 +335,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
-          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          # Optimized key: only hash lockfile and workspace config.
+          # package.json files don't affect store integrity (only lockfile does).
+          key: pnpm-store-v3-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
           restore-keys: |
-            pnpm-store-v2-${{ runner.os }}-
+            pnpm-store-v3-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -467,9 +471,11 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ env.STORE_PATH }}
-          key: pnpm-store-v2-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', 'catalyst-backend/package.json', 'catalyst-frontend/package.json', 'packages/**/package.json') }}
+          # Optimized key: only hash lockfile and workspace config.
+          # package.json files don't affect store integrity (only lockfile does).
+          key: pnpm-store-v3-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'pnpm-workspace.yaml') }}
           restore-keys: |
-            pnpm-store-v2-${{ runner.os }}-
+            pnpm-store-v3-${{ runner.os }}-
 
       - name: Cache Prisma Client
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

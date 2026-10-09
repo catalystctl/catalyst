@@ -8,6 +8,7 @@ import { Actor, enforceKeyScope, ensureServerAccess } from './servers/_helpers.j
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 import { config } from "../config.js";
+import { parsePaginationParams, buildPaginationMeta } from '../lib/pagination.js';
 
 /** Allowed scheduled-task actions (create + update). */
 const TASK_ACTIONS = ['restart', 'stop', 'start', 'backup', 'command'] as const;
@@ -269,16 +270,15 @@ export async function taskRoutes(app: FastifyInstance) {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
       const { page, limit } = request.query as { page?: number | string; limit?: number | string };
-      const paginated = page !== undefined || limit !== undefined;
-      const pageNumber = Math.max(1, Number(page ?? 1) || 1);
-      const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
+      // Use standardized pagination helper (page/limit pattern with max 100)
+      const { pageNumber, pageSize, skip, paginated } = parsePaginationParams(page, limit);
 
       if (!(await ensureServerAccess(serverId, user.userId, 'server.read', reply, request.user))) return;
 
       const taskQuery = {
         where: { serverId },
         orderBy: { createdAt: 'desc' },
-        ...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
+        ...(paginated ? { skip, take: pageSize } : {}),
       } as const;
       const [tasks, total] = await Promise.all([
         prisma.scheduledTask.findMany(taskQuery),
@@ -288,7 +288,7 @@ export async function taskRoutes(app: FastifyInstance) {
       reply.send(serialize({
         tasks,
         ...(paginated
-          ? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+          ? { pagination: buildPaginationMeta(pageNumber, pageSize, total) }
           : {}),
       }));
     }

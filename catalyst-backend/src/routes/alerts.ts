@@ -5,6 +5,7 @@ import { hasNodeAccess, hasGrant } from '../lib/permissions';
 import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
 import { pushOwnerVisibleAlertEvent } from '../services/alert-service.js';
+import { parsePaginationParams, buildPaginationMeta } from '../lib/pagination.js';
 
 export async function alertRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
@@ -429,10 +430,9 @@ export async function alertRoutes(app: FastifyInstance) {
       const user = request.user;
       const isAdmin = isAdminUser(request);
       const { alertId } = request.params as { alertId: string };
+      // Use standardized pagination helper (page/limit pattern with max 100)
       const { page, limit } = request.query as { page?: number | string; limit?: number | string };
-      const paginated = page !== undefined || limit !== undefined;
-      const pageNumber = Math.max(1, Number(page ?? 1) || 1);
-      const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
+      const { pageNumber, pageSize, skip, paginated } = parsePaginationParams(page, limit);
       const alert = await prisma.alert.findUnique({ where: { id: alertId }, select: { id: true, userId: true, serverId: true } });
       if (!alert) {
         return apiError(reply, 404, ErrorCodes.ALERT_NOT_FOUND, 'Alert not found');
@@ -457,7 +457,7 @@ export async function alertRoutes(app: FastifyInstance) {
       const deliveryQuery = {
         where: { alertId },
         orderBy: { createdAt: 'desc' },
-        ...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
+        ...(paginated ? { skip, take: pageSize } : {}),
       } as const;
       const [deliveries, total] = await Promise.all([
         prisma.alertDelivery.findMany(deliveryQuery),
@@ -468,12 +468,13 @@ export async function alertRoutes(app: FastifyInstance) {
       const visible = revealSecrets
         ? deliveries
         : deliveries.map((d: any) => ({ ...d, target: redactTarget(d?.target) }));
-      reply.send({
+      // Always use serialize() for consistent BigInt handling and response format
+      reply.send(serialize({
         deliveries: visible,
         ...(paginated
-          ? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+          ? { pagination: buildPaginationMeta(pageNumber, pageSize, total) }
           : {}),
-      });
+      }));
     }
   );
 

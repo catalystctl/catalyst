@@ -17,6 +17,7 @@ mod errors;
 mod file_manager;
 mod file_tunnel;
 mod firewall_manager;
+mod metrics;
 mod net_utils;
 mod network_manager;
 mod ownership;
@@ -33,6 +34,7 @@ pub use errors::{AgentError, AgentResult};
 pub use file_manager::FileManager;
 pub use file_tunnel::FileTunnelClient;
 pub use firewall_manager::FirewallManager;
+pub use metrics::AgentMetrics;
 pub use network_manager::NetworkManager;
 pub use runtime_manager::{ContainerdRuntime, ContainerdRuntimeConfig};
 pub use storage_manager::StorageManager;
@@ -48,6 +50,7 @@ pub struct CatalystAgent {
     pub file_tunnel: Arc<FileTunnelClient>,
     pub storage_manager: Arc<StorageManager>,
     pub backend_connected: Arc<RwLock<bool>>,
+    pub metrics: Arc<AgentMetrics>,
 }
 
 impl CatalystAgent {
@@ -55,6 +58,11 @@ impl CatalystAgent {
         info!("Initializing Catalyst Agent v{}", env!("CARGO_PKG_VERSION"));
 
         let config = Arc::new(config);
+        let metrics = Arc::new(AgentMetrics::new());
+
+        // Update memory usage metric on startup
+        metrics.update_memory_usage();
+
         let runtime_config = ContainerdRuntimeConfig {
             socket_path: config.containerd.socket_path.clone(),
             namespace: config.containerd.namespace.clone(),
@@ -149,6 +157,7 @@ impl CatalystAgent {
             file_tunnel,
             storage_manager,
             backend_connected,
+            metrics,
         })
     }
 
@@ -185,6 +194,26 @@ impl CatalystAgent {
         }
 
         let mut join_set = JoinSet::new();
+
+        // Start periodic memory usage updates (every 30 seconds)
+        {
+            let metrics = self.metrics.clone();
+            let mut shutdown = shutdown_rx.resubscribe();
+            join_set.spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    tokio::select! {
+                        _ = interval.tick() => {
+                            metrics.update_memory_usage();
+                        }
+                        _ = shutdown.recv() => {
+                            break;
+                        }
+                    }
+                }
+            });
+        }
 
         // Start WebSocket connection to backend
         let agent = self.clone_refs();
@@ -385,6 +414,7 @@ impl CatalystAgent {
             file_tunnel: self.file_tunnel.clone(),
             storage_manager: self.storage_manager.clone(),
             backend_connected: self.backend_connected.clone(),
+            metrics: self.metrics.clone(),
         }
     }
 }

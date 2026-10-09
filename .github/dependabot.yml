@@ -29,6 +29,11 @@ updates:
         dependency-type: "production"
         update-types:
           - "patch"
+    # Allow overrides defined in pnpm-workspace.yaml to control transitive
+    # patch versions, preventing Dependabot from proposing updates that
+    # conflict with security-patched transitive dependencies.
+    allow:
+      - dependency-type: "all"
 
   # Agent - Rust/Cargo dependencies
   - package-ecosystem: "cargo"
@@ -47,6 +52,14 @@ updates:
     commit-message:
       prefix: "chore(agent)"
       include: "scope"
+    groups:
+      rust-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+      rust-major:
+        update-types:
+          - "major"
 
   # GitHub Actions workflows
   - package-ecosystem: "github-actions"

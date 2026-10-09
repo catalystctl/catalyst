@@ -931,19 +931,199 @@ jobs:
           push-to-registry: true
 
   # ══════════════════════════════════════════════════════════════════════════════
+  # Docker image smoke tests: verify multi-arch manifests and basic runtime.
+  # Runs after merge-images to validate both architectures before publishing.
+  # A failing smoke test blocks the release — better to catch broken images
+  # here than after customers pull them.
+  # ══════════════════════════════════════════════════════════════════════════════
+  smoke-test-images:
+    name: Smoke Test ${{ matrix.image }}
+    needs: [version, merge-images]
+    if: needs.version.outputs.bump != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      packages: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - image: backend
+            port: 3000
+            healthcheck: /api/health
+          - image: frontend
+            port: 80
+            healthcheck: /
+
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify multi-arch manifest exists
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:${{ needs.version.outputs.new_version }}"
+          echo "Inspecting manifest for $IMAGE"
+          
+          # Fetch the manifest and verify it is a manifest list (multi-arch)
+          MANIFEST=$(docker buildx imagetools inspect "$IMAGE" --raw)
+          MEDIA_TYPE=$(echo "$MANIFEST" | jq -r '.mediaType // .MediaType')
+          
+          if [[ "$MEDIA_TYPE" != "application/vnd.docker.distribution.manifest.list.v2+json" && \
+                "$MEDIA_TYPE" != "application/vnd.oci.image.index.v1+json" ]]; then
+            echo "ERROR: $IMAGE is not a multi-arch manifest (type: $MEDIA_TYPE)"
+            exit 1
+          fi
+          
+          # Extract architectures from the manifest list
+          ARCHES=$(echo "$MANIFEST" | jq -r '[.manifests[]? // .[] | .platform.architecture] | unique | join(", ")')
+          echo "✅ Multi-arch manifest contains: $ARCHES"
+          
+          # Verify both amd64 and arm64 are present
+          if ! echo "$ARCHES" | grep -q "amd64"; then
+            echo "ERROR: Missing amd64 architecture"
+            exit 1
+          fi
+          if ! echo "$ARCHES" | grep -q "arm64"; then
+            echo "ERROR: Missing arm64 architecture"
+            exit 1
+          fi
+          
+          echo "✅ Both amd64 and arm64 architectures present"
+
+      - name: Pull and verify image size
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:${{ needs.version.outputs.new_version }}"
+          docker pull "$IMAGE"
+          SIZE=$(docker image inspect "$IMAGE" --format='{{.Size}}' | awk '{print int($1/1024/1024)}')
+          echo "Image size: ${SIZE} MB"
+          
+          # Sanity check: images should be >10 MB (has actual content) but <2 GB (not bloated)
+          if [ "$SIZE" -lt 10 ]; then
+            echo "ERROR: Image suspiciously small (${SIZE} MB)"
+            exit 1
+          fi
+          if [ "$SIZE" -gt 2000 ]; then
+            echo "WARN: Image larger than expected (${SIZE} MB)"
+          fi
+
+      - name: Smoke test runtime (backend)
+        if: matrix.image == 'backend'
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:${{ needs.version.outputs.new_version }}"
+          
+          # Backend needs PostgreSQL for startup
+          docker network create catalyst-smoke-test
+          
+          docker run -d \
+            --name smoke-postgres \
+            --network catalyst-smoke-test \
+            -e POSTGRES_USER=catalyst \
+            -e POSTGRES_PASSWORD=test_password \
+            -e POSTGRES_DB=catalyst_db \
+            postgres:16-alpine
+          
+          # Wait for Postgres to be ready
+          for i in {1..30}; do
+            if docker exec smoke-postgres pg_isready -U catalyst -d catalyst_db >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+          
+          # Start backend with minimal config
+          docker run -d \
+            --name smoke-backend \
+            --network catalyst-smoke-test \
+            -e DATABASE_URL="postgresql://catalyst:test_password@smoke-postgres:5432/catalyst_db" \
+            -e REDIS_URL="redis://localhost:6379" \
+            -e BETTER_AUTH_SECRET="smoke-test-secret-do-not-use-in-production" \
+            -e BETTER_AUTH_URL="http://localhost:3000" \
+            -e API_KEY_SECRET="smoke-test-api-key-secret" \
+            -e NODE_ENV=production \
+            -p 3000:3000 \
+            "$IMAGE"
+          
+          # Wait for backend to respond (migrations run at startup)
+          echo "Waiting for backend to start..."
+          for i in {1..60}; do
+            if curl -sf http://localhost:3000${{ matrix.healthcheck }} >/dev/null 2>&1; then
+              echo "✅ Backend health check passed"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "ERROR: Backend failed to start within 60 seconds"
+              docker logs smoke-backend
+              exit 1
+            fi
+            sleep 1
+          done
+          
+          # Verify response structure
+          HEALTH=$(curl -s http://localhost:3000${{ matrix.healthcheck }})
+          echo "Health response: $HEALTH"
+          
+          # Cleanup
+          docker stop smoke-backend smoke-postgres
+          docker rm smoke-backend smoke-postgres
+          docker network rm catalyst-smoke-test
+
+      - name: Smoke test runtime (frontend)
+        if: matrix.image == 'frontend'
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ github.repository_owner }}/catalyst-${{ matrix.image }}:${{ needs.version.outputs.new_version }}"
+          
+          docker run -d \
+            --name smoke-frontend \
+            -p 8080:80 \
+            "$IMAGE"
+          
+          # Wait for nginx to start
+          echo "Waiting for frontend to start..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080${{ matrix.healthcheck }} >/dev/null 2>&1; then
+              echo "✅ Frontend health check passed"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "ERROR: Frontend failed to start within 30 seconds"
+              docker logs smoke-frontend
+              exit 1
+            fi
+            sleep 1
+          done
+          
+          # Verify HTML is served
+          RESPONSE=$(curl -s http://localhost:8080/)
+          if ! echo "$RESPONSE" | grep -q "<!DOCTYPE html>"; then
+            echo "ERROR: Frontend did not serve HTML"
+            echo "Response: $RESPONSE"
+            exit 1
+          fi
+          echo "✅ Frontend serving HTML"
+          
+          # Cleanup
+          docker stop smoke-frontend
+          docker rm smoke-frontend
+
+  # ══════════════════════════════════════════════════════════════════════════════
   # Publish the draft release created by the release-notes job. Runs only after
-  # the agent binaries, the MCP bundle, AND both container images are live. Until this flips the
-  # draft to published, `releases/latest` keeps serving the previous version,
-  # so panels don't notify (and can't pull) an update whose artifacts don't
-  # exist yet. If any build job fails this is skipped and the release stays
-  # a draft — announce nothing rather than a broken update.
+  # the agent binaries, the MCP bundle, both container images are live, AND smoke
+  # tests pass. Until this flips the draft to published, `releases/latest` keeps
+  # serving the previous version, so panels don't notify (and can't pull) an
+  # update whose artifacts don't exist yet. If any build job fails this is
+  # skipped and the release stays a draft — announce nothing rather than a broken
+  # update.
   #
   # release-notes is a dependency because it is what creates the draft: without
   # it `gh release edit` would have no release to publish.
   # ══════════════════════════════════════════════════════════════════════════════
   publish-release:
     name: Publish GitHub Release
-    needs: [version, agent-release, publish-install-script, mcp-release, merge-images, release-notes]
+    needs: [version, agent-release, publish-install-script, mcp-release, merge-images, smoke-test-images, release-notes]
     if: needs.version.outputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:
