@@ -160,7 +160,6 @@ export async function setupRoutes(app: FastifyInstance) {
 	// ── Check if setup is needed ───────────────────────────────────────
 	app.get(
 		"/status",
-		{ schema: { summary: "Check whether initial setup is required", tags: ["Setup"], response: { 200: { type: "object", required: ["setupRequired"], properties: { setupRequired: { type: "boolean" } } } } } },
 		async (_request: FastifyRequest, reply: FastifyReply) => {
 			// This answer flips from true to false exactly once (when setup
 			// completes). A browser or CDN replaying a cached "setupRequired:

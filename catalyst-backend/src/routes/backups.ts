@@ -4,6 +4,7 @@ import { createReadStream } from "fs";
 import * as fs from "fs/promises";
 import { describeError } from '../utils/describe-error.js';
 import { PassThrough } from "stream";
+import { once } from "events";
 import * as path from "path";
 import {
   openStorageStream,
@@ -652,9 +653,9 @@ export async function backupRoutes(app: FastifyInstance) {
         }
         stream.destroy(error);
       };
-      request.raw.on("close", () => {
-        if (!reply.raw.writableEnded) finalize(new Error("Backup download client disconnected"));
-      });
+       request.raw.on("close", () => {
+         if (!reply.raw.writableEnded) finalize(new Error("Backup download client disconnected"));
+       });
 
       reply.header("Content-Type", "application/gzip");
       reply.header(
@@ -685,12 +686,18 @@ export async function backupRoutes(app: FastifyInstance) {
             backupPath: agentPath,
             requestId,
           },
-          (chunk: Buffer) => {
-            bytesWritten += chunk.length;
-            if (!stream.write(chunk)) {
-              throw new Error("Backup download consumer is too slow");
-            }
-          },
+           async (chunk: Buffer) => {
+             if (stream.destroyed || stream.writableEnded) {
+               throw new Error("Backup download consumer disconnected");
+             }
+             bytesWritten += chunk.length;
+             if (!stream.write(chunk)) {
+               if (stream.destroyed || stream.writableEnded) {
+                 throw new Error("Backup download consumer disconnected");
+               }
+               await once(stream, "drain");
+             }
+           },
         );
         if (bytesWritten === 0) {
           stream.end();

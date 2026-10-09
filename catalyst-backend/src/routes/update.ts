@@ -97,7 +97,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// and the change is published so other workers drop their cached copy.
 	app.put(
 		'/settings',
-		{ schema: { summary: 'Update automatic update settings', tags: ['Update'], body: { type: 'object', properties: { enabled: { type: 'boolean' }, autoTrigger: { type: 'boolean' }, intervalMs: { type: 'number' } } }, response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+     { schema: { summary: 'Update automatic update settings', tags: ['Update'], response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.write')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');

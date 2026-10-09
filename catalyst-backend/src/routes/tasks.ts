@@ -267,15 +267,29 @@ export async function taskRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.user;
       const { serverId } = request.params as { serverId: string };
+      const { page, limit } = request.query as { page?: number | string; limit?: number | string };
+      const paginated = page !== undefined || limit !== undefined;
+      const pageNumber = Math.max(1, Number(page ?? 1) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
 
       if (!(await ensureServerAccess(serverId, user.userId, 'server.read', reply, request.user))) return;
 
-      const tasks = await prisma.scheduledTask.findMany({
+      const taskQuery = {
         where: { serverId },
         orderBy: { createdAt: 'desc' },
-      });
+        ...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
+      } as const;
+      const [tasks, total] = await Promise.all([
+        prisma.scheduledTask.findMany(taskQuery),
+        paginated ? prisma.scheduledTask.count({ where: { serverId } }) : Promise.resolve(0),
+      ]);
 
-      reply.send(serialize({ tasks }));
+      reply.send(serialize({
+        tasks,
+        ...(paginated
+          ? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+          : {}),
+      }));
     }
   );
 

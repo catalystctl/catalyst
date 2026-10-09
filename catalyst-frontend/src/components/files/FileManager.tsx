@@ -1,28 +1,36 @@
-import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type DragEvent,
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation, useQueryClient } from '@/csync';
+import { useMutation, useQueryClient, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import {
- ArrowUp,
- ChevronRight,
- FilePlus,
- FolderPlus,
- RefreshCw,
- Upload,
- Archive,
- ArchiveRestore,
- Trash2,
- XCircle,
- Home,
- File,
- Folder,
- X,
- Loader2,
- AlertTriangle,
- Menu,
- Search,
+  ArrowUp,
+  ChevronRight,
+  FilePlus,
+  FolderPlus,
+  RefreshCw,
+  Upload,
+  Archive,
+  ArchiveRestore,
+  Trash2,
+  XCircle,
+  Home,
+  File,
+  Folder,
+  X,
+  Loader2,
+  AlertTriangle,
+  Menu,
+  Search,
 } from 'lucide-react';
 import FileEditor from './FileEditor';
 import { describeError } from '../../utils/errors';
@@ -42,14 +50,14 @@ import { buildBreadcrumbs, getParentPath, joinPath, normalizePath } from '../../
 import { useUploadStore } from '../../stores/uploadStore';
 import { useDownloadStore } from '../../stores/downloadStore';
 import {
- Dialog,
- DialogContent,
- DialogHeader,
- DialogToolbar,
- DialogBody,
- DialogFooter,
- DialogTitle,
- DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogToolbar,
+  DialogBody,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,1505 +66,1546 @@ import { Textarea } from '@/components/ui/textarea';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 type CreatePayload = {
- name: string;
- isDirectory: boolean;
- content?: string;
+  name: string;
+  isDirectory: boolean;
+  content?: string;
 };
 
 type SortField = 'name' | 'size' | 'modified' | 'mode';
 type SortDirection = 'asc' | 'desc';
 
 const isArchive = (name: string) =>
- name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.zip');
+  name.endsWith('.tar.gz') || name.endsWith('.tgz') || name.endsWith('.zip');
 
-const isBufferError = (error: any): { currentMaxBufferMb: number; recommendedMaxBufferMb: number } | null => {
- const msg = error?.message ?? '';
- if (msg.includes('MAX_BUFFER_EXCEEDED') || msg.includes('buffer limit')) {
- const currentMatch = msg.match(/(\d+)\s*MB/i);
- const recommendedMatch = msg.match(/(\d+)\s*MB/gi);
- return {
- currentMaxBufferMb: currentMatch ? parseInt(currentMatch[1], 10) : 50,
- recommendedMaxBufferMb: recommendedMatch?.[1] ? parseInt(recommendedMatch[1], 10) : 100,
- };
- }
- return null;
+const isBufferError = (
+  error: any,
+): { currentMaxBufferMb: number; recommendedMaxBufferMb: number } | null => {
+  const msg = error?.message ?? '';
+  if (msg.includes('MAX_BUFFER_EXCEEDED') || msg.includes('buffer limit')) {
+    const currentMatch = msg.match(/(\d+)\s*MB/i);
+    const recommendedMatch = msg.match(/(\d+)\s*MB/gi);
+    return {
+      currentMaxBufferMb: currentMatch ? parseInt(currentMatch[1], 10) : 50,
+      recommendedMaxBufferMb: recommendedMatch?.[1] ? parseInt(recommendedMatch[1], 10) : 100,
+    };
+  }
+  return null;
 };
 
 const containerVariants: Variants = {
- hidden: { opacity: 0 },
- visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
 };
 
 const itemVariants: Variants = {
- hidden: { opacity: 0, y: 8 },
- visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 350, damping: 26 } },
+  hidden: { opacity: 0, y: 8 },
+  visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 350, damping: 26 } },
 };
 
-function FileManager({ serverId, isSuspended = false, canWrite = false }: { serverId: string; isSuspended?: boolean; canWrite?: boolean }) {
- const { t } = useTranslation('server-tabs');
- const {
- path,
- setPath,
- files,
- message,
- isLoading,
- isError,
- refetch,
- activeFile,
- isFileLoading,
- isDirty,
- openFile,
- updateActiveContent,
- markActiveSaved,
- closeActiveFile,
- } = useFileManager(serverId);
- const queryClient = useQueryClient();
+function FileManager({
+  serverId,
+  isSuspended = false,
+  canWrite = false,
+}: {
+  serverId: string;
+  isSuspended?: boolean;
+  canWrite?: boolean;
+}) {
+  const { t } = useTranslation('server-tabs');
+  const {
+    path,
+    setPath,
+    files,
+    message,
+    isLoading,
+    isError,
+    refetch,
+    activeFile,
+    isFileLoading,
+    isDirty,
+    openFile,
+    updateActiveContent,
+    markActiveSaved,
+    closeActiveFile,
+  } = useFileManager(serverId);
+  const queryClient = useQueryClient();
 
- const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
- const [showUpload, setShowUpload] = useState(false);
- const [createMode, setCreateMode] = useState<'file' | 'directory' | null>(null);
- const [createName, setCreateName] = useState('');
- const [createContent, setCreateContent] = useState('');
- const [showCompress, setShowCompress] = useState(false);
- const [showDecompress, setShowDecompress] = useState(false);
- const [archiveName, setArchiveName] = useState('archive.tar.gz');
- const [decompressTarget, setDecompressTarget] = useState(path);
- const [confirmDelete, setConfirmDelete] = useState(false);
- const [permissionsEntry, setPermissionsEntry] = useState<FileEntry | null>(null);
- const [permissionsValue, setPermissionsValue] = useState('');
- const [permissionsError, setPermissionsError] = useState<string | null>(null);
- const [renamingEntry, setRenamingEntry] = useState<FileEntry | null>(null);
- const [sortField, setSortField] = useState<SortField>('name');
- const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
- const [archiveBrowsePath, setArchiveBrowsePath] = useState<string | null>(null);
- const [archiveBrowseDir, setArchiveBrowseDir] = useState('/');
- const [archiveEntries, setArchiveEntries] = useState<
- Array<{ name: string; size: number; isDirectory: boolean; modified?: string }>
- >([]);
- const [archiveLoading, setArchiveLoading] = useState(false);
- const [bufferError, setBufferError] = useState<{
- currentMaxBufferMb: number;
- recommendedMaxBufferMb: number;
- } | null>(null);
- const [showSidebar, setShowSidebar] = useState(false);
- const [searchQuery, setSearchQuery] = useState('');
- const [isFileDropActive, setIsFileDropActive] = useState(false);
- const fileDropDepthRef = useRef(0);
+  const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
+  const [showUpload, setShowUpload] = useState(false);
+  const [createMode, setCreateMode] = useState<'file' | 'directory' | null>(null);
+  const [createName, setCreateName] = useState('');
+  const [createContent, setCreateContent] = useState('');
+  const [showCompress, setShowCompress] = useState(false);
+  const [showDecompress, setShowDecompress] = useState(false);
+  const [archiveName, setArchiveName] = useState('archive.tar.gz');
+  const [decompressTarget, setDecompressTarget] = useState(path);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [permissionsEntry, setPermissionsEntry] = useState<FileEntry | null>(null);
+  const [permissionsValue, setPermissionsValue] = useState('');
+  const [permissionsError, setPermissionsError] = useState<string | null>(null);
+  const [renamingEntry, setRenamingEntry] = useState<FileEntry | null>(null);
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [archiveBrowsePath, setArchiveBrowsePath] = useState<string | null>(null);
+  const [archiveBrowseDir, setArchiveBrowseDir] = useState('/');
+  const [archiveEntries, setArchiveEntries] = useState<
+    Array<{ name: string; size: number; isDirectory: boolean; modified?: string }>
+  >([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [bufferError, setBufferError] = useState<{
+    currentMaxBufferMb: number;
+    recommendedMaxBufferMb: number;
+  } | null>(null);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isFileDropActive, setIsFileDropActive] = useState(false);
+  const fileDropDepthRef = useRef(0);
 
- const writeDisabled = isSuspended || !canWrite;
+  const writeDisabled = isSuspended || !canWrite;
 
- // Without preventDefault on dragover, the browser treats a file drop as a
- // navigation and the explorer never sees `drop`. Keep that from stealing
- // drops anywhere on the Files tab.
- useEffect(() => {
-  const onDragOver = (event: globalThis.DragEvent) => {
-   if (isFileDrag(event.dataTransfer)) event.preventDefault();
+  // Without preventDefault on dragover, the browser treats a file drop as a
+  // navigation and the explorer never sees `drop`. Keep that from stealing
+  // drops anywhere on the Files tab.
+  useEffect(() => {
+    const onDragOver = (event: globalThis.DragEvent) => {
+      if (isFileDrag(event.dataTransfer)) event.preventDefault();
+    };
+    const onDrop = (event: globalThis.DragEvent) => {
+      if (isFileDrag(event.dataTransfer)) event.preventDefault();
+    };
+    window.addEventListener('dragover', onDragOver);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragover', onDragOver);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
+
+  // Reset UI state when navigating to a different path
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setSelectedPaths(new Set());
+      setConfirmDelete(false);
+      setShowCompress(false);
+      setShowDecompress(false);
+      setPermissionsEntry(null);
+      setPermissionsError(null);
+      setRenamingEntry(null);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [path]);
+
+  // Sync decompress target with current path
+  useEffect(() => {
+    const id = setTimeout(() => setDecompressTarget(path), 0);
+    return () => clearTimeout(id);
+  }, [path]);
+
+  // Clear bulk actions when selection is emptied
+  useEffect(() => {
+    if (!selectedPaths.size) {
+      const id = setTimeout(() => {
+        setConfirmDelete(false);
+        setShowCompress(false);
+        setShowDecompress(false);
+      }, 0);
+      return () => clearTimeout(id);
+    }
+  }, [selectedPaths]);
+
+  // Filter files by search
+  const filteredFiles = useMemo(() => {
+    if (!searchQuery.trim()) return files;
+    const q = searchQuery.toLowerCase();
+    return files.filter((f) => f.name.toLowerCase().includes(q));
+  }, [files, searchQuery]);
+
+  const sortedFiles = useMemo(() => {
+    const next = [...filteredFiles];
+    next.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      let cmp = 0;
+      switch (sortField) {
+        case 'name':
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case 'size':
+          cmp = a.size - b.size;
+          break;
+        case 'modified': {
+          const am = a.modified ? new Date(a.modified).getTime() : 0;
+          const bm = b.modified ? new Date(b.modified).getTime() : 0;
+          cmp = am - bm;
+          break;
+        }
+        case 'mode':
+          cmp = (a.mode ?? 0) - (b.mode ?? 0);
+          break;
+      }
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+    return next;
+  }, [filteredFiles, sortField, sortDirection]);
+
+  const handleSort = useCallback((field: SortField) => {
+    setSortField((prev) => {
+      if (prev === field) {
+        setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+        return prev;
+      }
+      setSortDirection('asc');
+      return field;
+    });
+  }, []);
+
+  const breadcrumbs = useMemo(() => buildBreadcrumbs(path), [path]);
+  const selectedEntries = useMemo(
+    () => sortedFiles.filter((entry) => selectedPaths.has(entry.path)),
+    [sortedFiles, selectedPaths],
+  );
+  const selectedArchive =
+    selectedEntries.length === 1 &&
+    !selectedEntries[0].isDirectory &&
+    isArchive(selectedEntries[0].name)
+      ? selectedEntries[0]
+      : undefined;
+
+  const allSelected = sortedFiles.length > 0 && selectedPaths.size === sortedFiles.length;
+
+  const invalidateFiles = () => {
+    queryClient.invalidateQueries({ queryKey: qk.files(serverId, path) });
   };
-  const onDrop = (event: globalThis.DragEvent) => {
-   if (isFileDrag(event.dataTransfer)) event.preventDefault();
+
+  const createMutation = useMutation({
+    mutationFn: async ({ name, isDirectory, content }: CreatePayload) => {
+      const targetPath = joinPath(path, name);
+      if (isDirectory) {
+        await filesApi.create(serverId, { path: targetPath, isDirectory: true });
+        return { name, path: targetPath, isDirectory: true, size: 0 } as FileEntry;
+      }
+      try {
+        await filesApi.create(serverId, { path: targetPath, isDirectory: false, content });
+      } catch {
+        await filesApi.write(serverId, targetPath, content ?? '');
+      }
+      return { name, path: targetPath, isDirectory: false, size: 0 } as FileEntry;
+    },
+    onSuccess: (entry) => {
+      setCreateName('');
+      setCreateContent('');
+      setCreateMode(null);
+      notifySuccess(
+        entry.isDirectory ? t('files.manager.folderCreated') : t('files.manager.fileCreated'),
+      );
+      if (!entry.isDirectory) {
+        openFile(entry);
+      }
+    },
+    onError: (error: any) => {
+      notifyError(error?.message || t('files.manager.createFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeFile) return;
+      await filesApi.write(serverId, activeFile.path, activeFile.content);
+    },
+    onSuccess: () => {
+      markActiveSaved();
+      notifySuccess(t('files.manager.fileSaved'));
+    },
+    onError: (error: any) => {
+      notifyError(error?.message || t('files.manager.saveFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (paths: string[]) => {
+      await Promise.all(paths.map((target) => filesApi.remove(serverId, target)));
+    },
+    onSuccess: (_, paths) => {
+      setSelectedPaths(new Set());
+      setConfirmDelete(false);
+      if (activeFile && paths.includes(activeFile.path)) {
+        closeActiveFile();
+      }
+      notifySuccess(t('files.manager.deletedSelection'));
+    },
+    onError: (error: any) => {
+      notifyError(error?.message || t('files.manager.deleteFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const resolveMaxUploadMb = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try {
+        return await adminApi.getFileTunnelUploadLimit();
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch {
+      return DEFAULT_MAX_UPLOAD_MB;
+    }
+  }, []);
+
+  const assertUploadSize = useCallback(
+    async (files: File[]) => {
+      const maxUploadMb = await resolveMaxUploadMb();
+      const maxBytes = maxUploadMb * 1024 * 1024;
+      const oversized = files.filter((f) => f.size > maxBytes);
+      if (oversized.length > 0) {
+        const names = oversized.map((f) => f.name).join(', ');
+        throw new Error(t('files.manager.uploadTooLarge', { max: maxUploadMb, names }));
+      }
+    },
+    [resolveMaxUploadMb, t],
+  );
+
+  const uploadMutation = useMutation({
+    mutationFn: async ({
+      files,
+      onProgress,
+      signal,
+      targetPath,
+      batches,
+    }: {
+      files: File[];
+      onProgress?: (fileIndex: number, progress: number) => void;
+      signal?: AbortSignal;
+      targetPath?: string;
+      batches?: Array<{ files: File[]; targetPath: string }>;
+    }) => {
+      const uploadStore = useUploadStore.getState();
+      const abortController = new AbortController();
+      const abortSignal = abortController.signal;
+      if (signal) {
+        if (signal.aborted) abortController.abort();
+        else signal.addEventListener('abort', () => abortController.abort(), { once: true });
+      }
+
+      const runBatch = async (batchFiles: File[], destPath: string) => {
+        await assertUploadSize(batchFiles);
+        const sessionId = uploadStore.beginSession(
+          batchFiles.map((file) => ({
+            path: joinPath(destPath, file.name),
+            name: file.name,
+            total: file.size,
+          })),
+        );
+        uploadStore.registerAbort(sessionId, abortController);
+        try {
+          await filesApi.upload(
+            serverId,
+            destPath,
+            batchFiles,
+            (fileIndex, pct, loaded, total) => {
+              onProgress?.(fileIndex, pct);
+              if (loaded === undefined) return;
+              const file = batchFiles[fileIndex];
+              if (!file) return;
+              uploadStore.setFileProgress(sessionId, fileIndex, loaded, total);
+            },
+            abortSignal,
+          );
+          batchFiles.forEach((_, fileIndex) => uploadStore.setFileDone(sessionId, fileIndex));
+        } catch (error: any) {
+          const aborted = abortSignal.aborted || error?.message === 'Upload aborted';
+          if (aborted) {
+            uploadStore.markSessionCanceled(sessionId);
+          } else {
+            const message = error?.message || t('files.manager.uploadError');
+            batchFiles.forEach((_, fileIndex) =>
+              uploadStore.setFileError(sessionId, fileIndex, message),
+            );
+          }
+          throw error;
+        }
+      };
+
+      if (batches?.length) {
+        for (const batch of batches) {
+          await runBatch(batch.files, batch.targetPath);
+        }
+        return;
+      }
+      await runBatch(files, targetPath ?? path);
+    },
+    onSuccess: () => {
+      setShowUpload(false);
+      notifySuccess(t('files.manager.uploadComplete'));
+    },
+    onError: (error: any) => {
+      if (error?.message === 'Upload aborted') {
+        notifyInfo(t('files.manager.uploadCanceled'));
+        return;
+      }
+      notifyError(error?.message || t('files.manager.uploadFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const compressMutation = useMutation({
+    mutationFn: async ({ paths, archive }: { paths: string[]; archive: string }) =>
+      filesApi.compress(serverId, { paths, archiveName: archive }),
+    onSuccess: (data) => {
+      setShowCompress(false);
+      notifySuccess(
+        data?.archivePath
+          ? t('files.manager.archiveCreatedAt', { path: data.archivePath })
+          : t('files.manager.archiveCreated'),
+      );
+    },
+    onError: (error: any) => {
+      const bufErr = isBufferError(error);
+      if (bufErr) return setBufferError(bufErr);
+      notifyError(error?.message || t('files.manager.compressFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const decompressMutation = useMutation({
+    mutationFn: async ({ archivePath, targetPath }: { archivePath: string; targetPath: string }) =>
+      filesApi.decompress(serverId, { archivePath, targetPath }),
+    onSuccess: () => {
+      setShowDecompress(false);
+      notifySuccess(t('files.manager.archiveExtracted'));
+    },
+    onError: (error: any) => {
+      const bufErr = isBufferError(error);
+      if (bufErr) return setBufferError(bufErr);
+      notifyError(error?.message || t('files.manager.extractFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const permissionsMutation = useMutation({
+    mutationFn: async ({ path: targetPath, mode }: { path: string; mode: number }) =>
+      filesApi.updatePermissions(serverId, targetPath, mode),
+    onSuccess: () => {
+      setPermissionsEntry(null);
+      notifySuccess(t('files.manager.permissionsUpdated'));
+    },
+    onError: (error: any) => {
+      notifyError(error?.message || t('files.manager.permissionsFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const renameMutation = useMutation({
+    mutationFn: async ({ from, to }: { from: string; to: string }) =>
+      filesApi.rename(serverId, from, to),
+    onSuccess: () => {
+      setRenamingEntry(null);
+      notifySuccess(t('files.manager.renamed'));
+    },
+    onError: (error: any) => {
+      notifyError(error?.message || t('files.manager.renameFailed'));
+    },
+    onSettled: () => {
+      invalidateFiles();
+    },
+  });
+
+  const resetFileDrop = useCallback(() => {
+    fileDropDepthRef.current = 0;
+    setIsFileDropActive(false);
+  }, []);
+
+  const handleExplorerDragEnter = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      fileDropDepthRef.current += 1;
+      setIsFileDropActive(true);
+    },
+    [writeDisabled],
+  );
+
+  const handleExplorerDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    [writeDisabled],
+  );
+
+  const handleExplorerDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    fileDropDepthRef.current = Math.max(0, fileDropDepthRef.current - 1);
+    if (fileDropDepthRef.current === 0) setIsFileDropActive(false);
+  }, []);
+
+  const handleExplorerDrop = useCallback(
+    async (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resetFileDrop();
+      if (writeDisabled) {
+        notifyError(
+          isSuspended ? t('files.manager.serverSuspended') : t('files.manager.noPermission'),
+        );
+        return;
+      }
+      if (!isFileDrag(event.dataTransfer)) return;
+      try {
+        const dropped = await collectDroppedFiles(event.dataTransfer);
+        if (!dropped.length) {
+          notifyError(t('files.manager.noDropFiles'));
+          return;
+        }
+        const groups = new Map<string, File[]>();
+        for (const item of dropped) {
+          const target = item.relativeDir ? joinPath(path, item.relativeDir) : path;
+          const list = groups.get(target) ?? [];
+          list.push(item.file);
+          groups.set(target, list);
+        }
+        const batches = [...groups.entries()].map(([targetPath, filesToUpload]) => ({
+          files: filesToUpload,
+          targetPath,
+        }));
+        await uploadMutation.mutateAsync({
+          files: dropped.map((item) => item.file),
+          batches,
+        });
+      } catch (error: unknown) {
+        notifyError(error instanceof Error ? error.message : t('files.manager.uploadFailed'));
+      }
+    },
+    [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled, t],
+  );
+
+  const handleOpen = (entry: FileEntry) => {
+    if (entry.isDirectory) {
+      setPath(entry.path);
+      return;
+    }
+    if (isArchive(entry.name)) {
+      openArchiveBrowser(entry.path);
+      return;
+    }
+    openFile(entry);
   };
-  window.addEventListener('dragover', onDragOver);
-  window.addEventListener('drop', onDrop);
-  return () => {
-   window.removeEventListener('dragover', onDragOver);
-   window.removeEventListener('drop', onDrop);
+
+  const openArchiveBrowser = async (archivePath: string) => {
+    setArchiveBrowsePath(archivePath);
+    setArchiveBrowseDir('/');
+    setArchiveLoading(true);
+    try {
+      const entries = await filesApi.listArchiveContents(serverId, archivePath);
+      setArchiveEntries(entries);
+    } catch (error: unknown) {
+      reportSystemError({
+        level: 'error',
+        component: 'FileManager',
+        message: describeError(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        metadata: { context: 'read archive' },
+      });
+      const bufErr = isBufferError(error);
+      if (bufErr) {
+        setBufferError(bufErr);
+        setArchiveBrowsePath(null);
+      } else {
+        notifyError(t('files.manager.readArchiveFailed'));
+        setArchiveBrowsePath(null);
+      }
+    } finally {
+      setArchiveLoading(false);
+    }
   };
- }, []);
 
- // Reset UI state when navigating to a different path
- useEffect(() => {
- const id = setTimeout(() => {
- setSelectedPaths(new Set());
- setConfirmDelete(false);
- setShowCompress(false);
- setShowDecompress(false);
- setPermissionsEntry(null);
- setPermissionsError(null);
- setRenamingEntry(null);
- }, 0);
- return () => clearTimeout(id);
- }, [path]);
+  const handleSelect = (entry: FileEntry, selected: boolean) => {
+    setSelectedPaths((prev) => {
+      const next = new Set(prev);
+      if (selected) next.add(entry.path);
+      else next.delete(entry.path);
+      return next;
+    });
+  };
 
- // Sync decompress target with current path
- useEffect(() => {
- const id = setTimeout(() => setDecompressTarget(path), 0);
- return () => clearTimeout(id);
- }, [path]);
+  const handleSelectAll = () => {
+    if (allSelected) {
+      setSelectedPaths(new Set());
+    } else {
+      setSelectedPaths(new Set(sortedFiles.map((f) => f.path)));
+    }
+  };
 
- // Clear bulk actions when selection is emptied
- useEffect(() => {
- if (!selectedPaths.size) {
- const id = setTimeout(() => {
- setConfirmDelete(false);
- setShowCompress(false);
- setShowDecompress(false);
- }, 0);
- return () => clearTimeout(id);
- }
- }, [selectedPaths]);
+  const handleShiftSelect = (entry: FileEntry) => {
+    const lastSelected = [...selectedPaths].pop();
+    if (!lastSelected) {
+      setSelectedPaths(new Set([entry.path]));
+      return;
+    }
+    const paths = sortedFiles.map((f) => f.path);
+    const startIdx = paths.indexOf(lastSelected);
+    const endIdx = paths.indexOf(entry.path);
+    if (startIdx === -1 || endIdx === -1) return;
+    const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
+    const range = paths.slice(from, to + 1);
+    setSelectedPaths((prev) => new Set([...prev, ...range]));
+  };
 
- // Filter files by search
- const filteredFiles = useMemo(() => {
- if (!searchQuery.trim()) return files;
- const q = searchQuery.toLowerCase();
- return files.filter((f) => f.name.toLowerCase().includes(q));
- }, [files, searchQuery]);
+  const handleDownload = async (entry: FileEntry) => {
+    const store = useDownloadStore.getState();
+    const controller = new AbortController();
+    const knownTotal = entry.size > 0 ? entry.size : undefined;
+    const sessionId = store.beginSession([
+      { path: entry.path, name: entry.name, total: knownTotal },
+    ]);
+    store.registerAbort(sessionId, controller);
+    try {
+      const blob = await filesApi.download(
+        serverId,
+        entry.path,
+        (loaded, total) => {
+          useDownloadStore.getState().setFileProgress(sessionId, 0, loaded, total ?? knownTotal);
+        },
+        controller.signal,
+      );
+      useDownloadStore.getState().setFileDone(sessionId, 0);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = entry.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      notifySuccess(t('files.manager.downloadComplete'));
+    } catch (error: any) {
+      const aborted = controller.signal.aborted || error?.message === 'Download aborted';
+      if (aborted) {
+        useDownloadStore.getState().markSessionCanceled(sessionId);
+        notifyInfo(t('files.manager.downloadCanceled'));
+      } else {
+        useDownloadStore
+          .getState()
+          .setFileError(sessionId, 0, error?.message || t('files.manager.downloadFailed'));
+        notifyError(error?.message || t('files.manager.downloadFailed'));
+      }
+    }
+  };
 
- const sortedFiles = useMemo(() => {
- const next = [...filteredFiles];
- next.sort((a, b) => {
- if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
- let cmp = 0;
- switch (sortField) {
- case 'name':
- cmp = a.name.localeCompare(b.name);
- break;
- case 'size':
- cmp = a.size - b.size;
- break;
- case 'modified': {
- const am = a.modified ? new Date(a.modified).getTime() : 0;
- const bm = b.modified ? new Date(b.modified).getTime() : 0;
- cmp = am - bm;
- break;
- }
- case 'mode':
- cmp = (a.mode ?? 0) - (b.mode ?? 0);
- break;
- }
- return sortDirection === 'asc' ? cmp : -cmp;
- });
- return next;
- }, [filteredFiles, sortField, sortDirection]);
+  const handleCopyPath = (entry: FileEntry) => {
+    navigator.clipboard.writeText(entry.path).then(
+      () => notifyInfo(t('files.manager.pathCopied')),
+      () => notifyError(t('files.manager.copyPathFailed')),
+    );
+  };
 
- const handleSort = useCallback((field: SortField) => {
- setSortField((prev) => {
- if (prev === field) {
- setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
- return prev;
- }
- setSortDirection('asc');
- return field;
- });
- }, []);
+  const handleRename = (entry: FileEntry, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === entry.name) {
+      setRenamingEntry(null);
+      return;
+    }
+    const parentDir = getParentPath(entry.path);
+    const newPath = joinPath(parentDir, trimmed);
+    renameMutation.mutate({ from: entry.path, to: newPath });
+  };
 
- const breadcrumbs = useMemo(() => buildBreadcrumbs(path), [path]);
- const selectedEntries = useMemo(
- () => sortedFiles.filter((entry) => selectedPaths.has(entry.path)),
- [sortedFiles, selectedPaths],
- );
- const selectedArchive =
- selectedEntries.length === 1 &&
- !selectedEntries[0].isDirectory &&
- isArchive(selectedEntries[0].name)
- ? selectedEntries[0]
- : undefined;
+  const handleCreateSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!createMode) return;
+    const name = createName.trim();
+    if (!name) return;
+    createMutation.mutate({
+      name,
+      isDirectory: createMode === 'directory',
+      content: createContent,
+    });
+  };
 
- const allSelected = sortedFiles.length > 0 && selectedPaths.size === sortedFiles.length;
+  const handleCompress = () => {
+    const selected = Array.from(selectedPaths);
+    const name = archiveName.trim();
+    if (!selected.length || !name) {
+      notifyError(t('files.manager.selectForArchive'));
+      return;
+    }
+    const archivePath = name.startsWith('/') ? normalizePath(name) : joinPath(path, name);
+    compressMutation.mutate({ paths: selected, archive: archivePath });
+  };
 
- const invalidateFiles = () => {
- queryClient.invalidateQueries({ queryKey: qk.files(serverId, path) });
- };
+  const handleDecompress = () => {
+    if (!selectedArchive) return;
+    const target = normalizePath(decompressTarget);
+    decompressMutation.mutate({ archivePath: selectedArchive.path, targetPath: target });
+  };
 
- const createMutation = useMutation({
- mutationFn: async ({ name, isDirectory, content }: CreatePayload) => {
- const targetPath = joinPath(path, name);
- if (isDirectory) {
- await filesApi.create(serverId, { path: targetPath, isDirectory: true });
- return { name, path: targetPath, isDirectory: true, size: 0 } as FileEntry;
- }
- try {
- await filesApi.create(serverId, { path: targetPath, isDirectory: false, content });
- } catch {
- await filesApi.write(serverId, targetPath, content ?? '');
- }
- return { name, path: targetPath, isDirectory: false, size: 0 } as FileEntry;
- },
- onSuccess: (entry) => {
- setCreateName('');
- setCreateContent('');
- setCreateMode(null);
- notifySuccess(entry.isDirectory ? t('files.manager.folderCreated') : t('files.manager.fileCreated'));
- if (!entry.isDirectory) {
- openFile(entry);
- }
- },
- onError: (error: any) => {
- notifyError(error?.message || t('files.manager.createFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+  const handleDeleteSelection = () => {
+    const selected = Array.from(selectedPaths);
+    if (!selected.length) return;
+    deleteMutation.mutate(selected);
+  };
 
- const saveMutation = useMutation({
- mutationFn: async () => {
- if (!activeFile) return;
- await filesApi.write(serverId, activeFile.path, activeFile.content);
- },
- onSuccess: () => {
- markActiveSaved();
- notifySuccess(t('files.manager.fileSaved'));
- },
- onError: (error: any) => {
- notifyError(error?.message || t('files.manager.saveFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+  const parseModeInput = (value: string) => {
+    const trimmed = value.trim();
+    if (!/^[0-7]{3,4}$/.test(trimmed)) return null;
+    const parsed = parseInt(trimmed, 8);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
 
- const deleteMutation = useMutation({
- mutationFn: async (paths: string[]) => {
- await Promise.all(paths.map((target) => filesApi.remove(serverId, target)));
- },
- onSuccess: (_, paths) => {
- setSelectedPaths(new Set());
- setConfirmDelete(false);
- if (activeFile && paths.includes(activeFile.path)) {
- closeActiveFile();
- }
- notifySuccess(t('files.manager.deletedSelection'));
- },
- onError: (error: any) => {
- notifyError(error?.message || t('files.manager.deleteFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+  const handlePermissionsOpen = (entry: FileEntry) => {
+    const fallback = entry.isDirectory ? 0o755 : 0o644;
+    const formatted = formatFileMode(entry.mode ?? fallback);
+    setPermissionsValue(formatted === '---' ? '644' : formatted);
+    setPermissionsEntry(entry);
+    setPermissionsError(null);
+  };
 
- const resolveMaxUploadMb = useCallback(async () => {
- try {
- const controller = new AbortController();
- const timeout = setTimeout(() => controller.abort(), 5000);
- try {
- return await adminApi.getFileTunnelUploadLimit();
- } finally {
- clearTimeout(timeout);
- }
- } catch {
- return DEFAULT_MAX_UPLOAD_MB;
- }
- }, []);
+  const handlePermissionsSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!permissionsEntry) return;
+    const parsed = parseModeInput(permissionsValue);
+    if (!parsed) {
+      setPermissionsError(t('files.manager.invalidMode'));
+      return;
+    }
+    setPermissionsError(null);
+    permissionsMutation.mutate({ path: permissionsEntry.path, mode: parsed });
+  };
 
- const assertUploadSize = useCallback(async (files: File[]) => {
- const maxUploadMb = await resolveMaxUploadMb();
- const maxBytes = maxUploadMb * 1024 * 1024;
- const oversized = files.filter((f) => f.size > maxBytes);
- if (oversized.length > 0) {
- const names = oversized.map((f) => f.name).join(', ');
- throw new Error(t('files.manager.uploadTooLarge', { max: maxUploadMb, names }));
- }
- }, [resolveMaxUploadMb, t]);
+  const handleBulkCompressFromEntry = (entry: FileEntry) => {
+    setSelectedPaths(new Set([entry.path]));
+    setArchiveName(entry.name.endsWith('.tar.gz') ? entry.name : `${entry.name}.tar.gz`);
+    setShowCompress(true);
+  };
 
- const uploadMutation = useMutation({
- mutationFn: async ({
- files,
- onProgress,
- signal,
- targetPath,
- batches,
- }: {
- files: File[];
- onProgress?: (fileIndex: number, progress: number) => void;
- signal?: AbortSignal;
- targetPath?: string;
- batches?: Array<{ files: File[]; targetPath: string }>;
- }) => {
- const uploadStore = useUploadStore.getState();
- const abortController = new AbortController();
- const abortSignal = abortController.signal;
- if (signal) {
- if (signal.aborted) abortController.abort();
- else signal.addEventListener('abort', () => abortController.abort(), { once: true });
- }
+  const handleBulkDecompressFromEntry = (entry: FileEntry) => {
+    if (!isArchive(entry.name)) return;
+    setSelectedPaths(new Set([entry.path]));
+    setShowDecompress(true);
+  };
 
- const runBatch = async (batchFiles: File[], destPath: string) => {
- await assertUploadSize(batchFiles);
- const sessionId = uploadStore.beginSession(
- batchFiles.map((file) => ({
- path: joinPath(destPath, file.name),
- name: file.name,
- total: file.size,
- })),
- );
- uploadStore.registerAbort(sessionId, abortController);
- try {
- await filesApi.upload(
- serverId,
- destPath,
- batchFiles,
- (fileIndex, pct, loaded, total) => {
- onProgress?.(fileIndex, pct);
- if (loaded === undefined) return;
- const file = batchFiles[fileIndex];
- if (!file) return;
- uploadStore.setFileProgress(sessionId, fileIndex, loaded, total);
- },
- abortSignal,
- );
- batchFiles.forEach((_, fileIndex) => uploadStore.setFileDone(sessionId, fileIndex));
- } catch (error: any) {
- const aborted = abortSignal.aborted || error?.message === 'Upload aborted';
- if (aborted) {
- uploadStore.markSessionCanceled(sessionId);
- } else {
- const message = error?.message || t('files.manager.uploadError');
- batchFiles.forEach((_, fileIndex) => uploadStore.setFileError(sessionId, fileIndex, message));
- }
- throw error;
- }
- };
+  const guardSuspended = (fn: () => void) => () => {
+    if (isSuspended) {
+      notifyError(t('files.manager.serverSuspended'));
+      return;
+    }
+    fn();
+  };
 
- if (batches?.length) {
- for (const batch of batches) {
- await runBatch(batch.files, batch.targetPath);
- }
- return;
- }
- await runBatch(files, targetPath ?? path);
- },
- onSuccess: () => {
- setShowUpload(false);
- notifySuccess(t('files.manager.uploadComplete'));
- },
- onError: (error: any) => {
- if (error?.message === 'Upload aborted') {
- notifyInfo(t('files.manager.uploadCanceled'));
- return;
- }
- notifyError(error?.message || t('files.manager.uploadFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+  // Toolbar button styles
+  const tbtn =
+    'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
+  const tbtnIcon =
+    'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
+  const tbtnDanger =
+    'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40';
 
- const compressMutation = useMutation({
- mutationFn: async ({ paths, archive }: { paths: string[]; archive: string }) =>
- filesApi.compress(serverId, { paths, archiveName: archive }),
- onSuccess: (data) => {
- setShowCompress(false);
- notifySuccess(data?.archivePath ? t('files.manager.archiveCreatedAt', { path: data.archivePath }) : t('files.manager.archiveCreated'));
- },
- onError: (error: any) => {
- const bufErr = isBufferError(error);
- if (bufErr) return setBufferError(bufErr);
- notifyError(error?.message || t('files.manager.compressFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+  return (
+    <motion.div
+      className="flex flex-1 flex-col gap-4 lg:flex-row"
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+    >
+      {/* Ambient background (subtle, panel-style) */}
 
- const decompressMutation = useMutation({
- mutationFn: async ({ archivePath, targetPath }: { archivePath: string; targetPath: string }) =>
- filesApi.decompress(serverId, { archivePath, targetPath }),
- onSuccess: () => {
- setShowDecompress(false);
- notifySuccess(t('files.manager.archiveExtracted'));
- },
- onError: (error: any) => {
- const bufErr = isBufferError(error);
- if (bufErr) return setBufferError(bufErr);
- notifyError(error?.message || t('files.manager.extractFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+      {/* Mobile sidebar toggle */}
+      <motion.button
+        variants={itemVariants}
+        type="button"
+        className="flex h-8 items-center gap-2 rounded-sm border border-border/60 bg-card px-2.5 text-mini font-medium text-muted-foreground lg:hidden"
+        onClick={() => setShowSidebar(!showSidebar)}
+      >
+        <Menu className="h-4 w-4" />
+        {t('files.manager.folders')}
+      </motion.button>
 
- const permissionsMutation = useMutation({
- mutationFn: async ({ path: targetPath, mode }: { path: string; mode: number }) =>
- filesApi.updatePermissions(serverId, targetPath, mode),
- onSuccess: () => {
- setPermissionsEntry(null);
- notifySuccess(t('files.manager.permissionsUpdated'));
- },
- onError: (error: any) => {
- notifyError(error?.message || t('files.manager.permissionsFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
+      {/* Mobile overlay */}
+      <AnimatePresence>
+        {showSidebar && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-surface-0/50 backdrop-blur-sm lg:hidden"
+            onClick={() => setShowSidebar(false)}
+          />
+        )}
+      </AnimatePresence>
 
- const renameMutation = useMutation({
- mutationFn: async ({ from, to }: { from: string; to: string }) =>
- filesApi.rename(serverId, from, to),
- onSuccess: () => {
- setRenamingEntry(null);
- notifySuccess(t('files.manager.renamed'));
- },
- onError: (error: any) => {
- notifyError(error?.message || t('files.manager.renameFailed'));
- },
- onSettled: () => {
- invalidateFiles();
- },
- });
-
- const resetFileDrop = useCallback(() => {
- fileDropDepthRef.current = 0;
- setIsFileDropActive(false);
- }, []);
-
- const handleExplorerDragEnter = useCallback(
- (event: DragEvent<HTMLDivElement>) => {
- if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
- event.preventDefault();
- event.stopPropagation();
- fileDropDepthRef.current += 1;
- setIsFileDropActive(true);
- },
- [writeDisabled],
- );
-
- const handleExplorerDragOver = useCallback(
- (event: DragEvent<HTMLDivElement>) => {
- if (writeDisabled || !isFileDrag(event.dataTransfer)) return;
- event.preventDefault();
- event.stopPropagation();
- event.dataTransfer.dropEffect = 'copy';
- },
- [writeDisabled],
- );
-
- const handleExplorerDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
- event.preventDefault();
- event.stopPropagation();
- fileDropDepthRef.current = Math.max(0, fileDropDepthRef.current - 1);
- if (fileDropDepthRef.current === 0) setIsFileDropActive(false);
- }, []);
-
- const handleExplorerDrop = useCallback(
- async (event: DragEvent<HTMLDivElement>) => {
- event.preventDefault();
- event.stopPropagation();
- resetFileDrop();
- if (writeDisabled) {
- notifyError(isSuspended ? t('files.manager.serverSuspended') : t('files.manager.noPermission'));
- return;
- }
- if (!isFileDrag(event.dataTransfer)) return;
- try {
- const dropped = await collectDroppedFiles(event.dataTransfer);
- if (!dropped.length) {
- notifyError(t('files.manager.noDropFiles'));
- return;
- }
- const groups = new Map<string, File[]>();
- for (const item of dropped) {
- const target = item.relativeDir ? joinPath(path, item.relativeDir) : path;
- const list = groups.get(target) ?? [];
- list.push(item.file);
- groups.set(target, list);
- }
- const batches = [...groups.entries()].map(([targetPath, filesToUpload]) => ({
- files: filesToUpload,
- targetPath,
- }));
- await uploadMutation.mutateAsync({
- files: dropped.map((item) => item.file),
- batches,
- });
- } catch (error: unknown) {
- notifyError(error instanceof Error ? error.message : t('files.manager.uploadFailed'));
- }
- },
- [isSuspended, path, resetFileDrop, uploadMutation, writeDisabled, t],
- );
-
- const handleOpen = (entry: FileEntry) => {
- if (entry.isDirectory) {
- setPath(entry.path);
- return;
- }
- if (isArchive(entry.name)) {
- openArchiveBrowser(entry.path);
- return;
- }
- openFile(entry);
- };
-
- const openArchiveBrowser = async (archivePath: string) => {
- setArchiveBrowsePath(archivePath);
- setArchiveBrowseDir('/');
- setArchiveLoading(true);
- try {
- const entries = await filesApi.listArchiveContents(serverId, archivePath);
- setArchiveEntries(entries);
- } catch (error: unknown) {
- reportSystemError({
- level: 'error',
- component: 'FileManager',
- message: describeError(error),
- stack: error instanceof Error ? error.stack : undefined,
- metadata: { context: 'read archive' },
- });
- const bufErr = isBufferError(error);
- if (bufErr) {
- setBufferError(bufErr);
- setArchiveBrowsePath(null);
- } else {
- notifyError(t('files.manager.readArchiveFailed'));
- setArchiveBrowsePath(null);
- }
- } finally {
- setArchiveLoading(false);
- }
- };
-
- const handleSelect = (entry: FileEntry, selected: boolean) => {
- setSelectedPaths((prev) => {
- const next = new Set(prev);
- if (selected) next.add(entry.path);
- else next.delete(entry.path);
- return next;
- });
- };
-
- const handleSelectAll = () => {
- if (allSelected) {
- setSelectedPaths(new Set());
- } else {
- setSelectedPaths(new Set(sortedFiles.map((f) => f.path)));
- }
- };
-
- const handleShiftSelect = (entry: FileEntry) => {
- const lastSelected = [...selectedPaths].pop();
- if (!lastSelected) {
- setSelectedPaths(new Set([entry.path]));
- return;
- }
- const paths = sortedFiles.map((f) => f.path);
- const startIdx = paths.indexOf(lastSelected);
- const endIdx = paths.indexOf(entry.path);
- if (startIdx === -1 || endIdx === -1) return;
- const [from, to] = startIdx < endIdx ? [startIdx, endIdx] : [endIdx, startIdx];
- const range = paths.slice(from, to + 1);
- setSelectedPaths((prev) => new Set([...prev, ...range]));
- };
-
- const handleDownload = async (entry: FileEntry) => {
- const store = useDownloadStore.getState();
- const controller = new AbortController();
- const knownTotal = entry.size > 0 ? entry.size : undefined;
- const sessionId = store.beginSession([{ path: entry.path, name: entry.name, total: knownTotal }]);
- store.registerAbort(sessionId, controller);
- try {
- const blob = await filesApi.download(
- serverId,
- entry.path,
- (loaded, total) => {
- useDownloadStore.getState().setFileProgress(sessionId, 0, loaded, total ?? knownTotal);
- },
- controller.signal,
- );
- useDownloadStore.getState().setFileDone(sessionId, 0);
- const url = URL.createObjectURL(blob);
- const link = document.createElement('a');
- link.href = url;
- link.download = entry.name;
- document.body.appendChild(link);
- link.click();
- link.remove();
- URL.revokeObjectURL(url);
- notifySuccess(t('files.manager.downloadComplete'));
- } catch (error: any) {
- const aborted = controller.signal.aborted || error?.message === 'Download aborted';
- if (aborted) {
- useDownloadStore.getState().markSessionCanceled(sessionId);
- notifyInfo(t('files.manager.downloadCanceled'));
- } else {
- useDownloadStore.getState().setFileError(sessionId, 0, error?.message || t('files.manager.downloadFailed'));
- notifyError(error?.message || t('files.manager.downloadFailed'));
- }
- }
- };
-
- const handleCopyPath = (entry: FileEntry) => {
- navigator.clipboard.writeText(entry.path).then(
- () => notifyInfo(t('files.manager.pathCopied')),
- () => notifyError(t('files.manager.copyPathFailed')),
- );
- };
-
- const handleRename = (entry: FileEntry, newName: string) => {
- const trimmed = newName.trim();
- if (!trimmed || trimmed === entry.name) {
- setRenamingEntry(null);
- return;
- }
- const parentDir = getParentPath(entry.path);
- const newPath = joinPath(parentDir, trimmed);
- renameMutation.mutate({ from: entry.path, to: newPath });
- };
-
- const handleCreateSubmit = (event: FormEvent<HTMLFormElement>) => {
- event.preventDefault();
- if (!createMode) return;
- const name = createName.trim();
- if (!name) return;
- createMutation.mutate({ name, isDirectory: createMode === 'directory', content: createContent });
- };
-
- const handleCompress = () => {
- const selected = Array.from(selectedPaths);
- const name = archiveName.trim();
- if (!selected.length || !name) {
- notifyError(t('files.manager.selectForArchive'));
- return;
- }
- const archivePath = name.startsWith('/') ? normalizePath(name) : joinPath(path, name);
- compressMutation.mutate({ paths: selected, archive: archivePath });
- };
-
- const handleDecompress = () => {
- if (!selectedArchive) return;
- const target = normalizePath(decompressTarget);
- decompressMutation.mutate({ archivePath: selectedArchive.path, targetPath: target });
- };
-
- const handleDeleteSelection = () => {
- const selected = Array.from(selectedPaths);
- if (!selected.length) return;
- deleteMutation.mutate(selected);
- };
-
- const parseModeInput = (value: string) => {
- const trimmed = value.trim();
- if (!/^[0-7]{3,4}$/.test(trimmed)) return null;
- const parsed = parseInt(trimmed, 8);
- return Number.isFinite(parsed) ? parsed : null;
- };
-
- const handlePermissionsOpen = (entry: FileEntry) => {
- const fallback = entry.isDirectory ? 0o755 : 0o644;
- const formatted = formatFileMode(entry.mode ?? fallback);
- setPermissionsValue(formatted === '---' ? '644' : formatted);
- setPermissionsEntry(entry);
- setPermissionsError(null);
- };
-
- const handlePermissionsSubmit = (event: FormEvent<HTMLFormElement>) => {
- event.preventDefault();
- if (!permissionsEntry) return;
- const parsed = parseModeInput(permissionsValue);
- if (!parsed) {
- setPermissionsError(t('files.manager.invalidMode'));
- return;
- }
- setPermissionsError(null);
- permissionsMutation.mutate({ path: permissionsEntry.path, mode: parsed });
- };
-
- const handleBulkCompressFromEntry = (entry: FileEntry) => {
- setSelectedPaths(new Set([entry.path]));
- setArchiveName(entry.name.endsWith('.tar.gz') ? entry.name : `${entry.name}.tar.gz`);
- setShowCompress(true);
- };
-
- const handleBulkDecompressFromEntry = (entry: FileEntry) => {
- if (!isArchive(entry.name)) return;
- setSelectedPaths(new Set([entry.path]));
- setShowDecompress(true);
- };
-
- const guardSuspended = (fn: () => void) => () => {
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- fn();
- };
-
- // Toolbar button styles
- const tbtn =
- 'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
- const tbtnIcon =
- 'inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40';
- const tbtnDanger =
- 'inline-flex h-8 min-h-8 items-center gap-1.5 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-40';
-
- return (
- <motion.div
- className="flex flex-1 flex-col gap-4 lg:flex-row"
- variants={containerVariants}
- initial="hidden"
- animate="visible"
- >
- {/* Ambient background (subtle, panel-style) */}
-
-
-
- {/* Mobile sidebar toggle */}
- <motion.button
- variants={itemVariants}
- type="button"
- className="flex h-8 items-center gap-2 rounded-sm border border-border/60 bg-card px-2.5 text-mini font-medium text-muted-foreground lg:hidden"
- onClick={() => setShowSidebar(!showSidebar)}
- >
- <Menu className="h-4 w-4" />
- {t('files.manager.folders')}
- </motion.button>
-
- {/* Mobile overlay */}
- <AnimatePresence>
- {showSidebar && (
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- className="fixed inset-0 z-40 bg-surface-0/50 backdrop-blur-sm lg:hidden"
- onClick={() => setShowSidebar(false)}
- />
- )}
- </AnimatePresence>
-
- {/* Sidebar */}
- <motion.div
- variants={itemVariants}
- className={`
+      {/* Sidebar */}
+      <motion.div
+        variants={itemVariants}
+        className={`
  fixed inset-y-0 left-0 z-50 w-64 transform rounded-none border-r border-border bg-card p-3 transition-transform duration-normal ease-standard
  flex min-h-0 flex-col
  lg:static lg:z-auto lg:w-60 lg:shrink-0 lg:transform-none lg:rounded-sm lg:border lg:transition-none
  ${showSidebar ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
  `}
- >
- <div className="flex items-center justify-between mb-3">
- <div className="flex items-center gap-2">
- <span className="type-overline">
- {t('files.manager.directoryTree')}
- </span>
- </div>
- <button
- type="button"
- className="flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground lg:hidden"
- onClick={() => setShowSidebar(false)}
- aria-label={t('common:actions.close')}
- >
- <X className="h-4 w-4" />
- </button>
- </div>
- <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
- <FileTree
- serverId={serverId}
- activePath={path}
- onNavigate={(nextPath) => {
- setPath(nextPath);
- setShowSidebar(false);
- }}
- />
- </div>
- </motion.div>
+      >
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="type-overline">{t('files.manager.directoryTree')}</span>
+          </div>
+          <button
+            type="button"
+            className="flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground lg:hidden"
+            onClick={() => setShowSidebar(false)}
+            aria-label={t('common:actions.close')}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+          <FileTree
+            serverId={serverId}
+            activePath={path}
+            onNavigate={(nextPath) => {
+              setPath(nextPath);
+              setShowSidebar(false);
+            }}
+          />
+        </div>
+      </motion.div>
 
- {/* Main content */}
- <motion.div variants={itemVariants} className="flex min-w-0 flex-1 flex-col gap-3">
- {/* Breadcrumb + toolbar */}
- <div className="deck-panel px-3 py-2">
- {/* Breadcrumbs */}
- <nav className="flex items-center gap-1 overflow-x-auto pb-1.5 text-mini text-muted-foreground scrollbar-hide">
- <button
- type="button"
- className="flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 transition-colors hover:bg-surface-1/40 hover:text-foreground"
- onClick={() => setPath('/')}
- title={t('files.manager.root')}
- >
- <Home className="h-3.5 w-3.5" />
- <span>{t('files.manager.root')}</span>
- </button>
- {breadcrumbs.map((crumb, idx) => (
- <div key={crumb.path} className="flex items-center gap-1 shrink-0">
- <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
- <button
- type="button"
- className={`whitespace-nowrap rounded-sm px-1 py-0.5 transition-colors ${
- idx === breadcrumbs.length - 1
- ? 'font-medium text-foreground'
- : 'text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
- }`}
- onClick={() => setPath(crumb.path)}
- >
- {crumb.name}
- </button>
- </div>
- ))}
- </nav>
+      {/* Main content */}
+      <motion.div variants={itemVariants} className="flex min-w-0 flex-1 flex-col gap-3">
+        {/* Breadcrumb + toolbar */}
+        <div className="deck-panel px-3 py-2">
+          {/* Breadcrumbs */}
+          <nav className="flex items-center gap-1 overflow-x-auto pb-1.5 text-mini text-muted-foreground scrollbar-hide">
+            <button
+              type="button"
+              className="flex h-7 shrink-0 items-center gap-1 rounded-sm px-2 transition-colors hover:bg-surface-1/40 hover:text-foreground"
+              onClick={() => setPath('/')}
+              title={t('files.manager.root')}
+            >
+              <Home className="h-3.5 w-3.5" />
+              <span>{t('files.manager.root')}</span>
+            </button>
+            {breadcrumbs.map((crumb, idx) => (
+              <div key={crumb.path} className="flex items-center gap-1 shrink-0">
+                <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+                <button
+                  type="button"
+                  className={`whitespace-nowrap rounded-sm px-1 py-0.5 transition-colors ${
+                    idx === breadcrumbs.length - 1
+                      ? 'font-medium text-foreground'
+                      : 'text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
+                  }`}
+                  onClick={() => setPath(crumb.path)}
+                >
+                  {crumb.name}
+                </button>
+              </div>
+            ))}
+          </nav>
 
- {/* Search bar + toolbar */}
- <div className="mt-1 flex flex-wrap items-center gap-2">
- {/* Search */}
- <div className="relative min-w-[140px] flex-1 sm:max-w-xs">
- <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
- <input
- type="text"
- placeholder={t('files.manager.filterPlaceholder')}
- value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
- className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
- />
- </div>
+          {/* Search bar + toolbar */}
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {/* Search */}
+            <div className="relative min-w-[140px] flex-1 sm:max-w-xs">
+              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/60" />
+              <input
+                type="text"
+                placeholder={t('files.manager.filterPlaceholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+              />
+            </div>
 
- {/* One trailing group so a narrow viewport wraps the whole control run
+            {/* One trailing group so a narrow viewport wraps the whole control run
  instead of orphaning the refresh button on its own row. */}
- <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+            <div className="flex max-w-full shrink-0 flex-wrap items-center gap-2">
+              <div className="hidden sm:block h-4 w-px bg-border/60" />
 
- <div className="hidden sm:block h-4 w-px bg-border/60" />
+              {/* Navigation */}
+              <button
+                type="button"
+                className={tbtn}
+                onClick={() => setPath(getParentPath(path))}
+                disabled={path === '/'}
+                title={t('files.manager.goUp')}
+                aria-label={t('files.manager.goUp')}
+              >
+                <ArrowUp className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">{t('files.manager.up')}</span>
+              </button>
 
- {/* Navigation */}
- <button
- type="button"
- className={tbtn}
- onClick={() => setPath(getParentPath(path))}
- disabled={path === '/'}
- title={t('files.manager.goUp')}
- aria-label={t('files.manager.goUp')}
- >
- <ArrowUp className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.manager.up')}</span>
- </button>
+              <div className="hidden sm:block h-4 w-px bg-border/60" />
 
- <div className="hidden sm:block h-4 w-px bg-border/60" />
+              {/* Create actions */}
+              {canWrite && (
+                <>
+                  <button
+                    type="button"
+                    className={tbtn}
+                    onClick={guardSuspended(() => setShowUpload((prev) => !prev))}
+                    disabled={writeDisabled}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t('common:actions.upload')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={tbtn}
+                    onClick={guardSuspended(() => setCreateMode('file'))}
+                    disabled={writeDisabled}
+                  >
+                    <FilePlus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t('files.manager.newFile')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={tbtn}
+                    onClick={guardSuspended(() => setCreateMode('directory'))}
+                    disabled={writeDisabled}
+                  >
+                    <FolderPlus className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">{t('files.manager.newFolder')}</span>
+                  </button>
+                </>
+              )}
 
- {/* Create actions */}
- {canWrite && (
- <>
- <button
- type="button"
- className={tbtn}
- onClick={guardSuspended(() => setShowUpload((prev) => !prev))}
- disabled={writeDisabled}
- >
- <Upload className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('common:actions.upload')}</span>
- </button>
- <button
- type="button"
- className={tbtn}
- onClick={guardSuspended(() => setCreateMode('file'))}
- disabled={writeDisabled}
- >
- <FilePlus className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.manager.newFile')}</span>
- </button>
- <button
- type="button"
- className={tbtn}
- onClick={guardSuspended(() => setCreateMode('directory'))}
- disabled={writeDisabled}
- >
- <FolderPlus className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.manager.newFolder')}</span>
- </button>
- </>
- )}
+              <div className="hidden sm:block h-4 w-px bg-border/60" />
 
- <div className="hidden sm:block h-4 w-px bg-border/60" />
+              {/* Directory listing freshness (30s poll) next to the manual refresh. */}
+              <LastUpdated queryKey={qk.files(serverId, path)} className="hidden md:inline" />
 
- {/* Directory listing freshness (30s poll) next to the manual refresh. */}
- <LastUpdated queryKey={qk.files(serverId, path)} className="hidden md:inline" />
+              <button
+                type="button"
+                className={tbtnIcon}
+                onClick={() => refetch()}
+                aria-label={t('common:actions.refresh')}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
 
- <button type="button" className={tbtnIcon} onClick={() => refetch()} aria-label={t('common:actions.refresh')}>
- <RefreshCw className="h-3.5 w-3.5" />
- </button>
+              {/* Selection actions */}
+              <AnimatePresence>
+                {selectedEntries.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, width: 0 }}
+                    animate={{ opacity: 1, width: 'auto' }}
+                    exit={{ opacity: 0, width: 0 }}
+                    className="flex items-center gap-2 overflow-hidden"
+                  >
+                    <div className="hidden sm:block h-4 w-px bg-border/60" />
+                    <span className="font-mono text-micro tabular-nums text-foreground">
+                      {selectedEntries.length}
+                    </span>
+                    {canWrite && (
+                      <button
+                        type="button"
+                        className={tbtn}
+                        onClick={guardSuspended(() => setShowCompress(true))}
+                        disabled={writeDisabled}
+                      >
+                        <Archive className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">{t('files.actions.compress')}</span>
+                      </button>
+                    )}
+                    {canWrite && selectedArchive && (
+                      <button
+                        type="button"
+                        className={tbtn}
+                        onClick={guardSuspended(() => setShowDecompress(true))}
+                        disabled={writeDisabled}
+                      >
+                        <ArchiveRestore className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">{t('files.actions.extract')}</span>
+                      </button>
+                    )}
+                    {canWrite && (
+                      <button
+                        type="button"
+                        className={tbtnDanger}
+                        onClick={guardSuspended(() => setConfirmDelete(true))}
+                        disabled={writeDisabled}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">{t('common:actions.delete')}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
+                      onClick={() => setSelectedPaths(new Set())}
+                      title={t('files.manager.clearSelection')}
+                      aria-label={t('files.manager.clearSelection')}
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
 
- {/* Selection actions */}
- <AnimatePresence>
- {selectedEntries.length > 0 && (
- <motion.div
- initial={{ opacity: 0, width: 0 }}
- animate={{ opacity: 1, width: 'auto' }}
- exit={{ opacity: 0, width: 0 }}
- className="flex items-center gap-2 overflow-hidden"
- >
- <div className="hidden sm:block h-4 w-px bg-border/60" />
- <span className="font-mono text-micro tabular-nums text-foreground">
- {selectedEntries.length}
- </span>
- {canWrite && (
- <button
- type="button"
- className={tbtn}
- onClick={guardSuspended(() => setShowCompress(true))}
- disabled={writeDisabled}
- >
- <Archive className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.actions.compress')}</span>
- </button>
- )}
- {canWrite && selectedArchive && (
- <button
- type="button"
- className={tbtn}
- onClick={guardSuspended(() => setShowDecompress(true))}
- disabled={writeDisabled}
- >
- <ArchiveRestore className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('files.actions.extract')}</span>
- </button>
- )}
- {canWrite && (
- <button
- type="button"
- className={tbtnDanger}
- onClick={guardSuspended(() => setConfirmDelete(true))}
- disabled={writeDisabled}
- >
- <Trash2 className="h-3.5 w-3.5" />
- <span className="hidden sm:inline">{t('common:actions.delete')}</span>
- </button>
- )}
- <button
- type="button"
- className="inline-flex h-8 min-h-8 w-8 min-w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
- onClick={() => setSelectedPaths(new Set())}
- title={t('files.manager.clearSelection')}
- aria-label={t('files.manager.clearSelection')}
- >
- <XCircle className="h-4 w-4" />
- </button>
- </motion.div>
- )}
- </AnimatePresence>
- </div>
- </div>
+          {message && (
+            <div className="mt-2 flex items-center gap-1.5 rounded-sm border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-mini text-warning">
+              <AlertTriangle className="h-3 w-3 shrink-0" />
+              {message}
+            </div>
+          )}
+        </div>
 
- {message && (
- <div className="mt-2 flex items-center gap-1.5 rounded-sm border border-warning/25 bg-warning/10 px-2.5 py-1.5 text-mini text-warning">
- <AlertTriangle className="h-3 w-3 shrink-0" />
- {message}
- </div>
- )}
- </div>
+        {/* Delete confirmation */}
+        <AnimatePresence>
+          {confirmDelete && selectedEntries.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="flex flex-col justify-between gap-2 rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 sm:flex-row sm:items-center"
+            >
+              <div className="flex items-center gap-2">
+                <Trash2 className="h-4 w-4 text-danger" />
+                <span className="text-mini text-danger">
+                  {t('files.manager.deleteConfirm', { count: selectedEntries.length })}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className={tbtnDanger}
+                  onClick={handleDeleteSelection}
+                  disabled={deleteMutation.isPending || writeDisabled}
+                >
+                  {deleteMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    t('files.manager.confirmDelete')
+                  )}
+                </button>
+                <button type="button" className={tbtn} onClick={() => setConfirmDelete(false)}>
+                  {t('common:actions.cancel')}
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
- {/* Delete confirmation */}
- <AnimatePresence>
- {confirmDelete && selectedEntries.length > 0 && (
- <motion.div
- initial={{ opacity: 0, y: -8 }}
- animate={{ opacity: 1, y: 0 }}
- exit={{ opacity: 0, y: -8 }}
- transition={{ duration: 0.2 }}
- className="flex flex-col justify-between gap-2 rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 sm:flex-row sm:items-center"
- >
- <div className="flex items-center gap-2">
- <Trash2 className="h-4 w-4 text-danger" />
- <span className="text-mini text-danger">
- {t('files.manager.deleteConfirm', { count: selectedEntries.length })}
- </span>
- </div>
- <div className="flex items-center gap-2">
- <button
- type="button"
- className={tbtnDanger}
- onClick={handleDeleteSelection}
- disabled={deleteMutation.isPending || writeDisabled}
- >
- {deleteMutation.isPending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- t('files.manager.confirmDelete')
- )}
- </button>
- <button type="button" className={tbtn} onClick={() => setConfirmDelete(false)}>
- {t('common:actions.cancel')}
- </button>
- </div>
- </motion.div>
- )}
- </AnimatePresence>
+        {/* File list — drop target for explorer uploads (no Upload modal required) */}
+        <div
+          className={`deck-panel relative min-h-[12rem] flex-1 overflow-hidden transition-colors ${
+            isFileDropActive ? 'border-primary' : ''
+          }`}
+          onDragEnter={handleExplorerDragEnter}
+          onDragOver={handleExplorerDragOver}
+          onDragLeave={handleExplorerDragLeave}
+          onDrop={handleExplorerDrop}
+        >
+          {isFileDropActive && canWrite && !isSuspended && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10">
+              <Upload className="h-8 w-8 text-primary" />
+              <p className="text-mini font-semibold text-primary">
+                {t('files.manager.dropToUpload')}
+              </p>
+              <p className="font-mono text-micro tabular-nums text-muted-foreground">{path}</p>
+            </div>
+          )}
+          <FileList
+            files={sortedFiles}
+            selectedPaths={selectedPaths}
+            isLoading={isLoading}
+            isError={isError && !files.length}
+            allSelected={allSelected}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            renamingEntry={renamingEntry}
+            onSort={handleSort}
+            onSelectAll={handleSelectAll}
+            onOpen={handleOpen}
+            onSelect={handleSelect}
+            onShiftSelect={handleShiftSelect}
+            onDownload={handleDownload}
+            onCopyPath={handleCopyPath}
+            onRename={(entry) => {
+              if (!canWrite) {
+                notifyError(t('files.manager.noPermission'));
+                return;
+              }
+              if (isSuspended) {
+                notifyError(t('files.manager.serverSuspended'));
+                return;
+              }
+              setRenamingEntry(entry);
+            }}
+            onRenameSubmit={handleRename}
+            onRenameCancel={() => setRenamingEntry(null)}
+            onDelete={(entry) => {
+              if (!canWrite) {
+                notifyError(t('files.manager.noPermission'));
+                return;
+              }
+              if (isSuspended) {
+                notifyError(t('files.manager.serverSuspended'));
+                return;
+              }
+              setSelectedPaths(new Set([entry.path]));
+              setConfirmDelete(true);
+            }}
+            onCompress={(entry) => {
+              if (!canWrite) {
+                notifyError(t('files.manager.noPermission'));
+                return;
+              }
+              if (isSuspended) {
+                notifyError(t('files.manager.serverSuspended'));
+                return;
+              }
+              handleBulkCompressFromEntry(entry);
+            }}
+            onDecompress={(entry) => {
+              if (!canWrite) {
+                notifyError(t('files.manager.noPermission'));
+                return;
+              }
+              if (isSuspended) {
+                notifyError(t('files.manager.serverSuspended'));
+                return;
+              }
+              handleBulkDecompressFromEntry(entry);
+            }}
+            onPermissions={(entry) => {
+              if (!canWrite) {
+                notifyError(t('files.manager.noPermission'));
+                return;
+              }
+              if (isSuspended) {
+                notifyError(t('files.manager.serverSuspended'));
+                return;
+              }
+              handlePermissionsOpen(entry);
+            }}
+          />
+        </div>
+      </motion.div>
 
- {/* File list — drop target for explorer uploads (no Upload modal required) */}
- <div
- className={`deck-panel relative min-h-[12rem] flex-1 overflow-hidden transition-colors ${
- isFileDropActive ? 'border-primary' : ''
- }`}
- onDragEnter={handleExplorerDragEnter}
- onDragOver={handleExplorerDragOver}
- onDragLeave={handleExplorerDragLeave}
- onDrop={handleExplorerDrop}
- >
- {isFileDropActive && canWrite && !isSuspended && (
- <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-primary/10">
- <Upload className="h-8 w-8 text-primary" />
- <p className="text-mini font-semibold text-primary">{t('files.manager.dropToUpload')}</p>
- <p className="font-mono text-micro tabular-nums text-muted-foreground">{path}</p>
- </div>
- )}
- <FileList
- files={sortedFiles}
- selectedPaths={selectedPaths}
- isLoading={isLoading}
- isError={isError && !files.length}
- allSelected={allSelected}
- sortField={sortField}
- sortDirection={sortDirection}
- renamingEntry={renamingEntry}
- onSort={handleSort}
- onSelectAll={handleSelectAll}
- onOpen={handleOpen}
- onSelect={handleSelect}
- onShiftSelect={handleShiftSelect}
- onDownload={handleDownload}
- onCopyPath={handleCopyPath}
- onRename={(entry) => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- setRenamingEntry(entry);
- }}
- onRenameSubmit={handleRename}
- onRenameCancel={() => setRenamingEntry(null)}
- onDelete={(entry) => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- setSelectedPaths(new Set([entry.path]));
- setConfirmDelete(true);
- }}
- onCompress={(entry) => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- handleBulkCompressFromEntry(entry);
- }}
- onDecompress={(entry) => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- handleBulkDecompressFromEntry(entry);
- }}
- onPermissions={(entry) => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- if (isSuspended) {
- notifyError(t('files.manager.serverSuspended'));
- return;
- }
- handlePermissionsOpen(entry);
- }}
- />
- </div>
- </motion.div>
+      {/* File editor overlay */}
+      <Dialog
+        open={!!activeFile}
+        onOpenChange={(open) => {
+          if (!open) closeActiveFile();
+        }}
+      >
+        <DialogContent
+          size="full"
+          showClose={false}
+          className="h-[92dvh]"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <DialogTitle className="sr-only">{t('files.manager.editFile')}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {activeFile ? activeFile.path : t('files.manager.fileEditor')}
+          </DialogDescription>
+          <DialogBody className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4">
+            {activeFile && (
+              <FileEditor
+                file={activeFile}
+                isLoading={isFileLoading}
+                isSaving={saveMutation.isPending}
+                isDirty={isDirty}
+                onChange={updateActiveContent}
+                onSave={() => {
+                  if (!canWrite) {
+                    notifyError(t('files.manager.noPermission'));
+                    return;
+                  }
+                  saveMutation.mutate();
+                }}
+                onDownload={() => activeFile && handleDownload(activeFile as unknown as FileEntry)}
+                onReset={() => {
+                  if (!activeFile) return;
+                  updateActiveContent(activeFile.originalContent);
+                }}
+                onClose={closeActiveFile}
+                isSuspended={isSuspended || !canWrite}
+              />
+            )}
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
 
- {/* File editor overlay */}
- <Dialog
- open={!!activeFile}
- onOpenChange={(open) => {
- if (!open) closeActiveFile();
- }}
- >
- <DialogContent
- size="full"
- showClose={false}
- className="h-[92dvh]"
- onOpenAutoFocus={(event) => event.preventDefault()}
- >
- <DialogTitle className="sr-only">{t('files.manager.editFile')}</DialogTitle>
- <DialogDescription className="sr-only">
- {activeFile ? activeFile.path : t('files.manager.fileEditor')}
- </DialogDescription>
- <DialogBody className="flex min-h-0 flex-1 flex-col overflow-hidden p-2 sm:p-4">
- {activeFile && (
- <FileEditor
- file={activeFile}
- isLoading={isFileLoading}
- isSaving={saveMutation.isPending}
- isDirty={isDirty}
- onChange={updateActiveContent}
- onSave={() => {
- if (!canWrite) {
- notifyError(t('files.manager.noPermission'));
- return;
- }
- saveMutation.mutate();
- }}
- onDownload={() => activeFile && handleDownload(activeFile as unknown as FileEntry)}
- onReset={() => {
- if (!activeFile) return;
- updateActiveContent(activeFile.originalContent);
- }}
- onClose={closeActiveFile}
- isSuspended={isSuspended || !canWrite}
- />
- )}
- </DialogBody>
- </DialogContent>
- </Dialog>
+      {/* Permissions modal */}
+      <Dialog
+        open={!!permissionsEntry}
+        onOpenChange={(open) => {
+          if (!open) setPermissionsEntry(null);
+        }}
+      >
+        <DialogContent size="sm">
+          <form onSubmit={handlePermissionsSubmit} className="flex min-h-0 flex-1 flex-col">
+            <DialogHeader>
+              <DialogTitle>{t('files.manager.editPermissions')}</DialogTitle>
+              <DialogDescription className="truncate">
+                {permissionsEntry?.path ?? t('files.manager.permissionsDescription')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="file-permissions-mode">{t('files.manager.modeOctal')}</Label>
+                <Input
+                  id="file-permissions-mode"
+                  className="font-mono"
+                  value={permissionsValue}
+                  onChange={(e) => {
+                    setPermissionsValue(e.target.value);
+                    setPermissionsError(null);
+                  }}
+                  placeholder={permissionsEntry?.isDirectory ? '755' : '644'}
+                  autoFocus
+                />
+                <p className="text-micro text-muted-foreground/70">
+                  {t('files.manager.modeHint.prefix')}
+                  <span className="font-mono text-foreground/80">644</span>
+                  {t('files.manager.modeHint.forFiles')}
+                  <span className="font-mono text-foreground/80">755</span>
+                  {t('files.manager.modeHint.forFolders')}
+                </p>
+              </div>
+              {permissionsError && (
+                <div className="rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 text-mini text-danger">
+                  {permissionsError}
+                </div>
+              )}
+            </DialogBody>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPermissionsEntry(null)}>
+                {t('common:actions.cancel')}
+              </Button>
+              <Button type="submit" disabled={permissionsMutation.isPending || writeDisabled}>
+                {permissionsMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  t('files.manager.updatePermissions')
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
- {/* Permissions modal */}
- <Dialog
- open={!!permissionsEntry}
- onOpenChange={(open) => {
- if (!open) setPermissionsEntry(null);
- }}
- >
- <DialogContent size="sm">
- <form onSubmit={handlePermissionsSubmit} className="flex min-h-0 flex-1 flex-col">
- <DialogHeader>
- <DialogTitle>{t('files.manager.editPermissions')}</DialogTitle>
- <DialogDescription className="truncate">
- {permissionsEntry?.path ?? t('files.manager.permissionsDescription')}
- </DialogDescription>
- </DialogHeader>
- <DialogBody className="space-y-3">
- <div className="space-y-1.5">
- <Label htmlFor="file-permissions-mode">{t('files.manager.modeOctal')}</Label>
- <Input
- id="file-permissions-mode"
- className="font-mono"
- value={permissionsValue}
- onChange={(e) => {
- setPermissionsValue(e.target.value);
- setPermissionsError(null);
- }}
- placeholder={permissionsEntry?.isDirectory ? '755' : '644'}
- autoFocus
- />
- <p className="text-micro text-muted-foreground/70">
- {t('files.manager.modeHint.prefix')}
- <span className="font-mono text-foreground/80">644</span>
- {t('files.manager.modeHint.forFiles')}
- <span className="font-mono text-foreground/80">755</span>
- {t('files.manager.modeHint.forFolders')}
- </p>
- </div>
- {permissionsError && (
- <div className="rounded-sm border border-danger/25 bg-danger/10 px-3 py-2 text-mini text-danger">
- {permissionsError}
- </div>
- )}
- </DialogBody>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setPermissionsEntry(null)}>
- {t('common:actions.cancel')}
- </Button>
- <Button type="submit" disabled={permissionsMutation.isPending || writeDisabled}>
- {permissionsMutation.isPending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- t('files.manager.updatePermissions')
- )}
- </Button>
- </DialogFooter>
- </form>
- </DialogContent>
- </Dialog>
+      {/* Archive browser modal */}
+      <Dialog
+        open={!!archiveBrowsePath}
+        onOpenChange={(open) => {
+          if (!open) setArchiveBrowsePath(null);
+        }}
+      >
+        <DialogContent size="xl" className="h-[min(80dvh,40rem)]">
+          <DialogHeader>
+            <DialogTitle className="truncate">
+              {archiveBrowsePath?.split('/').pop() || t('files.manager.archive')}
+            </DialogTitle>
+            <DialogDescription>{t('files.manager.readOnlyPreview')}</DialogDescription>
+          </DialogHeader>
+          <DialogToolbar>
+            <div className="flex items-center gap-1 overflow-x-auto text-mini scrollbar-hide">
+              <button
+                type="button"
+                className="shrink-0 rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
+                onClick={() => setArchiveBrowseDir('/')}
+              >
+                <Home className="inline h-3 w-3" />
+              </button>
+              {archiveBrowseDir !== '/' &&
+                archiveBrowseDir
+                  .split('/')
+                  .filter(Boolean)
+                  .map((seg, i, arr) => {
+                    const segPath = '/' + arr.slice(0, i + 1).join('/');
+                    return (
+                      <span key={segPath} className="flex shrink-0 items-center gap-1">
+                        <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
+                        <button
+                          type="button"
+                          className="whitespace-nowrap rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
+                          onClick={() => setArchiveBrowseDir(segPath)}
+                        >
+                          {seg}
+                        </button>
+                      </span>
+                    );
+                  })}
+            </div>
+          </DialogToolbar>
+          <DialogBody className="p-0">
+            {archiveLoading ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                {t('files.manager.readingArchive')}
+              </div>
+            ) : (
+              <ArchiveListing
+                entries={archiveEntries}
+                currentDir={archiveBrowseDir}
+                onNavigate={setArchiveBrowseDir}
+              />
+            )}
+          </DialogBody>
+          <DialogFooter className="sm:justify-between">
+            <span className="font-mono text-micro tabular-nums text-muted-foreground">
+              {t('files.manager.entriesTotal', { count: archiveEntries.length })}
+            </span>
+            <Button type="button" variant="outline" onClick={() => setArchiveBrowsePath(null)}>
+              {t('common:actions.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
- {/* Archive browser modal */}
- <Dialog
- open={!!archiveBrowsePath}
- onOpenChange={(open) => {
- if (!open) setArchiveBrowsePath(null);
- }}
- >
- <DialogContent size="xl" className="h-[min(80dvh,40rem)]">
- <DialogHeader>
- <DialogTitle className="truncate">
- {archiveBrowsePath?.split('/').pop() || t('files.manager.archive')}
- </DialogTitle>
- <DialogDescription>{t('files.manager.readOnlyPreview')}</DialogDescription>
- </DialogHeader>
- <DialogToolbar>
- <div className="flex items-center gap-1 overflow-x-auto text-mini scrollbar-hide">
- <button
- type="button"
- className="shrink-0 rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
- onClick={() => setArchiveBrowseDir('/')}
- >
- <Home className="inline h-3 w-3" />
- </button>
- {archiveBrowseDir !== '/' &&
- archiveBrowseDir.split('/').filter(Boolean).map((seg, i, arr) => {
- const segPath = '/' + arr.slice(0, i + 1).join('/');
- return (
- <span key={segPath} className="flex shrink-0 items-center gap-1">
- <ChevronRight className="h-3 w-3 text-muted-foreground/40" />
- <button
- type="button"
- className="whitespace-nowrap rounded-sm px-1 py-0.5 font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
- onClick={() => setArchiveBrowseDir(segPath)}
- >
- {seg}
- </button>
- </span>
- );
- })}
- </div>
- </DialogToolbar>
- <DialogBody className="p-0">
- {archiveLoading ? (
- <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
- <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
- {t('files.manager.readingArchive')}
- </div>
- ) : (
- <ArchiveListing
- entries={archiveEntries}
- currentDir={archiveBrowseDir}
- onNavigate={setArchiveBrowseDir}
- />
- )}
- </DialogBody>
- <DialogFooter className="sm:justify-between">
- <span className="font-mono text-micro tabular-nums text-muted-foreground">
- {t('files.manager.entriesTotal', { count: archiveEntries.length })}
- </span>
- <Button type="button" variant="outline" onClick={() => setArchiveBrowsePath(null)}>
- {t('common:actions.close')}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
+      {/* Buffer error modal */}
+      <Dialog
+        open={!!bufferError}
+        onOpenChange={(open) => {
+          if (!open) setBufferError(null);
+        }}
+      >
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>{t('files.manager.bufferLimitTitle')}</DialogTitle>
+            <DialogDescription>{t('files.manager.bufferLimitDescription')}</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="rounded-sm border border-border/40 bg-surface-1/40 px-3 py-2">
+              <div className="flex justify-between text-mini">
+                <span className="text-muted-foreground">{t('files.manager.currentLimit')}</span>
+                <span className="font-mono tabular-nums text-foreground">
+                  {formatNumber(bufferError?.currentMaxBufferMb ?? 0)} MB
+                </span>
+              </div>
+              <div className="mt-1 flex justify-between text-mini">
+                <span className="text-muted-foreground">{t('files.manager.recommended')}</span>
+                <span className="font-mono tabular-nums text-foreground">
+                  {formatNumber(bufferError?.recommendedMaxBufferMb ?? 0)} MB
+                </span>
+              </div>
+            </div>
+            <p className="text-mini leading-relaxed text-muted-foreground">
+              {t('files.manager.bufferAdminHint.prefix')}
+              <span className="font-medium text-foreground">
+                {t('files.manager.bufferAdminHint.maxBufferSetting')}
+              </span>
+              {t('files.manager.bufferAdminHint.middle')}
+              <span className="font-medium text-foreground">
+                {t('files.manager.bufferAdminHint.adminSecurity')}
+              </span>
+              {t('files.manager.bufferAdminHint.suffix')}
+            </p>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" onClick={() => setBufferError(null)}>
+              {t('files.manager.gotIt')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
- {/* Buffer error modal */}
- <Dialog
- open={!!bufferError}
- onOpenChange={(open) => {
- if (!open) setBufferError(null);
- }}
- >
- <DialogContent size="sm">
- <DialogHeader>
- <DialogTitle>{t('files.manager.bufferLimitTitle')}</DialogTitle>
- <DialogDescription>
- {t('files.manager.bufferLimitDescription')}
- </DialogDescription>
- </DialogHeader>
- <DialogBody className="space-y-3">
- <div className="rounded-sm border border-border/40 bg-surface-1/40 px-3 py-2">
- <div className="flex justify-between text-mini">
- <span className="text-muted-foreground">{t('files.manager.currentLimit')}</span>
- <span className="font-mono tabular-nums text-foreground">
- {formatNumber(bufferError?.currentMaxBufferMb ?? 0)} MB
- </span>
- </div>
- <div className="mt-1 flex justify-between text-mini">
- <span className="text-muted-foreground">{t('files.manager.recommended')}</span>
- <span className="font-mono tabular-nums text-foreground">
- {formatNumber(bufferError?.recommendedMaxBufferMb ?? 0)} MB
- </span>
- </div>
- </div>
- <p className="text-mini leading-relaxed text-muted-foreground">
- {t('files.manager.bufferAdminHint.prefix')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.maxBufferSetting')}</span>{t('files.manager.bufferAdminHint.middle')}<span className="font-medium text-foreground">{t('files.manager.bufferAdminHint.adminSecurity')}</span>{t('files.manager.bufferAdminHint.suffix')}
- </p>
- </DialogBody>
- <DialogFooter>
- <Button type="button" onClick={() => setBufferError(null)}>
- {t('files.manager.gotIt')}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
+      {/* Upload modal */}
+      <Dialog open={showUpload} onOpenChange={setShowUpload}>
+        <DialogContent size="md">
+          <DialogHeader>
+            <DialogTitle>{t('files.manager.uploadFiles')}</DialogTitle>
+            <DialogDescription>
+              {t('files.uploader.target')} <span className="font-mono">{path}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <FileUploader
+              path={path}
+              isUploading={uploadMutation.isPending}
+              onUpload={(filesToUpload, onProgress, signal) =>
+                uploadMutation.mutate({ files: filesToUpload, onProgress, signal })
+              }
+              onClose={() => setShowUpload(false)}
+              inModal
+            />
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowUpload(false)}>
+              {t('common:actions.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
- {/* Upload modal */}
- <Dialog open={showUpload} onOpenChange={setShowUpload}>
- <DialogContent size="md">
- <DialogHeader>
- <DialogTitle>{t('files.manager.uploadFiles')}</DialogTitle>
- <DialogDescription>
- {t('files.uploader.target')} <span className="font-mono">{path}</span>
- </DialogDescription>
- </DialogHeader>
- <DialogBody>
- <FileUploader
- path={path}
- isUploading={uploadMutation.isPending}
- onUpload={(filesToUpload, onProgress, signal) =>
- uploadMutation.mutate({ files: filesToUpload, onProgress, signal })
- }
- onClose={() => setShowUpload(false)}
- inModal
- />
- </DialogBody>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setShowUpload(false)}>
- {t('common:actions.close')}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
+      {/* Create file/folder modal */}
+      <Dialog
+        open={!!createMode}
+        onOpenChange={(open) => {
+          if (!open) setCreateMode(null);
+        }}
+      >
+        <DialogContent size={createMode === 'file' ? 'md' : 'sm'}>
+          <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col">
+            <DialogHeader>
+              <DialogTitle>
+                {createMode === 'directory'
+                  ? t('files.manager.createFolder')
+                  : t('files.manager.createFile')}
+              </DialogTitle>
+              <DialogDescription>
+                {createMode === 'directory'
+                  ? t('files.manager.createFolderDescription')
+                  : t('files.manager.createFileDescription')}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogBody className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="create-entry-name">{t('files.manager.name')}</Label>
+                <Input
+                  id="create-entry-name"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder={createMode === 'directory' ? 'configs' : 'server.properties'}
+                  autoFocus
+                />
+              </div>
+              {createMode === 'file' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="create-file-content">{t('files.manager.initialContent')}</Label>
+                  <Textarea
+                    id="create-file-content"
+                    className="h-24 font-mono"
+                    value={createContent}
+                    onChange={(e) => setCreateContent(e.target.value)}
+                    placeholder="# New file"
+                  />
+                </div>
+              )}
+            </DialogBody>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateMode(null)}>
+                {t('common:actions.cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={!createName.trim() || createMutation.isPending || writeDisabled}
+              >
+                {createMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : createMode === 'directory' ? (
+                  t('files.manager.createFolder')
+                ) : (
+                  t('files.manager.createFile')
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
- {/* Create file/folder modal */}
- <Dialog
- open={!!createMode}
- onOpenChange={(open) => {
- if (!open) setCreateMode(null);
- }}
- >
- <DialogContent size={createMode === 'file' ? 'md' : 'sm'}>
- <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col">
- <DialogHeader>
- <DialogTitle>
- {createMode === 'directory' ? t('files.manager.createFolder') : t('files.manager.createFile')}
- </DialogTitle>
- <DialogDescription>
- {createMode === 'directory'
- ? t('files.manager.createFolderDescription')
- : t('files.manager.createFileDescription')}
- </DialogDescription>
- </DialogHeader>
- <DialogBody className="space-y-3">
- <div className="space-y-1.5">
- <Label htmlFor="create-entry-name">{t('files.manager.name')}</Label>
- <Input
- id="create-entry-name"
- value={createName}
- onChange={(e) => setCreateName(e.target.value)}
- placeholder={createMode === 'directory' ? 'configs' : 'server.properties'}
- autoFocus
- />
- </div>
- {createMode === 'file' && (
- <div className="space-y-1.5">
- <Label htmlFor="create-file-content">{t('files.manager.initialContent')}</Label>
- <Textarea
- id="create-file-content"
- className="h-24 font-mono"
- value={createContent}
- onChange={(e) => setCreateContent(e.target.value)}
- placeholder="# New file"
- />
- </div>
- )}
- </DialogBody>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setCreateMode(null)}>
- {t('common:actions.cancel')}
- </Button>
- <Button
- type="submit"
- disabled={!createName.trim() || createMutation.isPending || writeDisabled}
- >
- {createMutation.isPending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : createMode === 'directory' ? (
- t('files.manager.createFolder')
- ) : (
- t('files.manager.createFile')
- )}
- </Button>
- </DialogFooter>
- </form>
- </DialogContent>
- </Dialog>
+      {/* Compress modal */}
+      <Dialog open={showCompress} onOpenChange={setShowCompress}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>
+              {t('files.manager.compressTitle', { count: selectedEntries.length })}
+            </DialogTitle>
+            <DialogDescription>{t('files.manager.compressDescription')}</DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className="space-y-1.5">
+              <Label htmlFor="compress-archive-name">{t('files.manager.archiveName')}</Label>
+              <Input
+                id="compress-archive-name"
+                value={archiveName}
+                onChange={(e) => setArchiveName(e.target.value)}
+                placeholder="archive.tar.gz"
+                autoFocus
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowCompress(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCompress}
+              disabled={!selectedEntries.length || compressMutation.isPending || writeDisabled}
+            >
+              {compressMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <>
+                  <Archive className="h-3.5 w-3.5" />
+                  {t('files.manager.createArchive')}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
- {/* Compress modal */}
- <Dialog open={showCompress} onOpenChange={setShowCompress}>
- <DialogContent size="sm">
- <DialogHeader>
- <DialogTitle>
- {t('files.manager.compressTitle', { count: selectedEntries.length })}
- </DialogTitle>
- <DialogDescription>{t('files.manager.compressDescription')}</DialogDescription>
- </DialogHeader>
- <DialogBody>
- <div className="space-y-1.5">
- <Label htmlFor="compress-archive-name">{t('files.manager.archiveName')}</Label>
- <Input
- id="compress-archive-name"
- value={archiveName}
- onChange={(e) => setArchiveName(e.target.value)}
- placeholder="archive.tar.gz"
- autoFocus
- />
- </div>
- </DialogBody>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setShowCompress(false)}>
- {t('common:actions.cancel')}
- </Button>
- <Button
- type="button"
- onClick={handleCompress}
- disabled={!selectedEntries.length || compressMutation.isPending || writeDisabled}
- >
- {compressMutation.isPending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- <>
- <Archive className="h-3.5 w-3.5" />
- {t('files.manager.createArchive')}
- </>
- )}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
-
- {/* Decompress modal */}
- <Dialog
- open={showDecompress && !!selectedArchive}
- onOpenChange={setShowDecompress}
- >
- <DialogContent size="sm">
- <DialogHeader>
- <DialogTitle>{t('files.manager.extractArchive')}</DialogTitle>
- <DialogDescription className="truncate">
- {selectedArchive?.name ?? t('files.manager.extractDescription')}
- </DialogDescription>
- </DialogHeader>
- <DialogBody>
- <div className="space-y-1.5">
- <Label htmlFor="decompress-target-path">{t('files.manager.targetPath')}</Label>
- <Input
- id="decompress-target-path"
- value={decompressTarget}
- onChange={(e) => setDecompressTarget(e.target.value)}
- placeholder="/"
- autoFocus
- />
- </div>
- </DialogBody>
- <DialogFooter>
- <Button type="button" variant="outline" onClick={() => setShowDecompress(false)}>
- {t('common:actions.cancel')}
- </Button>
- <Button
- type="button"
- onClick={handleDecompress}
- disabled={decompressMutation.isPending || writeDisabled}
- >
- {decompressMutation.isPending ? (
- <Loader2 className="h-3.5 w-3.5 animate-spin" />
- ) : (
- <>
- <ArchiveRestore className="h-3.5 w-3.5" />
- {t('files.manager.extractArchive')}
- </>
- )}
- </Button>
- </DialogFooter>
- </DialogContent>
- </Dialog>
- </motion.div>
- );
+      {/* Decompress modal */}
+      <Dialog open={showDecompress && !!selectedArchive} onOpenChange={setShowDecompress}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>{t('files.manager.extractArchive')}</DialogTitle>
+            <DialogDescription className="truncate">
+              {selectedArchive?.name ?? t('files.manager.extractDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody>
+            <div className="space-y-1.5">
+              <Label htmlFor="decompress-target-path">{t('files.manager.targetPath')}</Label>
+              <Input
+                id="decompress-target-path"
+                value={decompressTarget}
+                onChange={(e) => setDecompressTarget(e.target.value)}
+                placeholder="/"
+                autoFocus
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowDecompress(false)}>
+              {t('common:actions.cancel')}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleDecompress}
+              disabled={decompressMutation.isPending || writeDisabled}
+            >
+              {decompressMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <>
+                  <ArchiveRestore className="h-3.5 w-3.5" />
+                  {t('files.manager.extractArchive')}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </motion.div>
+  );
 }
 
 /* ── Archive virtual directory listing ── */
@@ -1567,100 +1616,119 @@ type ArchiveItem = { name: string; size: number; isDirectory: boolean; modified?
 const ARCHIVE_GRID = 'grid grid-cols-[minmax(0,1fr)_6rem] items-center gap-x-2';
 
 function formatSize(bytes: number) {
- if (bytes === 0) return '—';
- if (bytes < 1024) return `${bytes} B`;
- if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
- return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes === 0) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function ArchiveListing({
- entries,
- currentDir,
- onNavigate,
+  entries,
+  currentDir,
+  onNavigate,
 }: {
- entries: ArchiveItem[];
- currentDir: string;
- onNavigate: (dir: string) => void;
+  entries: ArchiveItem[];
+  currentDir: string;
+  onNavigate: (dir: string) => void;
 }) {
- const { t } = useTranslation('server-tabs');
- const prefix = currentDir === '/' ? '' : currentDir.replace(/^\//, '') + '/';
+  const { t } = useTranslation('server-tabs');
+  const prefix = currentDir === '/' ? '' : currentDir.replace(/^\//, '') + '/';
+  const archiveRef = useRef<HTMLDivElement>(null);
 
- const visible = useMemo(() => {
- const seen = new Set<string>();
- const items: (ArchiveItem & { displayName: string })[] = [];
+  const visible = useMemo(() => {
+    const seen = new Set<string>();
+    const items: (ArchiveItem & { displayName: string })[] = [];
 
- for (const entry of entries) {
- const { name } = entry;
- if (prefix && !name.startsWith(prefix)) continue;
- const rest = name.slice(prefix.length);
- if (!rest) continue;
+    for (const entry of entries) {
+      const { name } = entry;
+      if (prefix && !name.startsWith(prefix)) continue;
+      const rest = name.slice(prefix.length);
+      if (!rest) continue;
 
- const slashIdx = rest.indexOf('/');
- if (slashIdx === -1) {
- if (!seen.has(rest)) {
- seen.add(rest);
- items.push({ ...entry, displayName: rest });
- }
- } else {
- const dirName = rest.slice(0, slashIdx);
- if (!seen.has(dirName)) {
- seen.add(dirName);
- items.push({ name: prefix + dirName, displayName: dirName, size: 0, isDirectory: true });
- }
- }
- }
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx === -1) {
+        if (!seen.has(rest)) {
+          seen.add(rest);
+          items.push({ ...entry, displayName: rest });
+        }
+      } else {
+        const dirName = rest.slice(0, slashIdx);
+        if (!seen.has(dirName)) {
+          seen.add(dirName);
+          items.push({ name: prefix + dirName, displayName: dirName, size: 0, isDirectory: true });
+        }
+      }
+    }
 
- items.sort((a, b) => {
- if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
- return a.displayName.localeCompare(b.displayName);
- });
- return items;
- }, [entries, prefix]);
+    items.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.displayName.localeCompare(b.displayName);
+    });
+    return items;
+  }, [entries, prefix]);
+  const archiveVirtualizer = useVirtualizer({
+    count: visible.length,
+    getScrollElement: () => archiveRef.current,
+    estimateSize: () => 40,
+    overscan: 8,
+    getItemKey: (index) => visible[index]?.name ?? index,
+  });
 
- if (visible.length === 0) {
- return (
- <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
- <Folder className="h-5 w-5 text-muted-foreground/30" />
- {t('files.manager.emptyDirectory')}
- </div>
- );
- }
+  if (visible.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12 text-mini text-muted-foreground">
+        <Folder className="h-5 w-5 text-muted-foreground/30" />
+        {t('files.manager.emptyDirectory')}
+      </div>
+    );
+  }
 
- return (
- <div className="deck-panel overflow-hidden">
- {/* Column header — same grid template as the rows */}
- <div className={`${ARCHIVE_GRID} border-b border-border/50 bg-surface-1 px-3 py-1.5 type-overline text-muted-foreground/70`}>
- <span>{t('files.list.name')}</span>
- <span className="text-right">{t('files.list.size')}</span>
- </div>
- {visible.map((item, index) => (
- <div
- key={item.name}
- className={`${ARCHIVE_GRID} px-3 py-1.5 transition-colors hover:bg-surface-1/40 ${
- index > 0 ? 'border-t border-border/40' : ''
- }`}
- onDoubleClick={() => item.isDirectory && onNavigate('/' + item.name)}
- >
- <button
- type="button"
- className="flex min-w-0 items-center gap-2 text-left text-data text-foreground disabled:cursor-default"
- onClick={() => item.isDirectory && onNavigate('/' + item.name)}
- disabled={!item.isDirectory}
- >
- {item.isDirectory ? (
- <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
- ) : (
- <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
- )}
- <span className="truncate">{item.displayName}</span>
- </button>
- <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
- {item.isDirectory ? '—' : formatSize(item.size)}
- </span>
- </div>
- ))}
- </div>
- );
+  return (
+    <div className="deck-panel overflow-hidden">
+      {/* Column header — same grid template as the rows */}
+      <div
+        className={`${ARCHIVE_GRID} border-b border-border/50 bg-surface-1 px-3 py-1.5 type-overline text-muted-foreground/70`}
+      >
+        <span>{t('files.list.name')}</span>
+        <span className="text-right">{t('files.list.size')}</span>
+      </div>
+      <div ref={archiveRef} className="max-h-[28rem] overflow-y-auto">
+        <div className="relative" style={{ height: archiveVirtualizer.getTotalSize() }}>
+          {archiveVirtualizer.getVirtualItems().map((virtualRow) => {
+            const item = visible[virtualRow.index];
+            if (!item) return null;
+            return (
+              <div
+                ref={archiveVirtualizer.measureElement}
+                data-index={virtualRow.index}
+                key={item.name}
+                className={`${ARCHIVE_GRID} absolute left-0 right-0 px-3 py-1.5 transition-colors hover:bg-surface-1/40 ${virtualRow.index > 0 ? 'border-t border-border/40' : ''}`}
+                style={{ transform: `translateY(${virtualRow.start}px)` }}
+                onDoubleClick={() => item.isDirectory && onNavigate('/' + item.name)}
+              >
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-2 text-left text-data text-foreground disabled:cursor-default"
+                  onClick={() => item.isDirectory && onNavigate('/' + item.name)}
+                  disabled={!item.isDirectory}
+                >
+                  {item.isDirectory ? (
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="truncate">{item.displayName}</span>
+                </button>
+                <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
+                  {item.isDirectory ? '—' : formatSize(item.size)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default FileManager;

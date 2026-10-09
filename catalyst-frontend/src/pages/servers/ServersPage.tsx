@@ -14,15 +14,7 @@ import {
   Segmented,
   StatusLed,
 } from '../../components/deck/primitives';
-import {
-  ChevronRight,
-  Globe,
-  Search,
-  Shield,
-  Terminal,
-  Users,
-  X,
-} from 'lucide-react';
+import { ChevronRight, Globe, Search, Shield, Terminal, Users, X } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -31,6 +23,7 @@ import {
   SelectValue,
 } from '../../components/ui/select';
 import { cn } from '@/lib/utils';
+import { useVirtualizer } from '@/csync';
 import { serverStatusLabel } from '../../utils/constants';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
@@ -62,11 +55,7 @@ const GRID = 'server-list-grid grid items-center gap-x-3 gap-y-1.5';
 function gameVersion(server: Server): string | undefined {
   const env = server.environment ?? {};
   return (
-    env.MC_VERSION ||
-    env.MINECRAFT_VERSION ||
-    env.GAME_VERSION ||
-    env.SERVER_VERSION ||
-    env.VERSION
+    env.MC_VERSION || env.MINECRAFT_VERSION || env.GAME_VERSION || env.SERVER_VERSION || env.VERSION
   );
 }
 
@@ -174,9 +163,7 @@ function ServerRow({
             <span className="truncate font-mono">
               {host}:{port}
             </span>
-            <span
-              className={cn('shrink-0 text-micro uppercase', stateTextClass(server.status))}
-            >
+            <span className={cn('shrink-0 text-micro uppercase', stateTextClass(server.status))}>
               {serverStatusLabel(t, server.status)}
             </span>
           </span>
@@ -192,19 +179,28 @@ function ServerRow({
           carries only the reading (bars + value) to stay dense and aligned */}
       <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={cpu} />
-        <Segmented muted={cpu == null} className={cn('min-w-[3rem] text-right', severityClass(cpu))}>
+        <Segmented
+          muted={cpu == null}
+          className={cn('min-w-[3rem] text-right', severityClass(cpu))}
+        >
           {cpu == null ? '—' : `${Math.round(cpu)}%`}
         </Segmented>
       </span>
       <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={ramPct} />
-        <Segmented muted={ramPct == null} className={cn('min-w-[3rem] text-right', severityClass(ramPct))}>
+        <Segmented
+          muted={ramPct == null}
+          className={cn('min-w-[3rem] text-right', severityClass(ramPct))}
+        >
           {ramPct == null ? '—' : `${Math.round(ramPct)}%`}
         </Segmented>
       </span>
       <span className="server-list-xl items-center justify-end gap-2">
         <Meter value={diskPct} />
-        <Segmented muted={diskPct == null} className={cn('min-w-[3rem] text-right', severityClass(diskPct))}>
+        <Segmented
+          muted={diskPct == null}
+          className={cn('min-w-[3rem] text-right', severityClass(diskPct))}
+        >
           {diskPct == null ? '—' : `${Math.round(diskPct)}%`}
         </Segmented>
       </span>
@@ -219,9 +215,7 @@ function ServerRow({
 
       {/* state */}
       <span className="server-list-md min-w-0 justify-end overflow-hidden">
-        <span
-          className={cn('truncate text-micro uppercase', stateTextClass(server.status))}
-        >
+        <span className={cn('truncate text-micro uppercase', stateTextClass(server.status))}>
           {serverStatusLabel(t, server.status)}
         </span>
       </span>
@@ -268,11 +262,14 @@ function ServersPage() {
   const user = useAuthStore((s) => s.user);
   const cols = useColumns();
   const clearCreateIntent = useCallback(() => {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete('action');
-      return next;
-    }, { replace: true });
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete('action');
+        return next;
+      },
+      { replace: true },
+    );
   }, [setSearchParams]);
 
   useEffect(() => {
@@ -291,8 +288,8 @@ function ServersPage() {
     () =>
       Boolean(
         user?.permissions?.includes('*') ||
-          user?.permissions?.includes('admin.read') ||
-          user?.permissions?.includes('admin.write'),
+        user?.permissions?.includes('admin.read') ||
+        user?.permissions?.includes('admin.write'),
       ),
     [user?.permissions],
   );
@@ -320,13 +317,47 @@ function ServersPage() {
     });
   }, [accessFiltered, search, status]);
 
+  const serverVirtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => 56,
+    overscan: 10,
+    getItemKey: (index) => filtered[index]?.id ?? index,
+  });
+
   const statusCounts = useMemo(() => {
     const counts = { running: 0, stopped: 0, transitioning: 0, issues: 0 };
     data?.forEach((server) => {
-      if (server.status === 'running') { counts.running += 1; return; }
-      if (server.status === 'stopped') { counts.stopped += 1; return; }
-      if (['installing', 'starting', 'stopping', 'transferring', 'cloning', 'restoring', 'creating_backup'].includes(server.status)) { counts.transitioning += 1; return; }
-      if (server.status === 'crashed' || server.status === 'suspended' || server.status === 'unhealthy' || server.status === 'error') { counts.issues += 1; }
+      if (server.status === 'running') {
+        counts.running += 1;
+        return;
+      }
+      if (server.status === 'stopped') {
+        counts.stopped += 1;
+        return;
+      }
+      if (
+        [
+          'installing',
+          'starting',
+          'stopping',
+          'transferring',
+          'cloning',
+          'restoring',
+          'creating_backup',
+        ].includes(server.status)
+      ) {
+        counts.transitioning += 1;
+        return;
+      }
+      if (
+        server.status === 'crashed' ||
+        server.status === 'suspended' ||
+        server.status === 'unhealthy' ||
+        server.status === 'error'
+      ) {
+        counts.issues += 1;
+      }
     });
     return counts;
   }, [data]);
@@ -343,10 +374,15 @@ function ServersPage() {
   const totalServers = data?.length ?? 0;
   const hasFilters = Boolean(search || status);
 
-  const moveFocus = (dir: 1 | -1) => {
-    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="listitem"]') ?? []);
-    const idx = rows.findIndex((row) => row === document.activeElement);
-    rows[idx + dir]?.focus();
+  const moveFocus = (index: number, dir: 1 | -1) => {
+    const target = index + dir;
+    if (target < 0 || target >= filtered.length) return;
+    serverVirtualizer.scrollToIndex(target, { align: 'auto' });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        listRef.current?.querySelector<HTMLElement>(`[data-server-index="${target}"]`)?.focus();
+      });
+    });
   };
 
   return (
@@ -358,11 +394,13 @@ function ServersPage() {
           <h1 className="font-display text-lg font-semibold leading-none tracking-tight text-foreground">
             {t('page.title')}
           </h1>
-
         </div>
 
         {canCreateServer && (
-          <CreateServerModal openOnIntent={searchParams.get('action') === 'create'} onIntentHandled={clearCreateIntent} />
+          <CreateServerModal
+            openOnIntent={searchParams.get('action') === 'create'}
+            onIntentHandled={clearCreateIntent}
+          />
         )}
       </header>
 
@@ -423,13 +461,24 @@ function ServersPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
-              {(['running', 'stopped', 'installing', 'starting', 'stopping', 'crashed', 'unhealthy', 'transferring', 'cloning', 'suspended'] as ServerStatus[]).map(
-                (value) => (
-                  <SelectItem key={value} value={value}>
-                    {serverStatusLabel(t, value)}
-                  </SelectItem>
-                ),
-              )}
+              {(
+                [
+                  'running',
+                  'stopped',
+                  'installing',
+                  'starting',
+                  'stopping',
+                  'crashed',
+                  'unhealthy',
+                  'transferring',
+                  'cloning',
+                  'suspended',
+                ] as ServerStatus[]
+              ).map((value) => (
+                <SelectItem key={value} value={value}>
+                  {serverStatusLabel(t, value)}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -446,7 +495,6 @@ function ServersPage() {
               {t('filters.clear')}
             </button>
           )}
-
         </div>
 
         {/* Column header — same grid as the rows, so columns always line up */}
@@ -469,7 +517,12 @@ function ServersPage() {
         {/* A refetch failure keeps any stale rows visible, but is never shown as an empty fleet. */}
         {isError && data && <TabErrorState onRetry={() => void refetch()} />}
         {/* Rows */}
-        <div ref={listRef} role="list" aria-label={t('page.title')} className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25">
+        <div
+          ref={listRef}
+          role="list"
+          aria-label={t('page.title')}
+          className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25"
+        >
           {isLoading ? (
             <div role="status" aria-label={t('page.title')}>
               {Array.from({ length: 6 }).map((_, index) => (
@@ -528,22 +581,47 @@ function ServersPage() {
               }
             />
           ) : (
-            filtered.map((server, index) => (
-              <div
-                key={server.id}
-                className={cn(index > 0 && 'border-t border-border/40')}
-              >
-                <ServerRow server={server} onMoveFocus={moveFocus} />
-              </div>
-            ))
+            <div className="relative" style={{ height: serverVirtualizer.getTotalSize() }}>
+              {serverVirtualizer.getVirtualItems().map((item) => {
+                const server = filtered[item.index];
+                if (!server) return null;
+                return (
+                  <div
+                    key={item.key}
+                    ref={serverVirtualizer.measureElement}
+                    data-index={item.index}
+                    className={cn(
+                      'absolute left-0 right-0',
+                      item.index > 0 && 'border-t border-border/40',
+                    )}
+                    style={{ transform: `translateY(${item.start}px)` }}
+                  >
+                    <div data-server-index={item.index}>
+                      <ServerRow
+                        server={server}
+                        onMoveFocus={(dir) => moveFocus(item.index, dir)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
         {/* Footer strip — legend + keymap, the deck's bottom edge */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border/50 bg-surface-1/40 px-3 py-1.5">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <LegendCount tone="go" value={statusCounts.running} label={t('common:status.running')} />
-            <LegendCount tone="idle" value={statusCounts.stopped} label={t('common:status.stopped')} />
+            <LegendCount
+              tone="go"
+              value={statusCounts.running}
+              label={t('common:status.running')}
+            />
+            <LegendCount
+              tone="idle"
+              value={statusCounts.stopped}
+              label={t('common:status.stopped')}
+            />
             <LegendCount tone="alarm" value={statusCounts.issues} label={t('page.stats.issues')} />
           </div>
           <div className="hidden items-center gap-4 font-mono text-micro text-muted-foreground/60 sm:flex">
@@ -563,15 +641,7 @@ function ServersPage() {
   );
 }
 
-function LegendCount({
-  tone,
-  value,
-  label,
-}: {
-  tone: Tone;
-  value: number;
-  label: string;
-}) {
+function LegendCount({ tone, value, label }: { tone: Tone; value: number; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
       <StatusLed tone={value > 0 ? tone : 'idle'} />
@@ -606,12 +676,12 @@ function RailTab({
         active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
       )}
     >
-      {active && (
-        <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />
-      )}
+      {active && <span className="absolute inset-x-1 bottom-0 h-[2px] bg-primary" aria-hidden />}
       <span className="shrink-0">{icon}</span>
       <span className="min-w-0 truncate">{label}</span>
-      <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground/80">{count}</span>
+      <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground/80">
+        {count}
+      </span>
     </button>
   );
 }

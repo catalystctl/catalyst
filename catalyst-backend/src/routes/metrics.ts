@@ -6,6 +6,97 @@ import { resolveServerPermissions } from '../lib/permissions-catalog';
 import { SimpleCache } from '../lib/cache.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
+import { Prisma } from "@prisma/client";
+
+type ServerMetricBucket = {
+  bucket: number;
+  count: bigint;
+  avgCpu: number | null;
+  maxMemory: number | null;
+  avgDiskIo: number | null;
+  maxDiskUsage: number | null;
+  newestRx: bigint | null;
+  newestTx: bigint | null;
+  newestTimestamp: Date | null;
+};
+
+type NodeMetricBucket = {
+  bucket: number;
+  count: bigint;
+  avgCpu: number | null;
+  maxMemory: number | null;
+  avgDiskUsage: number | null;
+  avgMemoryTotal: number | null;
+  avgDiskTotal: number | null;
+  newestRx: bigint | null;
+  newestTx: bigint | null;
+  newestTimestamp: Date | null;
+};
+
+async function queryServerMetricBuckets(
+  serverId: string,
+  since: Date,
+  until: Date,
+  bucketCount: number,
+  bucketSizeMs: number,
+) {
+  return prisma.$queryRaw<ServerMetricBucket[]>(Prisma.sql`
+    WITH buckets AS (
+      SELECT generate_series(0, ${bucketCount - 1}) AS bucket
+    )
+    SELECT
+      b.bucket::int AS bucket,
+      COUNT(m.id)::bigint AS count,
+      AVG(m."cpuPercent")::float8 AS "avgCpu",
+      MAX(m."memoryUsageMb")::int AS "maxMemory",
+      AVG(m."diskIoMb")::float8 AS "avgDiskIo",
+      MAX(m."diskUsageMb")::int AS "maxDiskUsage",
+      (array_agg(m."networkRxBytes" ORDER BY m.timestamp DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS "newestRx",
+      (array_agg(m."networkTxBytes" ORDER BY m.timestamp DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS "newestTx",
+      MAX(m.timestamp) AS "newestTimestamp"
+    FROM buckets b
+    LEFT JOIN "ServerMetrics" m
+      ON m."serverId" = ${serverId}
+       AND m.timestamp >= CAST(${since} AS timestamp) + (b.bucket * ${bucketSizeMs}) * interval '1 millisecond'
+       AND m.timestamp < CAST(${since} AS timestamp) + ((b.bucket + 1) * ${bucketSizeMs}) * interval '1 millisecond'
+      AND m.timestamp <= ${until}
+    GROUP BY b.bucket
+    ORDER BY b.bucket
+  `);
+}
+
+async function queryNodeMetricBuckets(
+  nodeId: string,
+  since: Date,
+  until: Date,
+  bucketCount: number,
+  bucketSizeMs: number,
+) {
+  return prisma.$queryRaw<NodeMetricBucket[]>(Prisma.sql`
+    WITH buckets AS (
+      SELECT generate_series(0, ${bucketCount - 1}) AS bucket
+    )
+    SELECT
+      b.bucket::int AS bucket,
+      COUNT(m.id)::bigint AS count,
+      AVG(m."cpuPercent")::float8 AS "avgCpu",
+      MAX(m."memoryUsageMb")::int AS "maxMemory",
+      AVG(m."diskUsageMb")::float8 AS "avgDiskUsage",
+      AVG(m."memoryTotalMb")::float8 AS "avgMemoryTotal",
+      AVG(m."diskTotalMb")::float8 AS "avgDiskTotal",
+      (array_agg(m."networkRxBytes" ORDER BY m.timestamp DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS "newestRx",
+      (array_agg(m."networkTxBytes" ORDER BY m.timestamp DESC) FILTER (WHERE m.id IS NOT NULL))[1] AS "newestTx",
+      MAX(m.timestamp) AS "newestTimestamp"
+    FROM buckets b
+    LEFT JOIN "NodeMetrics" m
+      ON m."nodeId" = ${nodeId}
+       AND m.timestamp >= CAST(${since} AS timestamp) + (b.bucket * ${bucketSizeMs}) * interval '1 millisecond'
+       AND m.timestamp < CAST(${since} AS timestamp) + ((b.bucket + 1) * ${bucketSizeMs}) * interval '1 millisecond'
+      AND m.timestamp <= ${until}
+    GROUP BY b.bucket
+    ORDER BY b.bucket
+  `);
+}
 
 // History payloads are polled frequently per open server tab and each miss
 // scans up to 10k metric rows. TTL is short (time-series data: TTL-only,
@@ -99,106 +190,22 @@ export async function metricsRoutes(app: FastifyInstance) {
         return reply.send(cached as string);
       }
 
-      // fetchLimit: get more raw points than `maxRecords` so bucketization uses
-      // data across the whole requested window instead of only the newest N rows.
-      const fetchLimit = Math.min(10000, Math.max(maxRecords * 25, maxRecords));
-      const queryStart = Date.now();
-      const metrics = await prisma.serverMetrics.findMany({
-        where: {
-          serverId,
-          timestamp: { gte: since },
-        },
-        orderBy: { timestamp: "desc" },
-        take: fetchLimit,
-        select: {
-          cpuPercent: true,
-          memoryUsageMb: true,
-          diskIoMb: true,
-          diskUsageMb: true,
-          networkRxBytes: true,
-          networkTxBytes: true,
-          timestamp: true,
-        },
-      });
-      app.log.debug({ serverId, queryMs: Date.now() - queryStart }, "Metrics query time");
-
-      // Return early if no metrics
-      if (metrics.length === 0) {
-        return reply.send(serialize({
-          success: true,
-          data: {
-            latest: null,
-            averages: null,
-            history: [],
-            count: 0,
-          },
-        }));
-      }
-
-      // Aggregate into evenly spaced buckets across the requested time range.
-      // This ensures long time windows (eg 24h, 7d) expose spikes (we use max for memory)
-      // instead of returning only the last N rows which can bias recent data.
       const nowMs = Date.now();
       const sinceMs = since.getTime();
       const bucketCount = Math.max(1, maxRecords);
       const rangeMs = Math.max(1, nowMs - sinceMs);
       const bucketSizeMs = Math.ceil(rangeMs / bucketCount);
-
-      type Bucket = {
-        count: number;
-        sumCpu: number;
-        maxMemory: number | null;
-        sumDiskIo: number;
-        maxDiskUsage: number | null;
-        firstNetRx: bigint | null;
-        lastNetRx: bigint | null;
-        firstNetTx: bigint | null;
-        lastNetTx: bigint | null;
-        lastTimestamp: number | null;
-      };
-
-      const buckets: Bucket[] = Array.from({ length: bucketCount }, () => ({
-        count: 0,
-        sumCpu: 0,
-        maxMemory: null,
-        sumDiskIo: 0,
-        maxDiskUsage: null,
-        firstNetRx: null,
-        lastNetRx: null,
-        firstNetTx: null,
-        lastNetTx: null,
-        lastTimestamp: null,
-      }));
-
-      // metrics returned in descending order - iterate and place into buckets
-      for (const m of metrics) {
-        const t = m.timestamp.getTime();
-        let idx = Math.floor((t - sinceMs) / bucketSizeMs);
-        if (idx < 0) idx = 0;
-        if (idx >= bucketCount) idx = bucketCount - 1;
-        const b = buckets[idx];
-        b.count += 1;
-        b.sumCpu += m.cpuPercent;
-        b.maxMemory = b.maxMemory === null ? m.memoryUsageMb : Math.max(b.maxMemory, m.memoryUsageMb);
-        b.sumDiskIo += m.diskIoMb ?? 0;
-        b.maxDiskUsage = b.maxDiskUsage === null ? m.diskUsageMb : Math.max(b.maxDiskUsage, m.diskUsageMb);
-
-        const rx = BigInt(Math.max(0, Number(m.networkRxBytes ?? 0)));
-        const tx = BigInt(Math.max(0, Number(m.networkTxBytes ?? 0)));
-        if (b.firstNetRx === null) b.firstNetRx = rx;
-        b.lastNetRx = rx;
-        if (b.firstNetTx === null) b.firstNetTx = tx;
-        b.lastNetTx = tx;
-
-        b.lastTimestamp = Math.max(b.lastTimestamp ?? 0, t);
-      }
+      const [buckets, latestRaw] = await Promise.all([
+        queryServerMetricBuckets(serverId, since, new Date(nowMs), bucketCount, bucketSizeMs),
+        prisma.serverMetrics.findFirst({ where: { serverId, timestamp: { gte: since, lte: new Date(nowMs) } }, orderBy: { timestamp: "desc" }, select: { cpuPercent: true, memoryUsageMb: true, diskIoMb: true, diskUsageMb: true, networkRxBytes: true, networkTxBytes: true, timestamp: true } }),
+      ]);
 
       // Build normalized history array - chronological order with network deltas
       let prevSrvRx = BigInt(0);
       let prevSrvTx = BigInt(0);
       let prevSrvTs = 0;
       const normalizedMetrics = buckets.map((b, i) => {
-        if (b.count === 0) {
+        if (b.count === BigInt(0)) {
           return {
             cpuPercent: null,
             memoryUsageMb: null,
@@ -209,14 +216,11 @@ export async function metricsRoutes(app: FastifyInstance) {
             timestamp: new Date(sinceMs + i * bucketSizeMs),
           };
         }
-        const cpu = Math.round((b.sumCpu / b.count) * 10) / 10;
-        const diskIo = Math.round(b.sumDiskIo / b.count);
-        // Newest sample per bucket: metrics arrive newest-first, so firstNet
-        // holds the newest counter in the bucket. Deltas clamp at 0 so a
-        // container restart (counter reset) never reports negative MB/s.
-        const rx = b.firstNetRx ?? BigInt(0);
-        const tx = b.firstNetTx ?? BigInt(0);
-        const bTs = b.lastTimestamp ?? (sinceMs + i * bucketSizeMs);
+        const cpu = Math.round((Number(b.avgCpu) * 10)) / 10;
+        const diskIo = Math.round(Number(b.avgDiskIo ?? 0));
+        const rx = b.newestRx ?? BigInt(0);
+        const tx = b.newestTx ?? BigInt(0);
+        const bTs = b.newestTimestamp?.getTime() ?? (sinceMs + i * bucketSizeMs);
         const elapsedSec = prevSrvTs > 0 ? Math.max(1, (bTs - prevSrvTs) / 1000) : 0;
         const rxRate = elapsedSec > 0 && prevSrvRx > BigInt(0)
           ? Math.max(0, Math.round(Number(rx - prevSrvRx) / elapsedSec / (1024 * 1024) * 100) / 100)
@@ -250,7 +254,6 @@ export async function metricsRoutes(app: FastifyInstance) {
         : null;
 
       // Get latest raw metric (most recent by timestamp)
-      const latestRaw = metrics[0] || null;
       const latest = latestRaw
         ? {
             cpuPercent: latestRaw.cpuPercent,
@@ -263,11 +266,12 @@ export async function metricsRoutes(app: FastifyInstance) {
           }
         : null;
 
+      const hasSamples = buckets.some((bucket) => bucket.count > BigInt(0));
       const payload = {
         latest,
         averages: avg,
-        history: normalizedMetrics, // chronological
-        count: normalizedMetrics.length,
+        history: hasSamples ? normalizedMetrics : [], // chronological
+        count: hasSamples ? normalizedMetrics.length : 0,
       };
       // Cache + serve the fully serialized response string so warm hits skip
       // the BigInt-safe serialize() round trip AND Fastify's stringify.
@@ -436,72 +440,15 @@ export async function metricsRoutes(app: FastifyInstance) {
       const maxRecords = Number.isFinite(parsedNodeLimit) ? Math.min(Math.max(parsedNodeLimit, 1), 1000) : 100;
       const since = new Date(Date.now() - hoursBack * 60 * 60 * 1000);
 
-      const fetchNodeLimit = Math.min(10000, Math.max(maxRecords * 25, maxRecords));
-      const rawMetrics = await prisma.nodeMetrics.findMany({
-        where: {
-          nodeId,
-          timestamp: { gte: since },
-        },
-        orderBy: { timestamp: "desc" },
-        take: fetchNodeLimit,
-      });
-
-      // Bucket into evenly-spaced intervals (same pattern as server metrics)
       const nowMs = Date.now();
       const sinceMs = since.getTime();
       const bucketCount = Math.max(1, maxRecords);
       const rangeMs = Math.max(1, nowMs - sinceMs);
       const bucketSizeMs = Math.ceil(rangeMs / bucketCount);
-
-      type NodeBucket = {
-        count: number;
-        sumCpu: number;
-        maxMemory: number | null;
-        sumDiskUsage: number;
-        sumMemoryTotal: number;
-        sumDiskTotal: number;
-        firstNetRx: bigint | null;
-        lastNetRx: bigint | null;
-        firstNetTx: bigint | null;
-        lastNetTx: bigint | null;
-        lastTimestamp: number | null;
-      };
-
-      const buckets: NodeBucket[] = Array.from({ length: bucketCount }, () => ({
-        count: 0,
-        sumCpu: 0,
-        maxMemory: null,
-        sumDiskUsage: 0,
-        sumMemoryTotal: 0,
-        sumDiskTotal: 0,
-        firstNetRx: null,
-        lastNetRx: null,
-        firstNetTx: null,
-        lastNetTx: null,
-        lastTimestamp: null,
-      }));
-
-      // rawMetrics is descending order — place into buckets
-      for (const m of rawMetrics) {
-        const t = m.timestamp.getTime();
-        let idx = Math.floor((t - sinceMs) / bucketSizeMs);
-        if (idx < 0) idx = 0;
-        if (idx >= bucketCount) idx = bucketCount - 1;
-        const b = buckets[idx];
-        b.count += 1;
-        b.sumCpu += m.cpuPercent;
-        b.maxMemory = b.maxMemory === null ? m.memoryUsageMb : Math.max(b.maxMemory, m.memoryUsageMb);
-        b.sumDiskUsage += m.diskUsageMb;
-        b.sumMemoryTotal += m.memoryTotalMb;
-        b.sumDiskTotal += m.diskTotalMb;
-        const rx = BigInt(Math.max(0, Number(m.networkRxBytes ?? 0)));
-        const tx = BigInt(Math.max(0, Number(m.networkTxBytes ?? 0)));
-        if (b.firstNetRx === null) b.firstNetRx = rx;
-        b.lastNetRx = rx;
-        if (b.firstNetTx === null) b.firstNetTx = tx;
-        b.lastNetTx = tx;
-        b.lastTimestamp = Math.max(b.lastTimestamp ?? 0, t);
-      }
+      const [buckets, latestRaw] = await Promise.all([
+        queryNodeMetricBuckets(nodeId, since, new Date(nowMs), bucketCount, bucketSizeMs),
+        prisma.nodeMetrics.findFirst({ where: { nodeId, timestamp: { gte: since, lte: new Date(nowMs) } }, orderBy: { timestamp: "desc" } }),
+      ]);
 
       // Build chronological history with network deltas (MB/s rates derived
       // from cumulative byte counters).
@@ -509,8 +456,8 @@ export async function metricsRoutes(app: FastifyInstance) {
       let prevNetTx = BigInt(0);
       let prevTimestamp = 0;
       const history = buckets.map((b, i) => {
-        const ts = b.lastTimestamp ?? (sinceMs + i * bucketSizeMs);
-        if (b.count === 0) {
+        const ts = b.newestTimestamp?.getTime() ?? (sinceMs + i * bucketSizeMs);
+        if (b.count === BigInt(0)) {
           return {
             cpuPercent: null,
             memoryUsageMb: null,
@@ -522,10 +469,9 @@ export async function metricsRoutes(app: FastifyInstance) {
             timestamp: new Date(sinceMs + i * bucketSizeMs),
           };
         }
-        const cpu = Math.round((b.sumCpu / b.count) * 10) / 10;
-        // Newest counter per bucket; clamp resets at 0.
-        const rx = b.firstNetRx ?? BigInt(0);
-        const tx = b.firstNetTx ?? BigInt(0);
+        const cpu = Math.round(Number(b.avgCpu ?? 0) * 10) / 10;
+        const rx = b.newestRx ?? BigInt(0);
+        const tx = b.newestTx ?? BigInt(0);
         const elapsedSec = prevTimestamp > 0 ? Math.max(1, (ts - prevTimestamp) / 1000) : 0;
         const rxRate = elapsedSec > 0 && prevNetRx > BigInt(0)
           ? Math.max(0, Number(rx - prevNetRx) / elapsedSec / (1024 * 1024))
@@ -539,9 +485,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         return {
           cpuPercent: cpu,
           memoryUsageMb: b.maxMemory as number,
-          memoryTotalMb: Math.round(b.sumMemoryTotal / b.count),
-          diskUsageMb: Math.round(b.sumDiskUsage / b.count),
-          diskTotalMb: Math.round(b.sumDiskTotal / b.count),
+          memoryTotalMb: Math.round(Number(b.avgMemoryTotal ?? 0)),
+          diskUsageMb: Math.round(Number(b.avgDiskUsage ?? 0)),
+          diskTotalMb: Math.round(Number(b.avgDiskTotal ?? 0)),
           networkRxBytes: Math.round(rxRate * 100) / 100,
           networkTxBytes: Math.round(txRate * 100) / 100,
           timestamp: new Date(ts),
@@ -558,7 +504,6 @@ export async function metricsRoutes(app: FastifyInstance) {
       } : null;
 
       // Latest is the most recent raw point
-      const latestRaw = rawMetrics[0] || null;
       const latest = latestRaw
         ? {
             cpuPercent: latestRaw.cpuPercent,

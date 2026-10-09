@@ -1,6 +1,4 @@
-import { Worker } from 'worker_threads';
-import path from 'path';
-import { describeError } from '../../utils/describe-error.js';
+import type { Worker } from 'worker_threads';
 import type { PluginManifest } from '../types';
 
 interface PendingRequest {
@@ -22,49 +20,12 @@ export class PluginWorkerHost {
   ) {}
 
   async start(): Promise<void> {
-    const entryPath = this.manifest.backend?.entry
-      ? path.resolve(this.pluginDir, this.manifest.backend.entry)
-      : null;
-
-    if (!entryPath) {
-      throw new Error('Plugin has no backend entry point');
-    }
-
-    this.worker = new Worker(
-      new URL('./worker.ts', import.meta.url),
-      {
-        workerData: {
-          manifest: this.manifest,
-          entryPath,
-        },
-        resourceLimits: {
-          maxOldGenerationSizeMb: 128,
-          maxYoungGenerationSizeMb: 32,
-        },
-      },
+    // The worker currently cannot proxy the host-side PluginBackendContext.
+    // Refuse to start rather than allowing a plugin to appear isolated while
+    // silently losing host API calls (or falling back in-process elsewhere).
+    throw new Error(
+      'Isolated plugin execution is unavailable: worker host IPC does not implement PluginBackendContext',
     );
-
-    const worker = this.worker;
-    worker.on('message', (msg: any) => this.handleMessage(msg));
-    worker.on('error', (err: unknown) => this.handleError(err instanceof Error ? err : new Error(describeError(err))));
-    worker.on('exit', (code) => this.handleExit(code));
-
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Worker initialization timed out')), 30000);
-      const handler = (msg: any) => {
-        if (msg.type === 'initialized') {
-          clearTimeout(timeout);
-          this.initialized = true;
-          worker.removeListener('message', handler);
-          resolve();
-        } else if (msg.type === 'error') {
-          clearTimeout(timeout);
-          worker.removeListener('message', handler);
-          reject(new Error(msg.error));
-        }
-      };
-      worker.on('message', handler);
-    });
   }
 
   async callMethod(method: string, args: any[] = [], timeoutMs = 10000): Promise<any> {

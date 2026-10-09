@@ -21,7 +21,11 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     teardownTimeout: 30000,
-    isolate: false,
+    // Keep each test file's module graph isolated so focused vi.mock() calls
+    // cannot leak a stubbed Prisma client into later DB-backed suites.
+    // Sequential execution still prevents shared database fixtures from
+    // stomping on one another.
+    isolate: true,
     // Vitest 4 removed poolOptions; keep sequential single-worker runs so
     // DB-backed suites do not stomp on shared fixtures.
     pool: 'forks',

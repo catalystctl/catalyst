@@ -182,6 +182,9 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         if (result.body) {
           reply.type(result.contentType || "application/octet-stream");
           reply.send(result.body);
+        } else if (result.stream) {
+          reply.type(result.contentType || "application/octet-stream");
+          reply.send(result.stream);
         } else {
           apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, "No file data received from agent");
         }

@@ -4,6 +4,7 @@ import { serialize } from "../../utils/serialize.js";
 import { canAccessServer } from './_helpers.js';
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
+import { Prisma } from "@prisma/client";
 
 export async function serverStatsRoutes(app: FastifyInstance) {
   app.get(
@@ -53,41 +54,47 @@ export async function serverStatsRoutes(app: FastifyInstance) {
       // Parse interval (seconds) for downsampling
       const interval = Math.max(1, Math.min(Number(query.interval) || 60, 3600));
 
-      const stats = await prisma.serverStat.findMany({
-        where: {
-          serverId,
-          createdAt: { gte: from, lte: to },
-        },
-        orderBy: { createdAt: "desc" },
-        take: 10000,
-      });
-      stats.reverse();
-
-      // Downsample: take one point per interval bucket
-      const downsampled: typeof stats = [];
-      let bucketStart = from.getTime();
-      const intervalMs = interval * 1000;
-      let bucket: typeof stats = [];
-
-      for (const stat of stats) {
-        const t = stat.createdAt.getTime();
-        while (t >= bucketStart + intervalMs && bucket.length) {
-          downsampled.push(bucket[0]); // keep first point in bucket
-          bucket = [];
-          bucketStart += intervalMs;
-        }
-        bucket.push(stat);
-      }
-      if (bucket.length) {
-        downsampled.push(bucket[0]);
-      }
+      const bucketRows = await prisma.$queryRaw<Array<{
+        id: string;
+        serverId: string;
+        cpuPercent: number;
+        memoryUsed: bigint;
+        memoryLimit: bigint;
+        diskUsed: bigint | null;
+        netRx: number | null;
+        netTx: number | null;
+        blockRead: number | null;
+        blockWrite: number | null;
+        createdAt: Date;
+        totalRaw: bigint;
+      }>>(Prisma.sql`
+        WITH ranked AS (
+          SELECT s.*, COUNT(*) OVER () AS "totalRaw",
+            ROW_NUMBER() OVER (
+              PARTITION BY FLOOR(EXTRACT(EPOCH FROM (s."createdAt" - ${from})) / ${interval})
+              ORDER BY s."createdAt" ASC
+            ) AS row_number
+          FROM "ServerStat" s
+          WHERE s."serverId" = ${serverId}
+            AND s."createdAt" >= ${from}
+            AND s."createdAt" <= ${to}
+        )
+        SELECT "id", "serverId", "cpuPercent", "memoryUsed", "memoryLimit", "diskUsed",
+          "netRx", "netTx", "blockRead", "blockWrite", "createdAt", "totalRaw"
+        FROM ranked
+        WHERE row_number = 1
+        ORDER BY "createdAt" ASC
+      `);
+      const totalRaw = bucketRows.length > 0 ? Number(bucketRows[0].totalRaw) : 0;
 
       // BigInt byte columns serialize to strings via serialize(); keep the
       // wire shape numeric (bytes fit safely in a JS number well past TiBs)
       // so charts do not flatline or string-concat.
       const toNum = (v: unknown) => (typeof v === "bigint" ? Number(v) : (v as number));
-      const data = downsampled.map((s) => ({
-        ...s,
+      const data = bucketRows.map((s) => {
+        const { totalRaw: _totalRaw, ...stat } = s;
+        return {
+        ...stat,
         memoryUsed: toNum((s as unknown as Record<string, unknown>).memoryUsed),
         memoryLimit: toNum((s as unknown as Record<string, unknown>).memoryLimit),
         diskUsed:
@@ -95,13 +102,14 @@ export async function serverStatsRoutes(app: FastifyInstance) {
           (s as unknown as Record<string, unknown>).diskUsed === undefined
             ? null
             : toNum((s as unknown as Record<string, unknown>).diskUsed),
-      }));
+        };
+      });
 
       reply.send(
         serialize({
           success: true,
           data,
-          meta: { from: from.toISOString(), to: to.toISOString(), interval, totalRaw: stats.length, returned: data.length },
+          meta: { from: from.toISOString(), to: to.toISOString(), interval, totalRaw, returned: data.length },
         }),
       );
     }

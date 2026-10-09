@@ -27,6 +27,7 @@ import { decideServerAccess, isFullAdminRole } from '../lib/server-access.js';
 import { openSseStream } from '../utils/sse.js';
 import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
+import { requestImmediateStatsCoalesced } from '../lib/event-bus.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 
@@ -391,7 +392,10 @@ export function sseEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGatewa
       // If this is the first SSE subscriber for this server, request live
       // metrics immediately so the user doesn't wait 30s for the next heartbeat.
       if (wasFirstSubscriber && serverNodeId) {
-        wsGateway.sendToAgent(serverNodeId, { type: 'request_immediate_stats', serverId });
+        const nodeId = serverNodeId;
+        void requestImmediateStatsCoalesced(serverNodeId, serverId, () =>
+          wsGateway.sendToAgent(nodeId, { type: 'request_immediate_stats', serverId }),
+        );
       }
 
       // Keep-alive heartbeat

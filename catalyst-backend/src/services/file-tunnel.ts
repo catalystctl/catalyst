@@ -3,6 +3,7 @@ import fs from "fs";
 import { promises as fsp } from "fs";
 import os from "os";
 import path from "path";
+import { Readable } from "stream";
 import type { Logger } from "pino";
 import { getSecuritySettings } from "./mailer";
 import { prisma } from "../db.js";
@@ -27,6 +28,9 @@ export interface FileTunnelResponse {
   contentType?: string;
   /** Streamed binary body (for download responses) */
   body?: Buffer;
+  /** Durable streamed body; callers own consumption and close the stream. */
+  stream?: fs.ReadStream;
+  bodySize?: number;
 }
 
 interface PendingRequest {
@@ -88,6 +92,60 @@ export class FileTunnelService {
   }
   createStagingPath(): string {
     return path.join(this.tempDir, `${randomUUID()}.bin`);
+  }
+
+  /** Spool an agent response without retaining its bytes in memory. */
+  async stageResponseStream(
+    requestId: string,
+    nodeId: string,
+    source: Readable,
+    maxBytes: number,
+    metadata: Omit<FileTunnelResponse, "requestId" | "body" | "stream" | "bodySize">,
+  ): Promise<boolean> {
+    const pending = this.pending.get(requestId);
+    if (!pending || pending.nodeId !== nodeId) {
+      source.destroy();
+      return false;
+    }
+    const filePath = path.join(this.tempDir, `response-${requestId}.bin`);
+    let size = 0;
+    try {
+      await fsp.mkdir(this.tempDir, { recursive: true });
+      const handle = await fsp.open(filePath, "wx");
+      try {
+        for await (const value of source) {
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+          size += chunk.length;
+          if (size > maxBytes) throw new Error("File tunnel response exceeds maximum size");
+          await handle.write(chunk);
+        }
+      } finally {
+        await handle.close();
+      }
+      const stream = fs.createReadStream(filePath);
+      const remove = () => {
+        stream.removeListener("close", remove);
+        stream.removeListener("error", remove);
+        void fsp.unlink(filePath).catch(() => {});
+      };
+      stream.once("close", remove);
+      stream.once("error", remove);
+      return this.resolveRequest(requestId, nodeId, { requestId, ...metadata, stream, bodySize: size });
+    } catch (error) {
+      source.destroy(error instanceof Error ? error : undefined);
+      await fsp.unlink(filePath).catch(() => {});
+      this.rejectRequest(requestId, nodeId, error instanceof Error ? error : new Error("Failed to stage response"));
+      return false;
+    }
+  }
+
+  private rejectRequest(requestId: string, nodeId: string, error: Error): void {
+    const pending = this.pending.get(requestId);
+    if (!pending || pending.nodeId !== nodeId) return;
+    clearTimeout(pending.timer);
+    this.pending.delete(requestId);
+    this.decrementPending(nodeId);
+    pending.reject(error);
   }
 
   /**

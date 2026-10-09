@@ -360,6 +360,16 @@ export class PluginLoader {
       const manifestData = await fs.readFile(manifestPath, 'utf-8');
       const manifest = validateManifest(JSON.parse(manifestData)) as PluginManifest;
 
+      // Isolation is fail-closed until the worker protocol can proxy the full
+      // PluginBackendContext. In particular, do not import plugin code before
+      // rejecting this declaration: importing it in the panel process would
+      // silently violate the manifest's isolation contract.
+      if (manifest.runtime === 'isolated') {
+        throw new Error(
+          'Plugin declares runtime="isolated", but isolated plugin execution is unavailable; refusing to load it',
+        );
+      }
+
       // Check version compatibility
       if (!isVersionCompatible(manifest.catalystVersion, CATALYST_VERSION)) {
         throw new Error(
@@ -501,24 +511,6 @@ export class PluginLoader {
         if (loadedPlugin.backend?.onLoad) {
           await loadedPlugin.backend.onLoad(context);
         }
-      }
-
-      // ── Isolated runtime: intentionally disabled ─────────────────────────
-      // WHY: the PluginWorkerHost / worker.ts IPC path is incomplete — the
-      // worker never handles host `call` messages after init, so isolated
-      // plugins cannot invoke host APIs and appear "loaded" while broken.
-      // Until that contract is finished, force in-process (legacy) execution
-      // even when the manifest requests `runtime: "isolated"`. Do NOT spawn
-      // the worker: a half-started isolate is worse than no isolation claim.
-      if (manifest.runtime === 'isolated') {
-        this.logger.warn(
-          { plugin: manifest.name },
-          'Plugin requested runtime=isolated, but isolated worker IPC is not production-ready; forcing in-process runtime',
-        );
-        // Keep workerHost unset so lifecycle hooks use loadedPlugin.backend.
-        loadedPlugin.workerHost = undefined;
-        // Normalize manifest so downstream code does not branch on isolated.
-        (manifest as { runtime?: string }).runtime = 'legacy';
       }
 
       // ── Apply middleware wrapping to all routes ─────────────────────────

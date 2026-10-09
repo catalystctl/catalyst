@@ -152,10 +152,10 @@ const app = Fastify({
 app.addContentTypeParser(
 	"application/octet-stream",
 	(_request, payload, done) => {
-		const chunks: Buffer[] = [];
-		payload.on("data", (chunk: Buffer) => chunks.push(chunk));
-		payload.on("end", () => done(null, Buffer.concat(chunks)));
-		payload.on("error", done);
+		// Keep the body as a readable stream. Consumers which need a durable body
+		// (file tunnel responses) spool it to disk with their own byte limit. The
+		// old parser concatenated arbitrarily large agent responses in the heap.
+		done(null, payload);
 	},
 );
 
@@ -904,8 +904,12 @@ await app.register(settingsRoutes, { prefix: "/api/settings" });
 				}
 				if (url.pathname === "/api/auth/sign-out") {
 					setCookies.push(
-						"better-auth-passkey=; Max-Age=0; Path=/; SameSite=Strict; HttpOnly",
+						"better-auth-passkey=; Max-Age=0; Path=/; SameSite=Lax; HttpOnly",
 					);
+					// Keep the session cache coherent even if Better Auth's sign-out
+					// response was served by another worker or its cookie was stale.
+					const { invalidateAuthSessionCache } = await import("./lib/auth-session-cache.js");
+					invalidateAuthSessionCache();
 				}
 				if (setCookies.length > 0) {
 					setCookies.forEach((cookie) => reply.header("set-cookie", cookie));

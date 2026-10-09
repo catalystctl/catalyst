@@ -683,6 +683,10 @@ export async function nodeRoutes(app: FastifyInstance) {
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!ensurePermission(request, reply, "node.read")) return;
 			const { nodeId } = request.params as { nodeId: string };
+			const { page, limit } = request.query as { page?: number | string; limit?: number | string };
+			const paginated = page !== undefined || limit !== undefined;
+			const pageNumber = Math.max(1, Number(page ?? 1) || 1);
+			const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
 
 			// Admin bits see every node; everyone else needs node access.
 			if (!(await hasNodeScope(request, nodeId, "read"))) {
@@ -694,6 +698,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				omit: { secret: true },
 				include: {
 					servers: {
+						...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
 						select: {
 							id: true,
 							uuid: true,
@@ -707,8 +712,14 @@ export async function nodeRoutes(app: FastifyInstance) {
 			if (!node) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
-
-			reply.send(serialize({ success: true, data: node }));
+			const total = paginated ? await prisma.server.count({ where: { nodeId } }) : 0;
+			reply.send(serialize({
+				success: true,
+				data: node,
+				...(paginated
+					? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+					: {}),
+			}));
 		},
 	);
 

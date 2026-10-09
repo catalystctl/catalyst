@@ -77,7 +77,7 @@ export async function apiKeyRoutes(app: FastifyInstance) {
   // ── POST / ──
   // Create a new API key with optional permission scoping.
   app.post("/api/admin/api-keys", {
-    schema: { summary: "Create an API key", tags: ["API keys"], body: {}, response: { 200: { type: "object" }, 403: { type: "object" }, 500: { type: "object" } } },
+     schema: { summary: "Create an API key", tags: ["API keys"], body: {}, response: { 200: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 500: { type: "object", additionalProperties: true } } },
     preHandler: [authenticate, requireApiKeyWrite],
   }, async (request: any, reply) => {
     try {

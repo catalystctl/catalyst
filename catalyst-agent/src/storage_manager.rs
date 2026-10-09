@@ -1507,4 +1507,75 @@ mod tests {
         assert_eq!(events.len(), 1);
         assert_eq!(events[0]["type"], "backup_delete_complete");
     }
+
+    #[tokio::test]
+    async fn buffered_metrics_incremental_replay_preserves_order_and_retains_on_failure() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+
+        for index in 0..501 {
+            sm.append_buffered_metric(&format!(r#"{{"index":{index}}}"#))
+                .await
+                .unwrap();
+        }
+
+        let _buffer_lock = sm.lock_buffer().await;
+        let mut reader = sm.open_buffered_metrics().await.unwrap().unwrap();
+        let mut replayed = Vec::new();
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let read = tokio::io::AsyncBufReadExt::read_line(&mut reader, &mut line)
+                .await
+                .unwrap();
+            if read == 0 {
+                break;
+            }
+            replayed.push(serde_json::from_str::<Value>(&line).unwrap());
+        }
+
+        // Model a failed send: the acknowledgement/clear step is deliberately
+        // skipped, so the complete replay remains available for the retry.
+        assert_eq!(replayed.len(), 501);
+        assert_eq!(replayed.first().unwrap()["index"], 0);
+        assert_eq!(replayed.last().unwrap()["index"], 500);
+        drop(reader);
+        drop(_buffer_lock);
+
+        let retained = sm.read_buffered_metrics().await.unwrap();
+        assert_eq!(retained.len(), 501);
+        assert_eq!(retained[250]["index"], 250);
+    }
+
+    #[tokio::test]
+    async fn concurrent_metric_appends_and_clears_do_not_create_partial_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = std::sync::Arc::new(StorageManager::new(tmp.path().to_path_buf()));
+        let mut tasks = Vec::new();
+
+        for index in 0..100 {
+            let sm = sm.clone();
+            tasks.push(tokio::spawn(async move {
+                sm.append_buffered_metric(&format!(r#"{{"index":{index}}}"#))
+                    .await
+                    .unwrap();
+            }));
+        }
+        for _ in 0..20 {
+            let sm = sm.clone();
+            tasks.push(tokio::spawn(async move {
+                sm.clear_buffered_metrics().await.unwrap();
+            }));
+        }
+
+        for task in tasks {
+            task.await.unwrap();
+        }
+
+        // A clear may legitimately win the race, but if an append wins, every
+        // surviving line must be a complete JSON record (never an interleaving
+        // of concurrent writers).
+        let metrics = sm.read_buffered_metrics().await.unwrap();
+        assert!(metrics.iter().all(|metric| metric.get("index").is_some()));
+    }
 }

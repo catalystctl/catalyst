@@ -1537,6 +1537,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       // Non-admin / scoped path — need accessible nodes
       const accessibleResult = await getUserAccessibleNodes(prisma, userId);
       const accessibleNodeIds = accessibleResult.nodeIds;
+      const accessibleNodeIdSet = new Set(accessibleNodeIds);
       const hasWildcard = accessibleResult.hasWildcard;
 
       // Role-scoped grants (role wizard): servers/nodes granted to the
@@ -1565,6 +1566,29 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         ...new Set(roleNodeGrantRows.map((g) => g.nodeId).filter((n): n is string => Boolean(n))),
       ];
       const hasAllNodesGrant = roleNodeGrantRows.some((g) => g.nodeId === null);
+
+      // Index grants once. The previous implementation searched every grant
+      // row for every server while building the response (O(servers*grants)).
+      // A server can inherit permissions from multiple roles, so merge rather
+      // than letting a later row replace an earlier one.
+      const serverGrantPermissions = new Map<string, Set<string>>();
+      for (const grant of roleServerGrantRows) {
+        let permissions = serverGrantPermissions.get(grant.serverId);
+        if (!permissions) {
+          permissions = new Set<string>();
+          serverGrantPermissions.set(grant.serverId, permissions);
+        }
+        for (const permission of grant.permissions) permissions.add(permission);
+      }
+      const nodeGrantPermissions = new Map<string | null, Set<string>>();
+      for (const grant of roleNodeGrantRows) {
+        let permissions = nodeGrantPermissions.get(grant.nodeId);
+        if (!permissions) {
+          permissions = new Set<string>();
+          nodeGrantPermissions.set(grant.nodeId, permissions);
+        }
+        for (const permission of grant.permissions) permissions.add(permission);
+      }
 
       const cacheKey = `${userId}:${limit}:${offset}:${withMetrics?1:0}:${hasWildcard?"w":"s"}:${accessibleNodeIds.length}:${accessibleNodeIds.slice(0,3).join(",")}:g${grantedServerIds.length}.${grantedNodeIds.length}.${hasAllNodesGrant?1:0}`;
       const hit = serverListCache.get(cacheKey);
@@ -1681,18 +1705,12 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             const a = accessByServer.get(server.id) as any;
             const isOwner = server.ownerId === userId;
             const hasExplicit = Boolean(a);
-            const hasNode = accessibleNodeIds.includes(server.nodeId);
+            const hasNode = accessibleNodeIdSet.has(server.nodeId);
             // Scoped role grants covering this server: direct server grants +
             // node grants matching this server's node (wildcard = all nodes).
-            const grantPerms = new Set<string>();
-            for (const g of roleServerGrantRows) {
-              if (g.serverId === server.id) for (const p of g.permissions) grantPerms.add(p);
-            }
-            for (const g of roleNodeGrantRows) {
-              if (g.nodeId === null || g.nodeId === server.nodeId) {
-                for (const p of g.permissions) grantPerms.add(p);
-              }
-            }
+            const grantPerms = new Set(serverGrantPermissions.get(server.id));
+            for (const permission of nodeGrantPermissions.get(null) ?? []) grantPerms.add(permission);
+            for (const permission of nodeGrantPermissions.get(server.nodeId) ?? []) grantPerms.add(permission);
             let effectivePermissions: string[];
             if (isOwner || listRolePermissions.includes('*') || listRolePermissions.includes('admin.write')) {
               effectivePermissions = [...ALL_SERVER_PERMISSIONS];

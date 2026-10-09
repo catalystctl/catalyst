@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { Readable } from "stream";
 import type { PrismaClient } from "@prisma/client";
 import type { Logger } from "pino";
 import type { FileTunnelService, FileTunnelResponse } from "../services/file-tunnel";
@@ -187,21 +188,24 @@ export function fileTunnelRoutes(
       const contentType =
         (request.headers["x-tunnel-content-type"] as string) || "application/octet-stream";
 
-      const body = request.body as Buffer;
-
-      const resolved = fileTunnel.resolveRequest(requestId, nodeId, {
-        requestId,
-        success,
-        error,
-        contentType,
-        body: Buffer.isBuffer(body) ? body : Buffer.from(body || []),
-      });
+       const settings = await getSecuritySettings();
+       const body = request.body as Readable;
+       if (!body || typeof (body as Readable).pipe !== "function") {
+         return apiError(reply, 400, ErrorCodes.FILE_OPERATION_FAILED, "Missing streamed response body");
+       }
+       const resolved = await fileTunnel.stageResponseStream(
+         requestId,
+         nodeId,
+         body,
+         settings.fileTunnelMaxUploadMb * 1024 * 1024,
+         { success, error, contentType },
+       );
 
       if (!resolved) {
         return apiError(reply, 404, ErrorCodes.FILE_TUNNEL_REQUEST_NOT_FOUND, "Unknown or expired request");
       }
 
-      reply.send({ success: true });
+       reply.send({ success: true });
     }
   );
 

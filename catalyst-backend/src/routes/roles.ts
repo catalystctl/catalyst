@@ -319,12 +319,16 @@ export async function roleRoutes(app: FastifyInstance) {
       if (!checkPermission(request, 'role.read', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
+      const query = request.query as { relationPage?: number | string; relationLimit?: number | string };
+      const paginatedRelations = query.relationPage !== undefined || query.relationLimit !== undefined;
+      const relationPage = Math.max(1, Number(query.relationPage ?? 1) || 1);
+      const relationLimit = Math.min(100, Math.max(1, Number(query.relationLimit ?? 50) || 50));
 
       const role = await prisma.role.findUnique({
         where: { id: roleId },
         include: {
           _count: {
-            select: { users: true },
+            select: { users: true, serverGrants: true, nodeGrants: true },
           },
           users: {
             select: {
@@ -333,6 +337,7 @@ export async function roleRoutes(app: FastifyInstance) {
               username: true,
             },
             orderBy: { username: 'asc' },
+            ...(paginatedRelations ? { skip: (relationPage - 1) * relationLimit, take: relationLimit } : {}),
           },
           serverGrants: {
             select: {
@@ -340,6 +345,7 @@ export async function roleRoutes(app: FastifyInstance) {
               permissions: true,
               server: { select: { name: true, node: { select: { name: true } } } },
             },
+            ...(paginatedRelations ? { skip: (relationPage - 1) * relationLimit, take: relationLimit } : {}),
           },
           nodeGrants: {
             select: {
@@ -347,6 +353,7 @@ export async function roleRoutes(app: FastifyInstance) {
               permissions: true,
               node: { select: { name: true } },
             },
+            ...(paginatedRelations ? { skip: (relationPage - 1) * relationLimit, take: relationLimit } : {}),
           },
         },
       });
@@ -355,23 +362,34 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.ROLE_NOT_FOUND, 'Role not found');
       }
 
+      // Keep the wizard's scope complete even when the display relations are
+      // explicitly paginated. These lean queries avoid loading related server
+      // and node objects while preserving the existing scope contract.
+      const scopeRelations = paginatedRelations
+        ? await Promise.all([
+            prisma.roleServerGrant.findMany({ where: { roleId }, select: { serverId: true, permissions: true } }),
+            prisma.roleNodeGrant.findMany({ where: { roleId }, select: { nodeId: true, permissions: true } }),
+          ])
+        : [role.serverGrants, role.nodeGrants];
+      const [scopeServerGrants, scopeNodeGrants] = scopeRelations;
+
       // Derive the wizard scope shape from the stored grants (single mode).
       const scopePermissions = [
         ...new Set(
-          [...role.serverGrants, ...role.nodeGrants].flatMap((g) => g.permissions)
+          [...scopeServerGrants, ...scopeNodeGrants].flatMap((g) => g.permissions)
         ),
       ];
       const scope =
-        role.serverGrants.length > 0
+        scopeServerGrants.length > 0
           ? {
               mode: 'servers' as const,
-              serverIds: role.serverGrants.map((g) => g.serverId),
+              serverIds: scopeServerGrants.map((g) => g.serverId),
               permissions: scopePermissions,
             }
-          : role.nodeGrants.length > 0
+          : scopeNodeGrants.length > 0
             ? {
                 mode: 'nodes' as const,
-                nodeIds: role.nodeGrants.map((g) => g.nodeId ?? '*'),
+                nodeIds: scopeNodeGrants.map((g) => g.nodeId ?? '*'),
                 permissions: scopePermissions,
               }
             : { mode: 'none' as const, permissions: [] };
@@ -388,6 +406,17 @@ export async function roleRoutes(app: FastifyInstance) {
           scope,
           serverGrants: role.serverGrants,
           nodeGrants: role.nodeGrants,
+          ...(paginatedRelations
+            ? {
+                relationPagination: {
+                  page: relationPage,
+                  limit: relationLimit,
+                  users: { total: role._count.users, totalPages: Math.ceil(role._count.users / relationLimit) },
+                  serverGrants: { total: role._count.serverGrants, totalPages: Math.ceil(role._count.serverGrants / relationLimit) },
+                  nodeGrants: { total: role._count.nodeGrants, totalPages: Math.ceil(role._count.nodeGrants / relationLimit) },
+                },
+              }
+            : {}),
           createdAt: role.createdAt,
           updatedAt: role.updatedAt,
         },

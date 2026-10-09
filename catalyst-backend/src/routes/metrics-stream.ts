@@ -11,6 +11,7 @@ import { prisma } from '../db.js';
 import { openSseStream } from '../utils/sse.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
+import { requestImmediateStatsCoalesced } from '../lib/event-bus.js';
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const METRICS_EVENT_TYPES = ['resource_stats', 'storage_resize_complete'];
@@ -139,10 +140,11 @@ export function metricsStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
 
       // Ask the agent to send fresh stats immediately (don't wait for the 30s tick)
       if (server.nodeId) {
-        wsGateway.sendToAgent(server.nodeId, {
+        const nodeId = server.nodeId;
+        void requestImmediateStatsCoalesced(nodeId, serverId, () => wsGateway.sendToAgent(nodeId, {
           type: 'request_immediate_stats',
           serverId,
-        }).catch(() => {});
+        })).catch(() => {});
       }
 
       // Subscribe to resource_stats for this server via the gateway's global list

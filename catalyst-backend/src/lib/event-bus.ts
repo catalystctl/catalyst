@@ -9,16 +9,63 @@
  *   pending promise maps are never stored in Redis.
  */
 
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { RedisChannels } from './cache-keys';
 import { getRedis } from './redis';
 import { broadcastCacheInvalidate as broadcastIpc, getCacheBusInstanceId, type CacheInvalidateChannel, type CacheInvalidatePayload } from './cache-bus';
+import { tryAcquireLock } from './distributed-lock';
 
 const instanceId = randomUUID();
 let fanoutSubscribed = false;
 const fanoutHandlers = new Set<(event: FanoutEvent & { origin: string }) => void | Promise<void>>();
 const cacheHandlers = new Set<(channel: CacheInvalidateChannel, payload: CacheInvalidatePayload, origin: string) => void>();
 let cacheSubscribed = false;
+
+// A metrics stream can be opened by several workers at the same time (for
+// example when a dashboard reconnects).  Keep the agent request outside the
+// stream itself and coalesce it for a short window. Redis makes the window
+// shared between workers; the local map is deliberately retained as the safe
+// degraded-mode fallback.
+const IMMEDIATE_STATS_COALESCE_MS = 2_000;
+const localImmediateStats = new Map<string, Promise<boolean>>();
+
+/**
+ * Request one fresh agent snapshot per server/window.
+ *
+ * Redis is an optimisation only: an unavailable Redis must not prevent an
+ * otherwise valid stream from asking its agent for data. A failed request is
+ * still considered handled for the coalescing window so a reconnect burst
+ * cannot turn an agent outage into a request storm.
+ */
+export async function requestImmediateStatsCoalesced(
+  nodeId: string,
+  serverId: string,
+  request: () => Promise<boolean>,
+): Promise<boolean> {
+  const key = `${nodeId}:${serverId}`;
+  const existing = localImmediateStats.get(key);
+  if (existing) return existing;
+
+  const flight = (async (): Promise<boolean> => {
+    const acquisition = await tryAcquireLock(`metrics-immediate:${key}`, IMMEDIATE_STATS_COALESCE_MS);
+    if (acquisition.status === 'held') return true;
+
+    // When Redis is unavailable, this process-local flight is the fallback.
+    // When it is available, the lock winner performs the actual request.
+    try {
+      return await request();
+    } catch {
+      return false;
+    }
+  })();
+  localImmediateStats.set(key, flight);
+  void flight.finally(() => {
+    setTimeout(() => {
+      if (localImmediateStats.get(key) === flight) localImmediateStats.delete(key);
+    }, IMMEDIATE_STATS_COALESCE_MS).unref?.();
+  }).catch(() => { /* the returned flight carries the result */ });
+  return flight;
+}
 
 export function getEventBusInstanceId(): string {
   return instanceId;
@@ -96,7 +143,18 @@ export function publishFanout(event: FanoutEvent): void {
   const redis = getRedis();
   if (!redis) return;
   const envelope = JSON.stringify({ ...event, origin: instanceId, ts: Date.now() });
-  redis.publish(RedisChannels.fanout(), envelope).catch((err) => {
+  const publish = async (): Promise<void> => {
+    // resource_stats is already delivered to this worker's subscribers. Use a
+    // content-addressed short lock so duplicate serialized samples published
+    // by multiple workers only consume one cross-instance fan-out message.
+    if (event.eventType === 'resource_stats') {
+      const digest = createHash('sha256').update(JSON.stringify(event.payload)).digest('hex');
+      const acquisition = await tryAcquireLock(`metrics-fanout:${event.serverId ?? 'unknown'}:${digest}`, 2_000, 0, redis);
+      if (acquisition.status === 'held') return;
+    }
+    await redis.publish(RedisChannels.fanout(), envelope);
+  };
+  publish().catch((err) => {
     recordFanoutPublishFailure(event.eventType, err);
   });
 }

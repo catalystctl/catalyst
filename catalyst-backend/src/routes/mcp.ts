@@ -157,7 +157,7 @@ export async function mcpRoutes(app: FastifyInstance): Promise<void> {
   app.post(
     "/mcp",
     {
-      schema: { summary: 'Handle an MCP JSON-RPC request', tags: ['MCP'], consumes: ['application/json'], response: { 200: { type: 'object' }, 202: { type: 'null' }, 401: { type: 'object' } } },
+       schema: { summary: 'Handle an MCP JSON-RPC request', tags: ['MCP'], consumes: ['application/json'], response: { 200: { type: 'object', additionalProperties: true }, 202: { type: 'null' }, 401: { type: 'object', additionalProperties: true } } },
       // Tool arguments are small JSON (even write_file content is bounded by
       // model context in practice); 2MB stops abuse while direct REST stays
       // available for large transfers.

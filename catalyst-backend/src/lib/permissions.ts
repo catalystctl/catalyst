@@ -60,7 +60,9 @@ function clearNodeAccessCachesLocal(userId?: string): void {
   // SimpleCache has no iterator export; clear whole map on user-scoped for safety.
   // TTL is 30s; user-scoped precision is best-effort via full clear of related maps.
   nodeAccessCache.clear();
-  userAccessibleNodesCache.delete(userId);
+  // Keys include the access mode so invalidate both read and write results.
+  userAccessibleNodesCache.delete(`getUserAccessibleNodes:read:${userId}`);
+  userAccessibleNodesCache.delete(`getUserAccessibleNodes:write:${userId}`);
 }
 
 /**

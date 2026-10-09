@@ -429,6 +429,10 @@ export async function alertRoutes(app: FastifyInstance) {
       const user = request.user;
       const isAdmin = isAdminUser(request);
       const { alertId } = request.params as { alertId: string };
+      const { page, limit } = request.query as { page?: number | string; limit?: number | string };
+      const paginated = page !== undefined || limit !== undefined;
+      const pageNumber = Math.max(1, Number(page ?? 1) || 1);
+      const pageSize = Math.min(100, Math.max(1, Number(limit ?? 50) || 50));
       const alert = await prisma.alert.findUnique({ where: { id: alertId }, select: { id: true, userId: true, serverId: true } });
       if (!alert) {
         return apiError(reply, 404, ErrorCodes.ALERT_NOT_FOUND, 'Alert not found');
@@ -450,16 +454,26 @@ export async function alertRoutes(app: FastifyInstance) {
       } else if (!isAdmin && alert.userId !== user.userId) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Forbidden');
       }
-      const deliveries = await prisma.alertDelivery.findMany({
+      const deliveryQuery = {
         where: { alertId },
         orderBy: { createdAt: 'desc' },
-      });
+        ...(paginated ? { skip: (pageNumber - 1) * pageSize, take: pageSize } : {}),
+      } as const;
+      const [deliveries, total] = await Promise.all([
+        prisma.alertDelivery.findMany(deliveryQuery),
+        paginated ? prisma.alertDelivery.count({ where: { alertId } }) : Promise.resolve(0),
+      ]);
       // Delivery targets carry webhook secrets — owner/write-admin only.
       const revealSecrets = isAdminUser(request, 'admin.write') || alert.userId === user.userId;
       const visible = revealSecrets
         ? deliveries
         : deliveries.map((d: any) => ({ ...d, target: redactTarget(d?.target) }));
-      reply.send({ deliveries: visible });
+      reply.send({
+        deliveries: visible,
+        ...(paginated
+          ? { pagination: { page: pageNumber, limit: pageSize, total, totalPages: Math.ceil(total / pageSize) } }
+          : {}),
+      });
     }
   );
 

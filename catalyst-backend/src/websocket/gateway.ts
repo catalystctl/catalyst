@@ -483,6 +483,10 @@ export class WebSocketGateway {
     }
   }
   private latestResourceStats = new CappedMap<string, Record<string, unknown>>(5000);
+  // Identical samples can arrive through a reconnect race or be replayed by
+  // an agent. Avoid serializing/fanning out the same wire update repeatedly,
+  // but never suppress a newer timestamp or a changed value.
+  private latestResourceStatsWire = new CappedMap<string, string>(5000);
   private static readonly SERVER_ACCESS_TTL_MS = 30_000;
   /** Monotonic grant version: bumped on every invalidate so queued outbox
    * entries stamped with an older version are dropped at drain time. */
@@ -4006,6 +4010,10 @@ export class WebSocketGateway {
     // subscriber below. Per-client JSON.stringify in this loop was the
     // hottest avoidable allocation on the realtime path.
     const wire = JSON.stringify(messageToSend);
+    if (messageToSend?.type === 'resource_stats') {
+      if (this.latestResourceStatsWire.get(serverId) === wire) return;
+      this.latestResourceStatsWire.set(serverId, wire);
+    }
 
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) continue;

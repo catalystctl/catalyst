@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
-import { useMutation, useQuery } from '@/csync';
+import { useMutation, useQuery, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
@@ -345,12 +345,29 @@ function NodeAllocationsPage() {
  { label: t('allocations.stats.uniqueIps'), value: portStats.uniqueIps },
  ];
 
- const allIpStatItems = [
+  const allIpStatItems = [
  { label: t('allocations.stats.totalIps'), value: ipPoolStats.total },
  { label: t('allocations.stats.available'), value: ipPoolStats.available },
  { label: t('allocations.stats.used'), value: ipPoolStats.used },
  { label: t('allocations.stats.reserved'), value: ipPoolStats.reserved },
- ];
+  ];
+
+  const portsListRef = useRef<HTMLDivElement>(null);
+  const poolsListRef = useRef<HTMLDivElement>(null);
+  const portsVirtualizer = useVirtualizer({
+    count: filteredAllocations.length,
+    getScrollElement: () => portsListRef.current,
+    estimateSize: () => 42,
+    overscan: 10,
+    getItemKey: (index) => filteredAllocations[index]?.id ?? index,
+  });
+  const poolsVirtualizer = useVirtualizer({
+    count: nodePools.length,
+    getScrollElement: () => poolsListRef.current,
+    estimateSize: () => 100,
+    overscan: 6,
+    getItemKey: (index) => nodePools[index]?.id ?? index,
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -555,7 +572,10 @@ function NodeAllocationsPage() {
             </div>
 
             {/* Rows */}
-            <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+            <div
+              ref={portsListRef}
+              className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25"
+            >
               {allocationsLoading ? (
                 <div>
                   {Array.from({ length: 5 }).map((_, index) => (
@@ -584,19 +604,25 @@ function NodeAllocationsPage() {
                   />
                 </div>
               ) : (
-                filteredAllocations.map((allocation) => {
-                  const isSelected = selectedIdSet.has(allocation.id);
-                  const isAssigned = Boolean(allocation.serverId);
-                  return (
-                    <div
-                      key={allocation.id}
-                      role="row"
-                      className={cn(
-                        PORTS_GRID,
-                        'py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
-                        isSelected && 'bg-primary/5',
-                      )}
-                    >
+                <div className="relative" style={{ height: portsVirtualizer.getTotalSize() }}>
+                  {portsVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const allocation = filteredAllocations[virtualRow.index];
+                    if (!allocation) return null;
+                    const isSelected = selectedIdSet.has(allocation.id);
+                    const isAssigned = Boolean(allocation.serverId);
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={portsVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        role="row"
+                        className={cn(
+                          PORTS_GRID,
+                          'absolute left-0 right-0 py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40',
+                          isSelected && 'bg-primary/5',
+                        )}
+                        style={{ transform: `translateY(${virtualRow.start}px)` }}
+                      >
                       <label className="-m-2 flex cursor-pointer items-center justify-center p-2">
                         <input
                           type="checkbox"
@@ -670,9 +696,10 @@ function NodeAllocationsPage() {
                           </button>
                         )}
                       </span>
-                    </div>
-                  );
-                })
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </>
@@ -693,7 +720,10 @@ function NodeAllocationsPage() {
               <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
             </div>
 
-            <div className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25">
+            <div
+              ref={poolsListRef}
+              className="max-h-[calc(100dvh-22rem)] min-w-0 overflow-y-auto bg-background/25"
+            >
               {poolsLoading ? (
                 <div>
                   {Array.from({ length: 4 }).map((_, index) => (
@@ -719,12 +749,22 @@ function NodeAllocationsPage() {
                   />
                 </div>
               ) : (
-                nodePools.map((pool: IpPool) => (
-                  <div key={pool.id} className="border-t border-border/40">
-                    <div
-                      role="row"
-                      className={cn(POOLS_GRID, 'py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40')}
+                <div className="relative" style={{ height: poolsVirtualizer.getTotalSize() }}>
+                  {poolsVirtualizer.getVirtualItems().map((virtualRow) => {
+                    const pool = nodePools[virtualRow.index];
+                    if (!pool) return null;
+                    return (
+                      <div
+                        key={virtualRow.key}
+                        ref={poolsVirtualizer.measureElement}
+                        data-index={virtualRow.index}
+                        className="absolute left-0 right-0 border-t border-border/40"
+                        style={{ transform: `translateY(${virtualRow.start}px)` }}
                     >
+                      <div
+                        role="row"
+                        className={cn(POOLS_GRID, 'py-1.5 pl-3 pr-3 transition-colors hover:bg-surface-1/40')}
+                      >
                       <div className="flex min-w-0 flex-col leading-tight">
                         <span
                           className="truncate font-display text-data font-semibold tracking-tight text-foreground"
@@ -772,8 +812,10 @@ function NodeAllocationsPage() {
                         </div>
                       </div>
                     )}
-                  </div>
-                ))
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </>

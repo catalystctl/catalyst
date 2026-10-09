@@ -774,6 +774,7 @@ model ScheduledTask {
 
   @@index([serverId, enabled])
   @@index([enabled, nextRunAt])
+  @@index([serverId, createdAt(sort: Desc)])
 }
 
 model ServerLog {
@@ -937,7 +938,9 @@ model Alert {
   deliveries AlertDelivery[]
 
   @@index([serverId, resolved, createdAt])
+  @@index([serverId, type, resolved, createdAt])
   @@index([nodeId, resolved, createdAt])
+  @@index([nodeId, type, resolved, createdAt])
   @@index([type, severity, resolved])
   @@index([ruleId, createdAt])
   @@index([userId, resolved, createdAt])
@@ -978,7 +981,9 @@ model AlertDelivery {
   updatedAt     DateTime  @updatedAt
 
   @@index([alertId, status])
+  @@index([alertId, createdAt(sort: Desc)])
   @@index([channel, status])
+  @@index([status, attempts, lastAttemptAt, id])
 }
 
 // ============================================================================

@@ -47,7 +47,7 @@ export async function sftpRoutes(app: FastifyInstance) {
 	app.get(
 		"/api/sftp/connection-info",
 		{
-			schema: { summary: "Get SFTP connection information", tags: ["SFTP"], querystring: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" }, ttl: { type: "string" } } }, response: { 200: { type: "object" }, 400: { type: "object" }, 403: { type: "object" }, 404: { type: "object" } } },
+           schema: { summary: "Get SFTP connection information", tags: ["SFTP"], querystring: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" }, ttl: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true } } },
 			preHandler: [authenticate],
 			config: { requiredPermission: "file.read" },
 		},

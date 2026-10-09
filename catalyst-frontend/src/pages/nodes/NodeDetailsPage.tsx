@@ -1,8 +1,8 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '@/i18n/format';
 import { Link, useParams } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@/csync';
+import { useMutation, useQuery, useQueryClient, useVirtualizer } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { buildDeployCommand } from '../../lib/deploy-command';
 import {
@@ -63,20 +63,35 @@ function ModalShell({
 }) {
   const { t } = useTranslation('nodes');
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+    >
       <DialogContent size="lg">
         <DialogHeader
-          icon={variant === 'danger' ? <AlertTriangle className="h-4 w-4" /> : <Key className="h-4 w-4" />}
-          iconClassName={variant === 'danger'
-            ? 'border-destructive/20 bg-destructive/10 text-destructive'
-            : 'border-primary/20 bg-primary/10 text-primary'}
+          icon={
+            variant === 'danger' ? (
+              <AlertTriangle className="h-4 w-4" />
+            ) : (
+              <Key className="h-4 w-4" />
+            )
+          }
+          iconClassName={
+            variant === 'danger'
+              ? 'border-destructive/20 bg-destructive/10 text-destructive'
+              : 'border-primary/20 bg-primary/10 text-primary'
+          }
         >
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogBody className="space-y-3">{children}</DialogBody>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>{t('common:actions.close')}</Button>
+          <Button variant="outline" onClick={onClose}>
+            {t('common:actions.close')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -129,7 +144,12 @@ function NodeDetailsPage() {
   const deployMutation = useMutation({
     mutationFn: async () => {
       if (!node?.id) {
-        reportSystemError({ level: 'error', component: 'NodeDetailsPage', message: 'Missing node id', metadata: { context: 'deploy mutation' } });
+        reportSystemError({
+          level: 'error',
+          component: 'NodeDetailsPage',
+          message: 'Missing node id',
+          metadata: { context: 'deploy mutation' },
+        });
         throw new Error('Missing node id');
       }
       return nodesApi.deploymentToken(node.id);
@@ -149,7 +169,12 @@ function NodeDetailsPage() {
   const apiKeyMutation = useMutation({
     mutationFn: async () => {
       if (!node?.id) {
-        reportSystemError({ level: 'error', component: 'NodeDetailsPage', message: 'Missing node id', metadata: { context: 'api key mutation' } });
+        reportSystemError({
+          level: 'error',
+          component: 'NodeDetailsPage',
+          message: 'Missing node id',
+          metadata: { context: 'api key mutation' },
+        });
         throw new Error('Missing node id');
       }
       const regenerate = apiKeyStatus?.exists === true;
@@ -194,6 +219,22 @@ function NodeDetailsPage() {
   );
 
   const serverList = useMemo(() => node?.servers ?? [], [node]);
+  const serverListRef = useRef<HTMLDivElement>(null);
+  const discoveredListRef = useRef<HTMLDivElement>(null);
+  const serverListVirtualizer = useVirtualizer({
+    count: serverList.length,
+    getScrollElement: () => serverListRef.current,
+    estimateSize: () => 48,
+    overscan: 8,
+    getItemKey: (index) => serverList[index]?.id ?? index,
+  });
+  const discoveredVirtualizer = useVirtualizer({
+    count: unregisteredContainers.length,
+    getScrollElement: () => discoveredListRef.current,
+    estimateSize: () => 42,
+    overscan: 8,
+    getItemKey: (index) => unregisteredContainers[index]?.containerId ?? index,
+  });
 
   if (isLoading) {
     return (
@@ -209,10 +250,7 @@ function NodeDetailsPage() {
   if (!node) {
     return (
       <div className="flex items-center justify-center py-20">
-        <TabErrorState
-          message={t('details.loadError')}
-          onRetry={() => refetch()}
-        />
+        <TabErrorState message={t('details.loadError')} onRetry={() => refetch()} />
       </div>
     );
   }
@@ -247,8 +285,8 @@ function NodeDetailsPage() {
             </Badge>
             {node.agentVersion && stats?.agentUpdateAvailable && (
               <Badge variant="warning" className="shrink-0 gap-1 font-mono text-micro">
-                <AlertTriangle className="h-2.5 w-2.5" />
-                v{node.agentVersion} → v{stats.latestAgentVersion}
+                <AlertTriangle className="h-2.5 w-2.5" />v{node.agentVersion} → v
+                {stats.latestAgentVersion}
               </Badge>
             )}
           </>
@@ -257,8 +295,12 @@ function NodeDetailsPage() {
           node.hostname,
           node.publicAddress,
           node.location?.name,
-          node.lastSeenAt ? t('details.seen', { time: formatDateTime(node.lastSeenAt) }) : t('details.neverSeen'),
-          node.agentVersion && !stats?.agentUpdateAvailable ? t('details.agentVersion', { version: node.agentVersion }) : null,
+          node.lastSeenAt
+            ? t('details.seen', { time: formatDateTime(node.lastSeenAt) })
+            : t('details.neverSeen'),
+          node.agentVersion && !stats?.agentUpdateAvailable
+            ? t('details.agentVersion', { version: node.agentVersion })
+            : null,
         ]
           .filter(Boolean)
           .join(' · ')}
@@ -336,9 +378,7 @@ function NodeDetailsPage() {
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-3.5 w-3.5 text-primary" />
-            <h3 className="type-overline">
-              {t('servers.title')}
-            </h3>
+            <h3 className="type-overline">{t('servers.title')}</h3>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-micro tabular-nums">
@@ -354,30 +394,39 @@ function NodeDetailsPage() {
         </div>
 
         {serverList.length > 0 ? (
-          <div className="divide-y divide-border/20">
-            {serverList.map((server) => (
-              <div
-                key={server.id}
-                className="group flex items-center justify-between py-2 first:pt-0 last:pb-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={`/servers/${server.id}`}
-                    className="truncate text-sm font-medium text-foreground transition-colors hover:text-primary"
+          <div ref={serverListRef} className="max-h-[28rem] overflow-y-auto">
+            <div className="relative" style={{ height: serverListVirtualizer.getTotalSize() }}>
+              {serverListVirtualizer.getVirtualItems().map((virtualRow) => {
+                const server = serverList[virtualRow.index];
+                if (!server) return null;
+                return (
+                  <div
+                    ref={serverListVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    key={server.id}
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    className="absolute left-0 right-0 group flex items-center justify-between border-b border-border/20 py-2 last:border-0"
                   >
-                    {server.name}
-                  </Link>
-                  <div className="text-mini text-muted-foreground/50">{server.status}</div>
-                </div>
-                <Link
-                  to={`/servers/${server.id}`}
-                  className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-100 transition-colors hover:border-primary/50 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
-                >
-                  {t('servers.open')}
-                  <ExternalLink className="h-2.5 w-2.5" />
-                </Link>
-              </div>
-            ))}
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to={`/servers/${server.id}`}
+                        className="truncate text-sm font-medium text-foreground transition-colors hover:text-primary"
+                      >
+                        {server.name}
+                      </Link>
+                      <div className="text-mini text-muted-foreground/50">{server.status}</div>
+                    </div>
+                    <Link
+                      to={`/servers/${server.id}`}
+                      className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-100 transition-colors hover:border-primary/50 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
+                    >
+                      {t('servers.open')}
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <TabEmptyState title={t('servers.empty')} />
@@ -392,9 +441,7 @@ function NodeDetailsPage() {
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Download className="h-3.5 w-3.5 text-warning" />
-              <h3 className="type-overline">
-                {t('discovered.title')}
-              </h3>
+              <h3 className="type-overline">{t('discovered.title')}</h3>
             </div>
             <div className="flex items-center gap-2">
               <LastUpdated queryKey={qk.unregisteredContainers(nodeId!)} />
@@ -407,31 +454,47 @@ function NodeDetailsPage() {
           <div className="text-mini text-muted-foreground/50">
             {t('discovered.count', { total: unregisteredContainers.length })}
           </div>
-          <div className="mt-2 divide-y divide-border/20">
-            {unregisteredContainers.map((c: any) => (
-              <div key={c.containerId} className="flex items-center justify-between py-1.5 first:pt-0 last:pb-0">
-                <div className="min-w-0 flex-1 overflow-hidden">
-                  <div className="font-mono text-mini font-medium text-foreground">{c.containerId}</div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground/50">
-                    <span>{c.image || t('import.unknownImage')}</span>
-                    <Badge
-                      variant={c.status?.includes('Up') ? 'success' : 'secondary'}
-                      className="text-micro"
-                    >
-                      {c.status?.includes('Up') ? t('common:status.running') : t('common:status.stopped')}
-                    </Badge>
-                    {c.networkMode && (
-                      <Badge
-                        variant={c.networkMode === 'host' ? 'warning' : 'outline'}
-                        className="text-micro"
-                      >
-                        {c.networkMode === 'host' ? t('import.host') : t('import.bridge')}
-                      </Badge>
-                    )}
+          <div ref={discoveredListRef} className="mt-2 max-h-[28rem] overflow-y-auto">
+            <div className="relative" style={{ height: discoveredVirtualizer.getTotalSize() }}>
+              {discoveredVirtualizer.getVirtualItems().map((virtualRow) => {
+                const c = unregisteredContainers[virtualRow.index] as any;
+                if (!c) return null;
+                return (
+                  <div
+                    ref={discoveredVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    key={c.containerId}
+                    style={{ transform: `translateY(${virtualRow.start}px)` }}
+                    className="absolute left-0 right-0 flex items-center justify-between border-b border-border/20 py-1.5 last:border-0"
+                  >
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <div className="font-mono text-mini font-medium text-foreground">
+                        {c.containerId}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 text-micro text-muted-foreground/50">
+                        <span>{c.image || t('import.unknownImage')}</span>
+                        <Badge
+                          variant={c.status?.includes('Up') ? 'success' : 'secondary'}
+                          className="text-micro"
+                        >
+                          {c.status?.includes('Up')
+                            ? t('common:status.running')
+                            : t('common:status.stopped')}
+                        </Badge>
+                        {c.networkMode && (
+                          <Badge
+                            variant={c.networkMode === 'host' ? 'warning' : 'outline'}
+                            className="text-micro"
+                          >
+                            {c.networkMode === 'host' ? t('import.host') : t('import.bridge')}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -471,14 +534,14 @@ function NodeDetailsPage() {
       >
         <div className="min-w-0 max-w-full overflow-x-auto rounded-md border border-border/40 bg-surface-2 px-3 py-2 font-mono text-xs text-foreground">
           <code className="block max-w-full break-all whitespace-pre-wrap">
-            {deployInfo
-              ? buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey)
-              : ''}
+            {deployInfo ? buildDeployCommand(deployInfo.deployUrl, deployInfo.apiKey) : ''}
           </code>
         </div>
         <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
           <span className="min-w-0">
-            {t('deploy.tokenExpires', { time: deployInfo ? formatDateTime(deployInfo.expiresAt) : '' })}
+            {t('deploy.tokenExpires', {
+              time: deployInfo ? formatDateTime(deployInfo.expiresAt) : '',
+            })}
           </span>
           <Button
             variant="outline"
