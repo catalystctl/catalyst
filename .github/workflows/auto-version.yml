@@ -11,6 +11,7 @@ on:
       - 'docs/**'
       - '**.md'
       - '.github/workflows/docs-impact.yml'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,12 +19,12 @@ permissions:
   id-token: write # SLSA provenance + cosign signing
   attestations: write
 
-# New pushes supersede older release pipelines instead of FIFO stacking.
-# Each main push fans out to musl agent builds + image builds; without this
-# rapid pushes queue obsolete 6-minute builds behind each other.
+# Release pipelines must be serialized. Cancelling an in-flight release after
+# it has created a tag can leave an orphaned tag with no published artifacts,
+# while concurrent version jobs can race on the main branch push.
 concurrency:
   group: auto-version-main
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -217,12 +218,36 @@ jobs:
           git add -A
           git commit -m "chore(release): bump version to $VERSION" || true
 
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists — skipping retag (concurrent race or redo)"
-          else
-            git tag -a "v$VERSION" -m "Release v$VERSION"
-          fi
-          git push origin main --follow-tags
+           # Several main pushes can arrive while this job is running. Rebase
+           # the release commit onto the latest main and retry instead of
+           # leaving a tag on an unreachable commit after a non-fast-forward.
+           for attempt in 1 2 3 4 5; do
+             git fetch origin main --tags
+
+             if ! git merge-base --is-ancestor origin/main HEAD; then
+               git rebase origin/main
+             fi
+
+             if git push origin HEAD:main; then
+               break
+             fi
+
+             if [ "$attempt" -eq 5 ]; then
+               echo "Unable to push release commit after $attempt attempts"
+               exit 1
+             fi
+             echo "main moved during release push; retrying (attempt $((attempt + 1))/5)"
+             sleep 2
+           done
+
+           # Create and push the tag only after its commit is reachable from
+           # main. This prevents orphaned tags when a rebase was required.
+           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+             echo "Tag v$VERSION already exists — refusing to retag"
+             exit 1
+           fi
+           git tag -a "v$VERSION" -m "Release v$VERSION"
+           git push origin "v$VERSION"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
