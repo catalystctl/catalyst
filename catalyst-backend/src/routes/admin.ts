@@ -9,6 +9,7 @@ import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipa
 import { describeError } from '../utils/describe-error.js';
 import { createAuditLog, buildServerAuditDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
+import { config } from '../config.js';
 import {
   hasGrant,
   hasNodeAccess,
@@ -108,8 +109,8 @@ export async function adminRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
 
-  const isSuspensionEnforced = () => process.env.SUSPENSION_ENFORCED !== "false";
-  const isSuspensionDeleteBlocked = () => process.env.SUSPENSION_DELETE_BLOCKED !== "false";
+  const isSuspensionEnforced = () => config.suspension.enforced;
+  const isSuspensionDeleteBlocked = () => config.suspension.deleteBlocked;
 
   // Check permissions from request.user.permissions (populated by auth middleware)
   // Works for both session and API key auth without extra DB queries.
@@ -1790,7 +1791,7 @@ export async function adminRoutes(app: FastifyInstance) {
               if (!gateway) {
                 return { serverId: server.id, status: 'failed', error: 'WebSocket gateway not available' };
               }
-              const serverDir = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
+              const serverDir = config.serverData.dir;
               const fullServerDir = `${serverDir}/${server.uuid}`;
               const templateVariables = (server.template?.variables as any[]) || [];
               const templateDefaults = templateVariables.reduce((acc, variable) => {
@@ -1988,7 +1989,7 @@ export async function adminRoutes(app: FastifyInstance) {
                   }).catch(() => {});
                 }
               }
-              const serverDir = process.env.SERVER_DATA_DIR || '/var/lib/catalyst/servers';
+              const serverDir = config.serverData.dir;
               const fullServerDir = `${serverDir}/${server.uuid}`;
               const environment: Record<string, string> = {
                 ...(server.environment as Record<string, string>),

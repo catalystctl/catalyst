@@ -115,6 +115,12 @@ services:
     # Redis is intentionally NOT a startup dependency: the backend degrades
     # to Postgres + process-local state when Redis is down, so a Redis
     # crash-loop must never take the API down with it at (re)start.
+    # Resource limits prevent runaway processes from affecting the host.
+    # Backend container CPU/memory usage scales with concurrent connections,
+    # active servers, and plugin count. Adjust based on your workload.
+    mem_limit: 2g
+    mem_reservation: 512m
+    cpus: 2.0
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       TZ: ${TZ:-UTC}
@@ -287,6 +293,19 @@ services:
       - "${FRONTEND_PORT:-0.0.0.0:80}:${PORT:-80}"
     volumes:
       - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    # Resource limits for nginx serving static assets and proxying API calls.
+    # Nginx is lightweight; these limits protect against unexpected spikes.
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 1.0
+    healthcheck:
+      # Probe the nginx root (serves index.html). The backend dependency
+      # already ensures the API is healthy before the frontend starts.
+      test: ["CMD-SHELL", "curl -sf http://localhost:$${PORT:-80}/ > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   catalyst-postgres-data:

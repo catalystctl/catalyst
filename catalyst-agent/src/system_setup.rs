@@ -1,7 +1,6 @@
 use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
 use tracing::{error, info, warn};
@@ -64,7 +63,9 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
         })?;
 
     // First, probe whether the user has passwordless sudo.
-    let probe = Command::new("sudo").args(["-n", "true"]).status();
+    let probe = std::process::Command::new("sudo")
+        .args(["-n", "true"])
+        .status();
     if let Ok(status) = probe {
         if status.success() {
             // Passwordless sudo works – cache an empty marker.
@@ -91,7 +92,7 @@ fn ensure_sudo_password() -> Result<(), AgentError> {
         .to_string();
 
     // Verify the password actually works.
-    let mut verify = Command::new("sudo")
+    let mut verify = std::process::Command::new("sudo")
         .args(["-S", "-p", "", "true"])
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
@@ -137,7 +138,7 @@ impl SystemSetup {
         info!("🚀 Starting system initialization...");
 
         // 1. Detect package manager
-        let pkg_manager = Self::detect_package_manager()?;
+        let pkg_manager = Self::detect_package_manager().await?;
         info!("✓ Detected package manager: {}", pkg_manager);
 
         // 2. Check and install containerd
@@ -166,7 +167,7 @@ impl SystemSetup {
     }
 
     /// Detect the system's package manager
-    fn detect_package_manager() -> Result<String, AgentError> {
+    async fn detect_package_manager() -> Result<String, AgentError> {
         let managers = vec![
             ("apk", "apk"),
             ("apt-get", "apt"),
@@ -177,15 +178,15 @@ impl SystemSetup {
         ];
 
         for (cmd, name) in managers {
-            if Command::new("which")
+            let output = tokio::process::Command::new("which")
                 .arg(cmd)
                 .output()
+                .await
                 .map_err(|e| {
                     AgentError::IoError(format!("Failed to detect package manager: {}", e))
-                })?
-                .status
-                .success()
-            {
+                })?;
+
+            if output.status.success() {
                 return Ok(name.to_string());
             }
         }
@@ -197,14 +198,13 @@ impl SystemSetup {
 
     /// Ensure container runtime is installed
     async fn ensure_container_runtime(pkg_manager: &str) -> Result<(), AgentError> {
-        let has_containerd = Command::new("which")
+        let output = tokio::process::Command::new("which")
             .arg("containerd")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check containerd: {}", e)))?
-            .status
-            .success();
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check containerd: {}", e)))?;
 
-        if has_containerd {
+        if output.status.success() {
             info!("✓ containerd already installed");
             return Ok(());
         }
@@ -260,18 +260,19 @@ impl SystemSetup {
 
     /// Ensure runc/crun runtime binary is available
     async fn ensure_oci_runtime(pkg_manager: &str) -> Result<(), AgentError> {
-        let has_runc = Command::new("which")
+        let runc_output = tokio::process::Command::new("which")
             .arg("runc")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check runc: {}", e)))?
-            .status
-            .success();
-        let has_crun = Command::new("which")
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check runc: {}", e)))?;
+        let has_runc = runc_output.status.success();
+
+        let crun_output = tokio::process::Command::new("which")
             .arg("crun")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check crun: {}", e)))?
-            .status
-            .success();
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check crun: {}", e)))?;
+        let has_crun = crun_output.status.success();
 
         if has_runc || has_crun {
             info!("✓ OCI runtime already installed");
@@ -311,12 +312,12 @@ impl SystemSetup {
     /// Ensure containerd is started and socket exists, and the current user
     /// can access the socket.
     async fn ensure_containerd_running(config: &AgentConfig) -> Result<(), AgentError> {
-        let has_systemctl = Command::new("which")
+        let systemctl_output = tokio::process::Command::new("which")
             .arg("systemctl")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check systemctl: {}", e)))?
-            .status
-            .success();
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check systemctl: {}", e)))?;
+        let has_systemctl = systemctl_output.status.success();
 
         // Ensure the socket is group-accessible.
         // containerd defaults to root:root 0600 which blocks non-root users.
@@ -354,7 +355,7 @@ impl SystemSetup {
         // Verify the current user can actually connect.
         if !is_root() {
             use std::os::unix::fs::{MetadataExt, PermissionsExt};
-            let meta = fs::metadata(socket_path).map_err(|e| {
+            let meta = tokio::fs::metadata(socket_path).await.map_err(|e| {
                 AgentError::InternalError(format!("Cannot stat containerd socket: {}", e))
             })?;
             let mode = meta.permissions().mode();
@@ -393,15 +394,17 @@ impl SystemSetup {
         // 1. Create the containerd system group if it doesn't exist.
         //    Note: Alpine's busybox groupadd does not support --system;
         //    we try with the flag first, then retry without it.
-        let has_group = Command::new("getent")
+        let getent_output = tokio::process::Command::new("getent")
             .args(["group", "containerd"])
             .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
+            .await;
+        let has_group = getent_output.map(|s| s.success()).unwrap_or(false);
+
         if !has_group {
             // getent may not exist on Alpine (busybox); double-check by
             // reading /etc/group directly.
-            let group_exists = fs::read_to_string("/etc/group")
+            let group_exists = tokio::fs::read_to_string("/etc/group")
+                .await
                 .map(|contents| contents.lines().any(|line| line.starts_with("containerd:")))
                 .unwrap_or(false);
             if !group_exists {
@@ -476,7 +479,7 @@ impl SystemSetup {
                 // Write to a user-writable temp location, then sudo-copy to
                 // the protected systemd directory.
                 let tmp = "/tmp/catalyst-containerd-override.tmp";
-                if let Err(e) = fs::write(tmp, content).map_err(|e| {
+                if let Err(e) = tokio::fs::write(tmp, content).await.map_err(|e| {
                     AgentError::IoError(format!("Failed to write containerd override: {}", e))
                 }) {
                     warn!(
@@ -488,10 +491,10 @@ impl SystemSetup {
 
                 if let Err(e) = Self::run_command("cp", &[tmp, &override_file], None).await {
                     warn!("Could not install containerd override (non-fatal): {}", e);
-                    let _ = fs::remove_file(tmp);
+                    let _ = tokio::fs::remove_file(tmp).await;
                     return Ok(());
                 }
-                let _ = fs::remove_file(tmp);
+                let _ = tokio::fs::remove_file(tmp).await;
             }
         }
 
@@ -500,13 +503,13 @@ impl SystemSetup {
 
     /// Ensure `ip` command is available
     async fn ensure_iproute(pkg_manager: &str) -> Result<(), AgentError> {
-        if Command::new("which")
+        let output = tokio::process::Command::new("which")
             .arg("ip")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check ip: {}", e)))?
-            .status
-            .success()
-        {
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check ip: {}", e)))?;
+
+        if output.status.success() {
             info!("✓ ip already installed");
             return Ok(());
         }
@@ -550,13 +553,13 @@ impl SystemSetup {
 
     /// Ensure `iptables` is available (needed for port forwarding / NAT).
     async fn ensure_iptables(pkg_manager: &str) -> Result<(), AgentError> {
-        if Command::new("which")
+        let output = tokio::process::Command::new("which")
             .arg("iptables")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check iptables: {}", e)))?
-            .status
-            .success()
-        {
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check iptables: {}", e)))?;
+
+        if output.status.success() {
             info!("✓ iptables already installed");
             return Ok(());
         }
@@ -598,24 +601,26 @@ impl SystemSetup {
 
     /// Ensure download/extract tools are available
     async fn ensure_download_tools(pkg_manager: &str) -> Result<(), AgentError> {
-        let has_curl = Command::new("which")
+        let curl_output = tokio::process::Command::new("which")
             .arg("curl")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check curl: {}", e)))?
-            .status
-            .success();
-        let has_tar = Command::new("which")
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check curl: {}", e)))?;
+        let has_curl = curl_output.status.success();
+
+        let tar_output = tokio::process::Command::new("which")
             .arg("tar")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check tar: {}", e)))?
-            .status
-            .success();
-        let has_gzip = Command::new("which")
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check tar: {}", e)))?;
+        let has_tar = tar_output.status.success();
+
+        let gzip_output = tokio::process::Command::new("which")
             .arg("gzip")
             .output()
-            .map_err(|e| AgentError::IoError(format!("Failed to check gzip: {}", e)))?
-            .status
-            .success();
+            .await
+            .map_err(|e| AgentError::IoError(format!("Failed to check gzip: {}", e)))?;
+        let has_gzip = gzip_output.status.success();
 
         if has_curl && has_tar && has_gzip {
             info!("✓ Download tools already installed");
@@ -671,14 +676,17 @@ impl SystemSetup {
         Ok(())
     }
 
-    fn sha256_file(path: &str) -> Result<String, AgentError> {
-        let mut file = fs::File::open(path)
+    async fn sha256_file(path: &str) -> Result<String, AgentError> {
+        use tokio::io::AsyncReadExt;
+        let mut file = tokio::fs::File::open(path)
+            .await
             .map_err(|e| AgentError::IoError(format!("Open {}: {}", path, e)))?;
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 8192];
         loop {
             let read = file
                 .read(&mut buffer)
+                .await
                 .map_err(|e| AgentError::IoError(format!("Read {}: {}", path, e)))?;
             if read == 0 {
                 break;
@@ -784,7 +792,8 @@ impl SystemSetup {
         );
 
         let cni_bin_dir = config.containerd.cni_bin_dir.to_string_lossy().to_string();
-        fs::create_dir_all(&*cni_bin_dir)
+        tokio::fs::create_dir_all(&*cni_bin_dir)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to create {}: {}", cni_bin_dir, e)))?;
         let archive_path = format!("/tmp/cni-plugins-{}-{}.tgz", version, arch);
         Self::run_command("curl", &["-fsSL", "-o", &archive_path, &url], None).await?;
@@ -803,10 +812,12 @@ impl SystemSetup {
                     None,
                 )
                 .await?;
-                let raw = fs::read_to_string(&checksum_path).map_err(|e| {
-                    AgentError::IoError(format!("Failed to read checksum file: {}", e))
-                })?;
-                let _ = fs::remove_file(&checksum_path);
+                let raw = tokio::fs::read_to_string(&checksum_path)
+                    .await
+                    .map_err(|e| {
+                        AgentError::IoError(format!("Failed to read checksum file: {}", e))
+                    })?;
+                let _ = tokio::fs::remove_file(&checksum_path).await;
                 Self::extract_sha256_hex(&raw).ok_or_else(|| {
                     AgentError::InstallationError(
                         "Failed to parse downloaded checksum file".to_string(),
@@ -815,9 +826,9 @@ impl SystemSetup {
             }
         };
 
-        let actual_sha256 = Self::sha256_file(&archive_path)?;
+        let actual_sha256 = Self::sha256_file(&archive_path).await?;
         if actual_sha256 != expected_sha256.to_ascii_lowercase() {
-            let _ = fs::remove_file(&archive_path);
+            let _ = tokio::fs::remove_file(&archive_path).await;
             return Err(AgentError::InstallationError(format!(
                 "CNI plugins checksum mismatch: expected {}, got {}",
                 expected_sha256, actual_sha256
@@ -830,7 +841,7 @@ impl SystemSetup {
             None,
         )
         .await?;
-        let _ = fs::remove_file(&archive_path);
+        let _ = tokio::fs::remove_file(&archive_path).await;
 
         if !Self::has_required_cni_plugins_with(config) {
             return Err(AgentError::InternalError(
@@ -879,7 +890,8 @@ impl SystemSetup {
         let cni_dir = &config.containerd.cni_dir;
 
         // Create CNI directory if it doesn't exist
-        fs::create_dir_all(cni_dir)
+        tokio::fs::create_dir_all(cni_dir)
+            .await
             .map_err(|e| AgentError::IoError(format!("Failed to create CNI dir: {}", e)))?;
 
         let networks = if config.networking.networks.is_empty() {
@@ -897,8 +909,8 @@ impl SystemSetup {
 
         for network in networks {
             let cni_config_path = cni_dir.join(format!("{}.conflist", network.name));
-            let existing_config = if Path::new(&cni_config_path).exists() {
-                match fs::read_to_string(&cni_config_path) {
+            let existing_config = if cni_config_path.exists() {
+                match tokio::fs::read_to_string(&cni_config_path).await {
                     Ok(raw) => serde_json::from_str::<serde_json::Value>(&raw).ok(),
                     Err(_) => None,
                 }
@@ -990,7 +1002,8 @@ impl SystemSetup {
             }
 
             let config_str = serde_json::to_string_pretty(&new_config)?;
-            fs::write(&cni_config_path, config_str)
+            tokio::fs::write(&cni_config_path, config_str)
+                .await
                 .map_err(|e| AgentError::IoError(format!("Failed to write CNI config: {}", e)))?;
             info!(
                 "✓ Created CNI static network configuration at {}",

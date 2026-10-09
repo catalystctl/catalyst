@@ -15,6 +15,7 @@
 
 import net from 'net';
 import tls from 'tls';
+import { config } from '../config.js';
 
 export type RedisStatus = 'disabled' | 'connecting' | 'ready' | 'degraded' | 'closed';
 
@@ -683,11 +684,11 @@ let singleton: CatalystRedis | null = null;
 let disabledReason: string | null = null;
 
 export function getRedisUrl(): string | null {
-  if (process.env.REDIS_ENABLED === 'false' || process.env.REDIS_ENABLED === '0') {
+  if (!config.redis.enabled) {
     disabledReason = 'REDIS_ENABLED is false';
     return null;
   }
-  const url = (process.env.REDIS_URL || '').trim();
+  const url = (config.redis.url || '').trim();
   if (!url) {
     disabledReason = 'REDIS_URL is not set';
     return null;

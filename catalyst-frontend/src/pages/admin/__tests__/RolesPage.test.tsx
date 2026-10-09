@@ -15,6 +15,16 @@ vi.mock('@/csync', () => ({
     return { data: undefined };
   },
   useMutation: () => ({ mutate: vi.fn(), isPending: false }),
+  useVirtualizer: ({ count, getItemKey }: any) => ({
+    getVirtualItems: () => Array.from({ length: count }, (_, i) => ({
+      index: i,
+      key: getItemKey(i),
+      start: i * 58,
+      size: 58,
+    })),
+    getTotalSize: () => count * 58,
+    measureElement: () => {},
+  }),
 }));
 vi.mock('@/hooks/useStreamAwareInterval', () => ({ useStreamAwareInterval: () => undefined }));
 vi.mock('@/lib/queryClient', () => ({ queryClient: { invalidateQueries: vi.fn() } }));

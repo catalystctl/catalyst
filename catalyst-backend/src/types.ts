@@ -21,7 +21,7 @@ declare module "fastify" {
 
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: import("fastify").FastifyReply) => Promise<void>;
-    wsGateway?: WebSocketGateway;
+    wsGateway: WebSocketGateway;
   }
 }
 

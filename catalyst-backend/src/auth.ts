@@ -5,10 +5,11 @@ import { passkey } from "@better-auth/passkey";
 import { prisma } from "./db";
 import { captureSystemError } from "./services/error-logger";
 import { describeError } from "./utils/describe-error.js";
+import { config } from "./config.js";
 
-const baseUrl = process.env.BETTER_AUTH_URL || process.env.PUBLIC_URL || process.env.BACKEND_EXTERNAL_ADDRESS || "http://localhost:3000";
-const authSecret = process.env.BETTER_AUTH_SECRET;
-if (!authSecret && process.env.NODE_ENV !== "test") {
+const baseUrl = config.auth.betterAuthUrl || config.backend.publicUrl || config.backend.externalAddress;
+const authSecret = config.auth.betterAuthSecret;
+if (!authSecret && config.server.nodeEnv !== "test") {
   throw new Error("BETTER_AUTH_SECRET is required");
 }
 // SECURITY: refuse to boot with the placeholder secrets shipped in
@@ -19,12 +20,12 @@ if (!authSecret && process.env.NODE_ENV !== "test") {
 const PLACEHOLDER_PATTERN = /^CHANGE_ME/;
 const INSECURE_SECRETS: Array<[string, string | undefined]> = [
   ["BETTER_AUTH_SECRET", authSecret],
-  ["API_KEY_SECRET", process.env.API_KEY_SECRET],
+  ["API_KEY_SECRET", config.auth.apiKeySecret],
   ["POSTGRES_PASSWORD", process.env.POSTGRES_PASSWORD],
   ["REDIS_PASSWORD", process.env.REDIS_PASSWORD],
   [
     "BACKUP_CREDENTIALS_ENCRYPTION_KEY",
-    process.env.BACKUP_CREDENTIALS_ENCRYPTION_KEY,
+    config.backup.credentialsEncryptionKey,
   ],
 ];
 for (const [name, value] of INSECURE_SECRETS) {

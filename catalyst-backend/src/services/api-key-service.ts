@@ -16,6 +16,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "crypto";
 import { invalidateAgentApiKeyCache } from "../lib/agent-auth";
 import { SimpleCache, registerCacheStats } from "../lib/cache";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "../lib/cache-bus";
+import { config } from "../config.js";
 
 const DEFAULT_PREFIX = "catalyst";
 const KEY_LENGTH = 32; // bytes of randomness
@@ -30,24 +31,24 @@ const KEY_LENGTH = 32; // bytes of randomness
 let warnedAboutApiKeySecretFallback = false;
 
 export function resolveApiKeySecret(): string {
-  const dedicated = process.env.API_KEY_SECRET?.trim();
+  const dedicated = config.auth.apiKeySecret?.trim();
   if (dedicated) {
     return dedicated;
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (config.server.nodeEnv === "production") {
     throw new Error(
       "API_KEY_SECRET environment variable is required in production " +
         "(set a dedicated secret: openssl rand -base64 32)",
     );
   }
 
-  const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  const authSecret = config.auth.betterAuthSecret?.trim();
   if (authSecret) {
     // Cache onto process.env so subsequent lookups (and other modules) see a
     // stable, non-empty API_KEY_SECRET for the rest of the process lifetime.
     process.env.API_KEY_SECRET = authSecret;
-    if (!warnedAboutApiKeySecretFallback && process.env.NODE_ENV !== "test") {
+    if (!warnedAboutApiKeySecretFallback && config.server.nodeEnv !== "test") {
       warnedAboutApiKeySecretFallback = true;
       console.warn(
         "[api-key-service] API_KEY_SECRET is unset; falling back to BETTER_AUTH_SECRET. " +
@@ -101,8 +102,8 @@ let warnedAboutApiKeySecretRotation = false;
  * Returns null when there is no distinct previous secret to try.
  */
 export function hashApiKeyPreviousSecret(key: string, salt?: string): string | null {
-  const current = process.env.API_KEY_SECRET?.trim();
-  const authSecret = process.env.BETTER_AUTH_SECRET?.trim();
+  const current = config.auth.apiKeySecret?.trim();
+  const authSecret = config.auth.betterAuthSecret?.trim();
   if (!current || !authSecret || authSecret === current) {
     return null;
   }
@@ -111,7 +112,7 @@ export function hashApiKeyPreviousSecret(key: string, salt?: string): string | n
 }
 
 export function warnApiKeySecretRotationNeeded(): void {
-  if (!warnedAboutApiKeySecretRotation && process.env.NODE_ENV !== "test") {
+  if (!warnedAboutApiKeySecretRotation && config.server.nodeEnv !== "test") {
     warnedAboutApiKeySecretRotation = true;
     console.warn(
       "[api-key-service] An API key verified under the pre-rotation secret. " +
@@ -121,7 +122,7 @@ export function warnApiKeySecretRotationNeeded(): void {
 }
 
 export function isLegacyHashAllowed(): boolean {
-  return process.env.ALLOW_LEGACY_API_KEY_HASH === "1";
+  return config.auth.allowLegacyApiKeyHash;
 }
 
 export function parseApiKeyRecordMetadata(raw: unknown): { salt?: string } | null {
@@ -301,8 +302,8 @@ export async function createApiKey(params: CreateApiKeyParams): Promise<ApiKeyRe
 const DEFAULT_APIKEY_CACHE_TTL_MS = 15_000;
 
 function resolvedApikeyCacheTtl(): number {
-  const raw = Number(process.env.AUTH_APIKEY_CACHE_TTL_MS);
-  if (!Number.isFinite(raw)) return DEFAULT_APIKEY_CACHE_TTL_MS;
+  const raw = config.auth.apiKeyCacheTtlMs;
+  if (!raw || !Number.isFinite(raw)) return DEFAULT_APIKEY_CACHE_TTL_MS;
   if (raw <= 0) return 0;
   return Math.min(300_000, Math.floor(raw));
 }

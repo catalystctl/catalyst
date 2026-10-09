@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useVirtualizer } from '@/csync';
 import type { Backup } from '../../types/backup';
 import { formatBackupSize } from '../../utils/formatters';
 import { formatDateTime } from '@/i18n/format';
@@ -54,6 +55,16 @@ function BackupList({
  return next;
  }, [backups]);
 
+ // ── Virtualization setup ──
+ const backupsListRef = useRef<HTMLDivElement>(null);
+ const backupsVirtualizer = useVirtualizer({
+   count: sorted.length,
+   getScrollElement: () => backupsListRef.current,
+   estimateSize: () => 72,
+   overscan: 5,
+   getItemKey: (index) => sorted[index]?.id ?? index,
+ });
+
  if (!sorted.length) {
  return (
  <div className="deck-panel px-3 py-10 text-center type-meta">
@@ -63,7 +74,7 @@ function BackupList({
  }
 
  return (
- <div className="deck-panel overflow-hidden">
+ <div className="deck-panel flex flex-col overflow-hidden">
  {/* Column header — same grid template as the rows */}
  <div className={`${GRID} sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 px-3 py-1.5 text-muted-foreground/70 md:grid`}>
  <span className="type-overline">{t('files.list.name')}</span>
@@ -75,14 +86,25 @@ function BackupList({
  <span className="type-overline justify-self-end">{t('files.sftp.actions')}</span>
  </div>
 
- {sorted.map((backup, index) => {
+ {/* Virtualized rows */}
+ <div ref={backupsListRef} className="min-h-0 flex-1 overflow-y-auto">
+ <div className="relative" style={{ height: backupsVirtualizer.getTotalSize() }}>
+ {backupsVirtualizer.getVirtualItems().map((item) => {
+ const backup = sorted[item.index];
+ if (!backup) return null;
  const status = getBackupStatus(backup);
  const downloading = Boolean(backup.downloadProgress);
  return (
  <div
- key={backup.id}
+ key={item.key}
+ ref={backupsVirtualizer.measureElement}
+ data-index={item.index}
+ className="absolute left-0 right-0"
+ style={{ transform: `translateY(${item.start}px)` }}
+ >
+ <div
  className={`${GRID} px-3 py-2 transition-colors hover:bg-surface-1/40 ${
- index > 0 ? 'border-t border-border/40' : ''
+ item.index > 0 ? 'border-t border-border/40' : ''
  }`}
  >
  {/* identity + timestamps */}
@@ -163,8 +185,11 @@ function BackupList({
  ) : null}
  </span>
  </div>
+ </div>
  );
  })}
+ </div>
+ </div>
  </div>
  );
 }

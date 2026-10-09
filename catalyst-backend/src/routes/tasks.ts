@@ -7,6 +7,7 @@ import { hasNodeAccess } from '../lib/permissions';
 import { Actor, enforceKeyScope, ensureServerAccess } from './servers/_helpers.js';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
+import { config } from "../config.js";
 
 /** Allowed scheduled-task actions (create + update). */
 const TASK_ACTIONS = ['restart', 'stop', 'start', 'backup', 'command'] as const;
@@ -57,7 +58,7 @@ export async function taskRoutes(app: FastifyInstance) {
       return false;
     }
 
-    if (process.env.SUSPENSION_ENFORCED !== 'false' && server.suspendedAt) {
+    if (config.suspension.enforced && server.suspendedAt) {
       reply.status(423).send({
         error: 'Server is suspended',
         code: ErrorCodes.SERVER_SUSPENDED,
@@ -206,7 +207,7 @@ export async function taskRoutes(app: FastifyInstance) {
       try {
         const interval = CronExpressionParser.parse(schedule, {
           currentDate: new Date(),
-          tz: process.env.TZ || 'UTC',
+          tz: config.timezone.tz,
         });
         nextRunAt = interval.next().toDate();
       } catch (error) {
@@ -236,7 +237,7 @@ export async function taskRoutes(app: FastifyInstance) {
       reply.send(serialize({ success: true, task }));
 
       // Broadcast task_created event — admin + global + per-server stream.
-      const wsGatewayTaskCreated = (app as any).wsGateway;
+      const wsGatewayTaskCreated = app.wsGateway;
       const taskCreatedEvent = {
         type: 'task_created',
         serverId,
@@ -378,7 +379,7 @@ export async function taskRoutes(app: FastifyInstance) {
         try {
           const interval = CronExpressionParser.parse(schedule, {
             currentDate: new Date(),
-            tz: process.env.TZ || 'UTC',
+            tz: config.timezone.tz,
           });
           nextRunAt = interval.next().toDate();
         } catch (error) {
@@ -431,7 +432,7 @@ export async function taskRoutes(app: FastifyInstance) {
       reply.send(serialize({ success: true, task: reloadedTask }));
 
       // Broadcast task_updated event — admin + global + per-server (see task_created).
-      const wsGatewayTaskUpdated = (app as any).wsGateway;
+      const wsGatewayTaskUpdated = app.wsGateway;
       const taskUpdatedEvent = {
         type: 'task_updated',
         serverId,
@@ -487,7 +488,7 @@ export async function taskRoutes(app: FastifyInstance) {
       reply.send({ success: true, message: 'Task deleted' });
 
       // Broadcast task_deleted event — admin + global + per-server (see task_created).
-      const wsGatewayTaskDeleted = (app as any).wsGateway;
+      const wsGatewayTaskDeleted = app.wsGateway;
       const taskDeletedEvent = {
         type: 'task_deleted',
         serverId,

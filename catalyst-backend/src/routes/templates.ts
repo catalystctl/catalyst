@@ -290,7 +290,7 @@ export async function templateRoutes(app: FastifyInstance) {
 
 			clearTemplateCache();
 			reply.status(201).send({ success: true, data: template });
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("template_created", {
 					type: "template_created",
@@ -423,7 +423,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			clearTemplateCache();
 			reply.send(serialize({ success: true, data: updated }));
 
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("template_updated", {
 					type: "template_updated",
@@ -461,7 +461,7 @@ export async function templateRoutes(app: FastifyInstance) {
 
 			clearTemplateCache();
 			reply.send({ success: true });
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("template_deleted", {
 					type: "template_deleted",
@@ -577,7 +577,7 @@ export async function templateRoutes(app: FastifyInstance) {
 
 			clearTemplateCache();
 			reply.status(201).send(response);
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("template_created", {
 					type: "template_created",
@@ -800,7 +800,7 @@ export async function templateRoutes(app: FastifyInstance) {
 			);
 
 			// Invalidate template cache via WebSocket notification
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			if (wsGateway?.pushToAdminSubscribers) {
 				wsGateway.pushToAdminSubscribers("templates_batch_imported", {
 					type: "templates_batch_imported",

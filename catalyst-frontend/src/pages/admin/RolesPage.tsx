@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { useMutation, useQuery } from '@/csync';
+import { useMutation, useQuery, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import {
@@ -534,6 +534,16 @@ function RolesPage() {
     [roles, search],
   );
 
+  // ── Virtualization setup ──
+  const rolesListRef = useRef<HTMLDivElement>(null);
+  const rolesVirtualizer = useVirtualizer({
+    count: filteredRoles.length,
+    getScrollElement: () => rolesListRef.current,
+    estimateSize: () => 58,
+    overscan: 10,
+    getItemKey: (index) => filteredRoles[index]?.id ?? index,
+  });
+
   const isModalOpen = isCreateOpen || !!editingRole;
   const isPending = createMutation.isPending || updateMutation.isPending;
 
@@ -614,7 +624,7 @@ function RolesPage() {
         </div>
 
         {/* Rows */}
-        <div className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
+        <div ref={rolesListRef} className="max-h-[calc(100dvh-20rem)] min-w-0 overflow-y-auto bg-background/25">
           {isLoading ? (
             <div>
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -648,18 +658,31 @@ function RolesPage() {
               />
             </div>
           ) : (
-            filteredRoles.map((role: Role) => (
-              <RoleRow
-                key={role.id}
-                role={role}
-                isActive={viewingRole?.id === role.id}
-                onView={() => startView(role)}
-                onEdit={() => startEdit(role)}
-                onDelete={() => setDeletingRole(role)}
-                canDelete={role.userCount === 0}
-                isDeleting={deleteMutation.isPending}
-              />
-            ))
+            <div className="relative" style={{ height: rolesVirtualizer.getTotalSize() }}>
+              {rolesVirtualizer.getVirtualItems().map((item) => {
+                const role = filteredRoles[item.index];
+                if (!role) return null;
+                return (
+                  <div
+                    key={item.key}
+                    ref={rolesVirtualizer.measureElement}
+                    data-index={item.index}
+                    className="absolute left-0 right-0"
+                    style={{ transform: `translateY(${item.start}px)` }}
+                  >
+                    <RoleRow
+                      role={role}
+                      isActive={viewingRole?.id === role.id}
+                      onView={() => startView(role)}
+                      onEdit={() => startEdit(role)}
+                      onDelete={() => setDeletingRole(role)}
+                      canDelete={role.userCount === 0}
+                      isDeleting={deleteMutation.isPending}
+                    />
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>

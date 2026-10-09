@@ -1,12 +1,13 @@
-import { prisma } from '../db.js';
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { serialize } from '../utils/serialize';
-import { hasGrant, hasNodeAccess } from '../lib/permissions';
-import { resolveServerPermissions } from '../lib/permissions-catalog';
-import { SimpleCache } from '../lib/cache.js';
-import { apiError } from "../lib/http-error";
-import { ErrorCodes } from "../shared-types";
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { Prisma } from "@prisma/client";
+import { prisma } from "../db.js";
+import { apiError } from "../lib/http-error.js";
+import { ErrorCodes } from "../shared-types.js";
+import { serialize } from "../utils/serialize.js";
+import { resolveServerPermissions } from "../lib/permissions-catalog.js";
+import { hasNodeAccess, hasGrant } from "../lib/permissions.js";
+import { SimpleCache } from "../lib/cache.js";
+import { config } from "../config.js";
 
 type ServerMetricBucket = {
   bucket: number;
@@ -152,7 +153,7 @@ export async function metricsRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      if (config.suspension.enforced && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
           code: ErrorCodes.SERVER_SUSPENDED,
@@ -335,7 +336,7 @@ export async function metricsRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      if (config.suspension.enforced && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
           code: ErrorCodes.SERVER_SUSPENDED,

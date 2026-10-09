@@ -15,6 +15,7 @@ import { openSseStream } from "../utils/sse.js";
 import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-memory.js";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
+import { config } from "../config.js";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
 const ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
@@ -216,7 +217,7 @@ const parseAllocationIps = async (input: string): Promise<string[]> => {
  */
 const pushNodeUpdated = (app: FastifyInstance, nodeId: string, userId: string, change: string): void => {
 	try {
-		(app as any).wsGateway?.pushToAdminSubscribers?.("node_updated", {
+		app.wsGateway?.pushToAdminSubscribers?.("node_updated", {
 			type: "node_updated",
 			nodeId,
 			change,
@@ -240,7 +241,7 @@ const pushAllocationEvent = (
 	allocationIds?: string[],
 ): void => {
 	try {
-		(app as any).wsGateway?.pushToAdminSubscribers?.(type, {
+		app.wsGateway?.pushToAdminSubscribers?.(type, {
 			type,
 			nodeId,
 			...(allocationIds ? { allocationIds } : {}),
@@ -386,7 +387,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			});
 
 			// Best-effort fan-out so open panels re-render the new selection.
-			const gateway = (app as any).wsGateway;
+			const gateway = app.wsGateway;
 			try {
 				gateway?.pushToAdminSubscribers?.("node_updated", {
 					type: "node_updated",
@@ -600,7 +601,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.send(serialize({ success: true, data: safeNode }));
 
 			// Broadcast node_created event
-			const wsGatewayNodeCreated = (app as any).wsGateway;
+			const wsGatewayNodeCreated = app.wsGateway;
 			if (wsGatewayNodeCreated?.pushToAdminSubscribers) {
 				wsGatewayNodeCreated.pushToAdminSubscribers('node_created', {
 					type: 'node_created',
@@ -771,7 +772,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				},
 			});
 
-			const deployUrl = `${process.env.BACKEND_URL || "http://localhost:3000"}/api/deploy/${token}`;
+			const deployUrl = `${config.backend.url || config.backend.externalAddress}/api/deploy/${token}`;
 			let apiKey = "";
 			try {
 				const apiKeyResponse = await createApiKey({
@@ -998,7 +999,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 				// F18: same payload shape as routes/api-keys.ts create.
 				try {
-					(app as any).wsGateway?.pushToAdminSubscribers?.("api_key_created", {
+					app.wsGateway?.pushToAdminSubscribers?.("api_key_created", {
 						type: "api_key_created",
 						keyId: apiKeyResponse.id,
 						keyName: apiKeyResponse.name ?? `agent-${nodeId.slice(0, 8)}`,
@@ -1162,7 +1163,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			);
 
 			// Broadcast node_updated event
-			const wsGatewayNodeUpdated = (app as any).wsGateway;
+			const wsGatewayNodeUpdated = app.wsGateway;
 			if (wsGatewayNodeUpdated?.pushToAdminSubscribers) {
 				wsGatewayNodeUpdated.pushToAdminSubscribers('node_updated', {
 					type: 'node_updated',
@@ -1414,7 +1415,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// health_report emission (node_metrics_updated); uptimeSeconds is
 			// not part of the HTTP heartbeat body and is omitted.
 			try {
-				const wsGateway = (app as any).wsGateway;
+				const wsGateway = app.wsGateway;
 				wsGateway?.pushToAdminSubscribers?.("node_updated", {
 					type: "node_updated",
 					nodeId,
@@ -1503,7 +1504,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			// Immediate revoke: close live agent sockets + fail pending
 			// requests so a deleted node stops receiving commands now.
 			try {
-				const gw = (app as any).wsGateway as {
+				const gw = app.wsGateway as {
 					closeAgentConnections?: (id: string, reason: string) => void;
 					failPendingRequestsForNodePublic?: (id: string, reason: string) => void;
 				} | undefined;
@@ -1515,7 +1516,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.send({ success: true, deletedApiKeys: deletedKeys });
 
 			// Broadcast node_deleted event
-			const wsGatewayNodeDeleted = (app as any).wsGateway;
+			const wsGatewayNodeDeleted = app.wsGateway;
 			if (wsGatewayNodeDeleted?.pushToAdminSubscribers) {
 				wsGatewayNodeDeleted.pushToAdminSubscribers('node_deleted', {
 					type: 'node_deleted',
@@ -1628,9 +1629,11 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
 			}
 
-			const { serverId, search } = request.query as {
+			const { serverId, search, limit, offset } = request.query as {
 				serverId?: string;
 				search?: string;
+				limit?: string;
+				offset?: string;
 			};
 
 			const node = await prisma.node.findUnique({ where: { id: nodeId } });
@@ -1663,30 +1666,39 @@ export async function nodeRoutes(app: FastifyInstance) {
 					: {}),
 			};
 
-			const allocations = await prisma.nodeAllocation.findMany({
-				where,
-				select: {
-					id: true,
-					nodeId: true,
-					serverId: true,
-					ip: true,
-					port: true,
-					alias: true,
-					notes: true,
-					createdAt: true,
-					updatedAt: true,
-					server: {
-						select: {
-							id: true,
-							name: true,
-							status: true,
+			// Add pagination with reasonable defaults (max 1000)
+			const take = Math.min(Number(limit) || 1000, 1000);
+			const skip = Math.max(0, Number(offset) || 0);
+
+			const [allocations, total] = await Promise.all([
+				prisma.nodeAllocation.findMany({
+					where,
+					select: {
+						id: true,
+						nodeId: true,
+						serverId: true,
+						ip: true,
+						port: true,
+						alias: true,
+						notes: true,
+						createdAt: true,
+						updatedAt: true,
+						server: {
+							select: {
+								id: true,
+								name: true,
+								status: true,
+							},
 						},
 					},
-				},
-				orderBy: [{ ip: "asc" }, { port: "asc" }],
-			});
+					orderBy: [{ ip: "asc" }, { port: "asc" }],
+					take,
+					skip,
+				}),
+				prisma.nodeAllocation.count({ where }),
+			]);
 
-			reply.send(serialize({ success: true, data: allocations }));
+			reply.send(serialize({ success: true, data: allocations, pagination: { limit: take, offset: skip, total } }));
 		},
 	);
 
@@ -2031,7 +2043,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.status(201).send(serialize({ success: true, data: assignment }));
 
 			// Broadcast node_assigned event
-			const wsGatewayNodeAssigned = (app as any).wsGateway;
+			const wsGatewayNodeAssigned = app.wsGateway;
 			if (wsGatewayNodeAssigned?.pushToAdminSubscribers) {
 				wsGatewayNodeAssigned.pushToAdminSubscribers('node_assigned', {
 					type: 'node_assigned',
@@ -2109,7 +2121,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.send({ success: true });
 
 			// Broadcast node_unassigned event
-			const wsGatewayNodeUnassigned = (app as any).wsGateway;
+			const wsGatewayNodeUnassigned = app.wsGateway;
 			if (wsGatewayNodeUnassigned?.pushToAdminSubscribers) {
 				wsGatewayNodeUnassigned.pushToAdminSubscribers('node_unassigned', {
 					type: 'node_unassigned',
@@ -2207,7 +2219,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			const registeredIds = new Set(registeredServers.map((s) => s.id));
 
 			// Get discovered containers from gateway
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
 
 			// Filter out containers that are already registered
@@ -2252,7 +2264,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 				return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
 			}
 
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
 			const container = discovered.find((c: any) => c.containerId === containerId);
 			if (!container) {
@@ -2431,7 +2443,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			}
 
 			// Verify container was discovered on this node
-			const wsGateway = (app as any).wsGateway;
+			const wsGateway = app.wsGateway;
 			const discovered = wsGateway?.getDiscoveredContainers?.(nodeId) ?? [];
 			const container = discovered.find((c: any) => c.containerId === containerId);
 			if (!container) {
@@ -2688,7 +2700,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.status(201).send(serialize({ success: true, data: assignment }));
 
 			// Broadcast wildcard_assigned event
-			const wsGatewayWildcardAssigned = (app as any).wsGateway;
+			const wsGatewayWildcardAssigned = app.wsGateway;
 			if (wsGatewayWildcardAssigned?.pushToAdminSubscribers) {
 				wsGatewayWildcardAssigned.pushToAdminSubscribers('wildcard_assigned', {
 					type: 'wildcard_assigned',
@@ -2767,7 +2779,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 			reply.send({ success: true });
 
 			// Broadcast wildcard_removed event
-			const wsGatewayWildcardRemoved = (app as any).wsGateway;
+			const wsGatewayWildcardRemoved = app.wsGateway;
 			if (wsGatewayWildcardRemoved?.pushToAdminSubscribers) {
 				wsGatewayWildcardRemoved.pushToAdminSubscribers('wildcard_removed', {
 					type: 'wildcard_removed',
@@ -2852,7 +2864,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// If agent is online, query it for rich system info
 			if (node.isOnline) {
-				const gateway = (app as any).wsGateway;
+				const gateway = app.wsGateway;
 				if (gateway) {
 					try {
 						const agentData = await gateway.requestFromAgent(nodeId, {

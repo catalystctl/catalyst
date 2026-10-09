@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { useMutation } from '@/csync';
+import { useMutation, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
@@ -420,6 +420,16 @@ function UsersPage() {
 
  const filteredIds = useMemo(() => filteredUsers.map((user) => user.id), [filteredUsers]);
  const allSelected = filteredIds.length > 0 && filteredIds.every((id) => selectedIds.includes(id));
+
+ // ── Virtualization setup ──
+ const usersListRef = useRef<HTMLDivElement>(null);
+ const usersVirtualizer = useVirtualizer({
+   count: filteredUsers.length,
+   getScrollElement: () => usersListRef.current,
+   estimateSize: () => 58,
+   overscan: 10,
+   getItemKey: (index) => filteredUsers[index]?.id ?? index,
+ });
 
  const currentUserIds = useMemo(() => new Set(users.map((u) => u.id)), [users]);
  const validSelectedIds = useMemo(
@@ -1072,7 +1082,7 @@ function UsersPage() {
  )}
 
  {/* Rows */}
- <div className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
+ <div ref={usersListRef} className="max-h-[min(32rem,50dvh)] min-w-0 overflow-y-auto bg-background/25">
  {isLoading ? (
  <div>
  {Array.from({ length: 6 }).map((_, index) => (
@@ -1087,7 +1097,10 @@ function UsersPage() {
  ) : isError && !data ? (
  <div className="p-3"><TabErrorState message={t('users.loadFailed')} onRetry={() => refetch()} /></div>
  ) : filteredUsers.length > 0 ? (
- filteredUsers.map((user: AdminUser) => {
+ <div className="relative" style={{ height: usersVirtualizer.getTotalSize() }}>
+ {usersVirtualizer.getVirtualItems().map((item) => {
+ const user = filteredUsers[item.index];
+ if (!user) return null;
  const isSelected = selectedIds.includes(user.id);
  const isActiveView = viewingUser?.id === user.id;
  const roleNames = user.roles.length > 0
@@ -1106,7 +1119,13 @@ function UsersPage() {
 
  return (
  <div
- key={user.id}
+ key={item.key}
+ ref={usersVirtualizer.measureElement}
+ data-index={item.index}
+ className="absolute left-0 right-0"
+ style={{ transform: `translateY(${item.start}px)` }}
+ >
+ <div
  role="row"
  onClick={() => startView(user)}
  className={cn(
@@ -1287,8 +1306,10 @@ function UsersPage() {
  </DropdownMenu>
  </span>
  </div>
+ </div>
  );
- })
+ })}
+ </div>
  ) : (
  <div className="p-3">
  <TabEmptyState

@@ -10,6 +10,7 @@ import type { PrismaClient } from "@prisma/client";
 import type pino from "pino";
 import crypto from "crypto";
 import { captureSystemError } from "./error-logger";
+import { config } from "../config.js";
 
 export interface WebhookEvent {
   event: string;
@@ -33,7 +34,7 @@ export class WebhookService {
     this.logger = logger.child({ component: "WebhookService" });
     // Prefer env; otherwise load/persist a stable secret from SystemSetting so
     // multi-worker / restart does not rotate signatures every boot.
-    this.secret = process.env.WEBHOOK_SECRET || "";
+    this.secret = config.webhook.secret || "";
     if (!this.secret) {
       // Sync bootstrap path is not possible with async Prisma; resolve lazily on first sign.
       this.secret = "";
@@ -45,8 +46,8 @@ export class WebhookService {
    * SystemSetting(id="webhooks").smtpPassword holds a persisted random secret.
    */
   private async ensureSecret(): Promise<string> {
-    if (process.env.WEBHOOK_SECRET) {
-      this.secret = process.env.WEBHOOK_SECRET;
+    if (config.webhook.secret) {
+      this.secret = config.webhook.secret;
       return this.secret;
     }
     if (this.secret) return this.secret;

@@ -6,6 +6,7 @@ import { describeError } from '../utils/describe-error.js';
 import { PassThrough } from "stream";
 import { once } from "events";
 import * as path from "path";
+import { config } from '../config.js';
 import {
   openStorageStream,
   deleteBackupFromStorage,
@@ -27,7 +28,7 @@ export async function backupRoutes(app: FastifyInstance) {
   const TRANSFER_DIR = process.env.BACKUP_TRANSFER_DIR || "/tmp/catalyst-backup-transfer";
 
   const buildServerDir = (serverUuid: string) => {
-    const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
+    const serverDir = config.serverData.dir;
     return `${serverDir}/${serverUuid}`;
   };
 
@@ -59,7 +60,7 @@ export async function backupRoutes(app: FastifyInstance) {
       apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       return null;
     }
-    if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+    if (config.suspension.enforced && server.suspendedAt) {
       reply.status(423).send({
         error: "Server is suspended",
         code: ErrorCodes.SERVER_SUSPENDED,
@@ -197,7 +198,7 @@ export async function backupRoutes(app: FastifyInstance) {
       const pageNum = Number.isFinite(parsedPage) ? Math.max(parsedPage, 1) : 1;
       const skip = (pageNum - 1) * limitNum;
 
-      if (process.env.SUSPENSION_ENFORCED !== "false") {
+      if (config.suspension.enforced) {
         const server = await prisma.server.findUnique({
           where: { id: serverId },
           select: { suspendedAt: true, suspensionReason: true },
@@ -290,7 +291,7 @@ export async function backupRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false") {
+      if (config.suspension.enforced) {
         const server = await prisma.server.findUnique({
           where: { id: serverId },
           select: { suspendedAt: true, suspensionReason: true },
@@ -331,7 +332,7 @@ export async function backupRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      if (config.suspension.enforced && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
           code: ErrorCodes.SERVER_SUSPENDED,
@@ -370,7 +371,7 @@ export async function backupRoutes(app: FastifyInstance) {
 
       // Per-server state push for restore transitions (P1-29).
       const emitRestoreState = (state: string) => {
-        const gw = (app as any).wsGateway;
+        const gw = app.wsGateway;
         if (gw?.routeToClients) {
           void gw
             .routeToClients(serverId, {
@@ -424,7 +425,7 @@ export async function backupRoutes(app: FastifyInstance) {
       const isEncrypted = (backup.metadata as any)?.encrypted === true;
       let encryptionKey: string | undefined;
       if (isEncrypted) {
-        const rawKey = process.env.BACKUP_ENCRYPTION_KEY;
+        const rawKey = config.backup.encryptionKey;
         if (!rawKey) {
           await revertToStopped();
           return apiError(reply, 400, ErrorCodes.BACKUP_ENCRYPTION_KEY_MISSING, "Backup is encrypted but no encryption key is configured");
@@ -501,7 +502,7 @@ export async function backupRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      if (config.suspension.enforced && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
           code: ErrorCodes.SERVER_SUSPENDED,
@@ -575,7 +576,7 @@ export async function backupRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
       }
 
-      if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      if (config.suspension.enforced && server.suspendedAt) {
         return reply.status(423).send({
           error: "Server is suspended",
           code: ErrorCodes.SERVER_SUSPENDED,

@@ -258,8 +258,66 @@ When vulnerabilities are disclosed, they will be listed here with:
 - Fixed version
 - Credit to reporter (if desired)
 
+## Dependency Security Advisories
+
+### Mitigated Advisories
+
+#### extract-zip Symlink Vulnerability (GHSA-jmr9-qjv8-65gv)
+
+**Status:** Mitigated in `catalyst-backend/src/plugins/marketplace/packaging.ts`
+
+**Vulnerability:** extract-zip versions through 2.0.1 materialize symlink entries verbatim, allowing malicious packages to redirect writes outside the extraction directory via planted symlinks.
+
+**Mitigation:** The plugin extraction code (`extractPackage`) validates every ZIP entry type before extraction:
+
+```typescript
+// Lines 262-274 in packaging.ts
+// Regular files and directories only. extract-zip materializes symlink
+// entries verbatim (GHSA-jmr9-qjv8-65gv), so a link planted by a
+// package would redirect a later write outside destDir. A .catpkg has
+// no legitimate need for links, devices or FIFOs. Mode 0 means the
+// archive recorded no attributes (common for Windows-built zips) and
+// extract-zip falls back to name-based detection, so allow it.
+const entryType = (entry.externalFileAttributes >>> 16) & 0o170000;
+if (entryType !== 0 && entryType !== 0o040000 && entryType !== 0o100000) {
+  throw new PackagingError(
+    'UNSAFE_ENTRY',
+    `Package contains a non-regular file entry: ${entry.fileName}`,
+  );
+}
+```
+
+Only regular files (`0o100000`) and directories (`0o040000`) are permitted. Symlinks, devices, FIFOs, and sockets are rejected before extraction.
+
+**Verification:** Search for `GHSA-jmr9-qjv8-65gv` or `symlink` in `catalyst-backend/src/plugins/marketplace/packaging.ts`.
+
+#### RUSTSEC-2023-0071 (rsa Marvin Attack)
+
+**Status:** Accepted risk, documented in `catalyst-agent/deny.toml`
+
+**Vulnerability:** Marvin Attack timing side-channel in RSA PKCS#1 v1.5 decryption affects the `rsa` crate (transitive dependency of `russh` for SFTP host-key exchange).
+
+**Risk Assessment:**
+- `rsa` is a transitive dependency of `russh`, used only for SFTP host-key exchange in the agent
+- The agent does not use `rsa` for panel traffic encryption or authentication
+- No patched release exists (tracked upstream)
+- SFTP tokens are validated by the panel API, not decrypted on the agent
+
+**Mitigation Plan:** Remove `rsa` dependency when `russh` drops its default `rsa` feature or switches to an alternative implementation.
+
+**Documentation:** See `catalyst-agent/deny.toml` lines 7-10 and `.github/workflows/ci.yml` lines 201-207.
+
+### Active Monitoring
+
+All dependencies are monitored via:
+- **GitHub Dependabot** (automated PRs for security patches)
+- **cargo-audit** (Rust dependencies, blocking in CI)
+- **cargo-deny** (Rust license/advisory/ban policy, blocking in CI)
+- **npm audit** (JavaScript dependencies, informational)
+
 ## Additional Resources
 
+- **Database Migration Safety**: [docs/database-migrations.md](database-migrations.md)
 - **GPLv3 License**: [LICENSE](../LICENSE)
 - **GNU GPL FAQ**: https://www.gnu.org/licenses/gpl-faq.html
 - **FSF Security Guidelines**: https://www.fsf.org/

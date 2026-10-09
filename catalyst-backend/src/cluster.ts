@@ -1,5 +1,6 @@
 import cluster from 'cluster';
 import os from 'os';
+import { config } from './config.js';
 import { initCacheBusPrimary } from './lib/cache-bus.js';
 import { isRedisConfigured } from './lib/redis.js';
 import { RESTART_MESSAGE_TYPE } from './lib/panel-restart.js';
@@ -17,7 +18,7 @@ import { RESTART_MESSAGE_TYPE } from './lib/panel-restart.js';
  */
 export let backgroundJobWorkerPid: number | null = null;
 
-if (cluster.isWorker && process.env.CATALYST_BACKGROUND_JOB_OWNER === '1') {
+if (cluster.isWorker && config.cluster.backgroundJobOwner) {
   backgroundJobWorkerPid = process.pid;
 }
 
@@ -60,7 +61,7 @@ if (cluster.isWorker && process.env.CATALYST_BACKGROUND_JOB_OWNER === '1') {
  */
 export function bootstrapCluster(mainFn: () => Promise<void>) {
   if (cluster.isPrimary) {
-    const workers = Number(process.env.WORKERS) || os.cpus().length;
+    const workers = config.server.workers || os.cpus().length;
     // Arm IPC relay before any worker can broadcast cache invalidations.
     initCacheBusPrimary();
     console.warn(
@@ -180,7 +181,7 @@ export function bootstrapCluster(mainFn: () => Promise<void>) {
  * are gated.
  */
 export function shouldRunBackgroundJobs(): boolean {
-  const workersEnv = Number(process.env.WORKERS || 0);
+  const workersEnv = config.server.workers;
   if (!workersEnv || workersEnv <= 0) {
     return true;
   }
@@ -195,7 +196,7 @@ export function shouldRunBackgroundJobs(): boolean {
 
 /** Convenience: current worker label for logs. */
 export function backgroundJobOwnerLabel(): string {
-  if (!Number(process.env.WORKERS || 0)) {
+  if (!config.server.workers) {
     return `pid=${process.pid} (single-process)`;
   }
   const isOwner = backgroundJobWorkerPid !== null && process.pid === backgroundJobWorkerPid;

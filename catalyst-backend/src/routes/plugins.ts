@@ -11,6 +11,7 @@ import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
 import { formatZodIssues } from '../lib/validation';
 import { PluginMarketplaceService, browseMarketplaces, annotateMarketplaceEntries, PackagingError, listMarketplaceSources, addMarketplaceSource, setMarketplaceSourceEnabled, removeMarketplaceSource } from '../plugins/marketplace/service';
+import { config } from '../config.js';
 import {
   DISCLAIMER_VERSION,
   computeConsentState,
@@ -228,7 +229,7 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
     prisma,
     app.log,
     (name) => pluginLoader.discoverSingle(name),
-    { allowLocalDownloads: process.env.PLUGIN_MARKETPLACE_ALLOW_LOCAL === 'true' },
+    { allowLocalDownloads: config.plugin.marketplaceAllowLocal },
   );
   /**
    * GET /api/plugins/marketplace

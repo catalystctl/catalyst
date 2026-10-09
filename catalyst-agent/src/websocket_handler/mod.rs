@@ -1933,6 +1933,26 @@ impl WebSocketHandler {
     ) -> AgentResult<()> {
         let msg: Value = serde_json::from_str(text)?;
 
+        // Extract request_id and message type for tracing
+        let request_id = msg
+            .get("requestId")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let msg_type = msg
+            .get("type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Create tracing span with request_id propagation (not entered - stored for Send)
+        let span = tracing::info_span!(
+            "handle_message",
+            request_id = %request_id,
+            msg_type = %msg_type
+        );
+        let _guard = span.enter();
+
         // SEC-C-04: replay + freshness guard. Applies to every inbound frame
         // carrying a requestId; handshake/error frames bypass the
         // handshake_verified gate below. Duplicates or timestamps outside the
