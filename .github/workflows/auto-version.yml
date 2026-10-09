@@ -1098,7 +1098,9 @@ jobs:
           
           # Verify HTML is served
           RESPONSE=$(curl -s http://localhost:8080/)
-          if ! echo "$RESPONSE" | grep -q "<!DOCTYPE html>"; then
+           # HTML doctype matching is case-insensitive per the HTML spec; Vite
+           # emits the canonical lowercase form (<!doctype html>).
+           if ! echo "$RESPONSE" | grep -qi "<!doctype html>"; then
             echo "ERROR: Frontend did not serve HTML"
             echo "Response: $RESPONSE"
             exit 1
