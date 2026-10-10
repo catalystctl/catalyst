@@ -47,6 +47,9 @@ use russh_sftp::server::StatusReply;
 use crate::config::AgentConfig;
 use crate::file_manager::FileManager;
 
+/// Largest SFTP READ reply. Clients can reissue short reads until EOF;
+/// returning a smaller reply avoids attacker-controlled multi-gigabyte buffers.
+const MAX_SFTP_READ_CHUNK: usize = 1024 * 1024;
 // ---------------------------------------------------------------------------
 // File-change notifications
 // ---------------------------------------------------------------------------
@@ -608,7 +611,10 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
                 .await
                 .map_err(|e| SftpError(format!("Read seek failed: {}", e)))?;
 
-            let to_read = std::cmp::min(len as u64, file_len - offset) as usize;
+            let to_read = std::cmp::min(
+                std::cmp::min(len as u64, file_len - offset),
+                MAX_SFTP_READ_CHUNK as u64,
+            ) as usize;
             let mut buf = vec![0u8; to_read];
             let n = file
                 .read(&mut buf)
@@ -1632,5 +1638,40 @@ mod file_change_notification_tests {
                 action
             );
         }
+    }
+
+    #[tokio::test]
+    async fn oversized_read_requests_return_bounded_byte_exact_chunks() {
+        use russh_sftp::server::Handler;
+        let dir = tempfile::tempdir().unwrap();
+        let server = dir.path().join("read-server");
+        tokio::fs::create_dir(&server).await.unwrap();
+        let expected: Vec<u8> = (0..MAX_SFTP_READ_CHUNK + 251)
+            .map(|i| (i % 251) as u8)
+            .collect();
+        tokio::fs::write(server.join("binary.dat"), &expected)
+            .await
+            .unwrap();
+        let mut handler = CatalystSftpHandler::new(
+            Arc::new(FileManager::new(dir.path().to_path_buf())),
+            "read-server".to_string(),
+            vec!["file.read".to_string()],
+        );
+        let handle = CatalystSftpHandler::make_file_handle("binary.dat");
+        let mut received = Vec::new();
+        while received.len() < expected.len() {
+            let reply = handler
+                .read(1, handle.clone(), received.len() as u64, u32::MAX)
+                .await
+                .unwrap();
+            assert!(reply.data.len() <= MAX_SFTP_READ_CHUNK);
+            received.extend_from_slice(&reply.data);
+        }
+        assert_eq!(received, expected);
+        let eof = handler
+            .read(2, handle, received.len() as u64, u32::MAX)
+            .await
+            .unwrap_err();
+        assert_eq!(eof.status_code(), StatusCode::Eof);
     }
 }

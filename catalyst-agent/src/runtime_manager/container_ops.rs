@@ -480,7 +480,7 @@ impl ContainerdRuntime {
                 // cgroup path and NO resource limits — a fork bomb or malloc
                 // loop in an installer OOMs the whole node for every tenant.
                 // Apply the same resource discipline as runtime containers.
-                "cgroupsPath": format!("/catalyst/{}", container_id),
+                "cgroupsPath": format!("/{}/{}", self.namespace, container_id),
                 "resources": {
                     "memory": {"limit": 2147483648i64, "swap": 2147483648i64},
                     // shares 1024 (=1 core) for cgroup v1; unified cpu.weight 200
@@ -1014,40 +1014,10 @@ impl ContainerdRuntime {
             // 5s budget, so the worker thread always terminates.
             // (O_NONBLOCK lives on the shared open file description; every
             // writer goes through this path, so the mode is consistent.)
+            let deadline = Instant::now() + Duration::from_secs(5);
             let write_fut = spawn_blocking(move || {
-                use std::os::unix::io::AsRawFd;
-                let w = h;
-                let fd = w.as_raw_fd();
-                let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
-                if flags >= 0 {
-                    unsafe {
-                        libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                    }
-                }
-                let mut buf = input.as_bytes();
-                let start = std::time::Instant::now();
-                while !buf.is_empty() {
-                    let n = unsafe { libc::write(fd, buf.as_ptr() as *const _, buf.len()) };
-                    if n > 0 {
-                        buf = &buf[n as usize..];
-                        continue;
-                    }
-                    let err = std::io::Error::last_os_error();
-                    if err.kind() == std::io::ErrorKind::WouldBlock {
-                        if start.elapsed() > Duration::from_secs(5) {
-                            return Err(AgentError::ContainerError(
-                                "stdin write timed out: container is not reading input".to_string(),
-                            ));
-                        }
-                        std::thread::sleep(Duration::from_millis(10));
-                        continue;
-                    }
-                    if err.kind() == std::io::ErrorKind::Interrupted {
-                        continue;
-                    }
-                    return Err(AgentError::ContainerError(format!("stdin: {}", err)));
-                }
-                Ok::<(), AgentError>(())
+                helpers::write_fifo_until(&h, input.as_bytes(), deadline)
+                    .map_err(|e| AgentError::ContainerError(format!("stdin: {}", e)))
             });
             match tokio::time::timeout(Duration::from_secs(6), write_fut).await {
                 Ok(Ok(Ok(()))) => {}
@@ -1085,7 +1055,7 @@ impl ContainerdRuntime {
         }
         create_fifo(&ep).ok();
         File::create(&eo).ok();
-        let spec = serde_json::json!({"args":["sh","-c","cat > /proc/1/fd/0"],"user":{"uid":1000,"gid":1000},"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/"});
+        let spec = serde_json::json!({"args":["sh","-c","exec cat > /proc/1/fd/0"],"user":{"uid":1000,"gid":1000},"env":["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],"cwd":"/"});
         let spec_any = Any {
             type_url: "types.containerd.io/opencontainers/runtime-spec/1/Process".to_string(),
             value: spec.to_string().into_bytes(),
@@ -1120,36 +1090,36 @@ impl ContainerdRuntime {
         }
         let epc = ep.clone();
         let input_owned = input.to_string();
-        // Bounded open+write: a blocking O_WRONLY open parks the pool thread
-        // forever when the exec'd cat died before opening the read end.
-        let write_result = tokio::time::timeout(
-            Duration::from_secs(5),
-            spawn_blocking(move || -> AgentResult<()> {
-                let mut f = std::fs::OpenOptions::new()
-                    .write(true)
-                    .open(&epc)
-                    .map_err(|e| {
-                        AgentError::ContainerError(format!("stdin fallback open: {}", e))
-                    })?;
-                f.write_all(input_owned.as_bytes()).map_err(|e| {
-                    AgentError::ContainerError(format!("stdin fallback write: {}", e))
-                })?;
-                Ok(())
-            }),
-        )
-        .await;
-        // Reap the exec entry and temp files on every path.
-        self.delete_exec_process(container_id, &exec_id).await;
+        // The worker itself must finish: a timeout on its join handle alone
+        // cannot cancel a blocking open when the exec'd reader has exited.
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let write_result = spawn_blocking(move || {
+            helpers::write_fifo_path_until(&epc, input_owned.as_bytes(), deadline)
+                .map_err(|e| AgentError::ContainerError(format!("stdin fallback: {}", e)))
+        })
+        .await
+        .map_err(|e| AgentError::ContainerError(format!("stdin fallback worker failed: {}", e)))
+        .and_then(|result| result);
+        let req = WaitRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.clone(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        // Closing the writer sends EOF to cat. Give it time to deliver the
+        // bytes before reaping; on failure or a stuck cat, kill this exec only.
+        let exited = write_result.is_ok()
+            && matches!(
+                tokio::time::timeout(Duration::from_secs(3), tasks.wait(req)).await,
+                Ok(Ok(_))
+            );
+        if exited {
+            self.delete_exec_process(container_id, &exec_id).await;
+        } else {
+            self.terminate_exec_process(container_id, &exec_id).await;
+        }
         let _ = fs::remove_file(&ep);
         let _ = fs::remove_file(&eo);
-        match write_result {
-            Ok(Ok(Ok(()))) => Ok(()),
-            Ok(Ok(Err(e))) => Err(e),
-            Ok(Err(join_err)) => Err(AgentError::ContainerError(join_err.to_string())),
-            Err(_) => Err(AgentError::ContainerError(
-                "stdin fallback write timed out".to_string(),
-            )),
-        }
+        write_result
     }
 
     /// Reap installer containers orphaned by a previous agent process (kill or
@@ -1776,10 +1746,20 @@ impl ContainerdRuntime {
             exec_id: exec_id.clone(),
         };
         let req = with_namespace!(req, &self.namespace);
-        let _ = tokio::time::timeout(Duration::from_secs(30), tasks.wait(req)).await;
-
-        // Reap the exec process entry on every path; otherwise each exec
-        // leaks a zombie entry in the task state.
+        let wait_error = match tokio::time::timeout(Duration::from_secs(30), tasks.wait(req)).await
+        {
+            Ok(Ok(_)) => None,
+            Ok(Err(error)) => Some(grpc_err(error)),
+            Err(_) => Some(AgentError::ContainerError(
+                "Exec timed out after 30s".to_string(),
+            )),
+        };
+        if let Some(error) = wait_error {
+            self.terminate_exec_process(container_id, &exec_id).await;
+            let _ = fs::remove_file(&op);
+            let _ = fs::remove_file(&ep);
+            return Err(error);
+        }
         self.delete_exec_process(container_id, &exec_id).await;
 
         let out = tokio::fs::read_to_string(&op).await.unwrap_or_default();
@@ -1792,6 +1772,34 @@ impl ContainerdRuntime {
         Ok(out)
     }
 
+    /// Kill only the requested exec, not the game container's init process.
+    /// Bound cleanup RPCs as well, so a wedged shim cannot pin a worker task.
+    async fn terminate_exec_process(&self, container_id: &str, exec_id: &str) {
+        let mut tasks = TasksClient::new(self.channel.clone());
+        let req = TaskKillRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.to_string(),
+            signal: Signal::SIGKILL as u32,
+            all: false,
+        };
+        let req = with_namespace!(req, &self.namespace);
+        match tokio::time::timeout(Duration::from_secs(3), tasks.kill(req)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(error)) if is_not_found(&error) => {}
+            result => warn!(
+                "Exec cleanup kill failed for {} in {}: {:?}",
+                exec_id, container_id, result
+            ),
+        }
+        let req = WaitRequest {
+            container_id: container_id.to_string(),
+            exec_id: exec_id.to_string(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        let _ = tokio::time::timeout(Duration::from_secs(3), tasks.wait(req)).await;
+        self.delete_exec_process(container_id, exec_id).await;
+    }
+
     /// Best-effort reap of an exec'd process entry (DeleteProcess).
     pub(crate) async fn delete_exec_process(&self, container_id: &str, exec_id: &str) {
         let mut tasks = TasksClient::new(self.channel.clone());
@@ -1800,11 +1808,12 @@ impl ContainerdRuntime {
             exec_id: exec_id.to_string(),
         };
         let req = with_namespace!(req, &self.namespace);
-        if let Err(e) = tasks.delete_process(req).await {
-            debug!(
-                "delete exec {} in {} failed (may already be gone): {}",
-                exec_id, container_id, e
-            );
+        match tokio::time::timeout(Duration::from_secs(3), tasks.delete_process(req)).await {
+            Ok(Ok(_)) => {}
+            result => debug!(
+                "delete exec {} in {} failed (may already be gone): {:?}",
+                exec_id, container_id, result
+            ),
         }
     }
 

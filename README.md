@@ -139,6 +139,68 @@ See the [Administrator Guide](https://docs.catalystctl.com/admin/networking/) fo
 
 👉 [Full architecture details](docs/architecture.md)
 
+### Agent performance and node tuning
+
+The agent's control plane shares host CPU, memory, and storage with game
+containers. These safeguards reduce avoidable interference without removing
+tenant CPU quotas, memory limits, swap policy, or security isolation:
+
+- **Monitoring:** resource reports default to five seconds; missed periodic
+  ticks are skipped instead of replayed in a catch-up burst. Host CPU/network
+  collectors are reused on the blocking pool; host CPU usage is averaged between
+  reports. Console status fallback polls at most once every two seconds per
+  stream, independently of live log delivery and container exit events.
+- **Transfers:** web downloads stream in 64 KiB chunks with a snapshot-length
+  limit. A bounded 128-request queue keeps long-polling responsive, and one
+  dispatcher admits at most 16 active operations before spawning work. Excess
+  requests fail explicitly rather than creating an unbounded waiting-task backlog.
+  SFTP READ replies are capped at 1 MiB; clients continue reading until EOF.
+  Advisory SFTP file-change notifications use one worker and a 256-event queue;
+  overflow drops notifications, not file operations or critical lifecycle events.
+  These notifications wait for authentication when a reconnecting socket exists.
+- **Installer output:** log polling reads appended bytes, not the whole log.
+  Diagnostic tails retain at most 64 KiB per stream; SteamCMD restart and disk
+  failure detection retain independent flags. Incomplete trailing UTF-8 is held
+  until a subsequent write completes it.
+- **Backups and repair:** local backup pipelines are serialized, including
+  compression/encryption. Backups do not force source-file fsyncs: tar reads the
+  page cache, and fsync does not make a changing game world consistent. Quiesce
+  or stop the game for a consistent backup. Recursive ownership repair runs off
+  the async reactor and does not chown already-correct inodes.
+- **CPU burst:** kernel support is detected from existing cgroup interfaces,
+  without writes that fail under `ProtectControlGroups`. Where supported, new
+  game containers bank one quota period of unused CPU to absorb short spikes;
+  sustained CPU remains capped. Existing container specifications do not change
+  merely because the agent is upgraded.
+
+For dense nodes, set `[agent].stats_interval_secs = 10` or `30` in the agent
+configuration when slower graphs are acceptable; `STATS_INTERVAL_SECS` overrides
+the file setting. Minimum: one second. Leave `[logging].level = "info"` in normal
+operation; SSH/SFTP debug logging now follows that setting rather than being
+forced on. See [the configuration example](catalyst-agent/config.toml.example).
+
+[The node tuning script](scripts/node-tuning.sh) configures host limits and
+absolute dirty-page thresholds (256 MiB background, 1 GiB maximum). **It changes
+global kernel settings and restarts the agent; review it before running on a live
+node.** Generated systemd units use neutral CPU/IO weights of 100. These weights
+are hierarchical, not cross-hierarchy game reservations or disk bandwidth caps;
+their effectiveness also depends on the active I/O controller/scheduler.
+
+Validate tuning under representative player load: compare game tick/frame
+latency, cgroup `cpu.stat` throttling deltas, `memory.events`, and
+`/proc/pressure/{cpu,memory,io}` while exercising saves, backups, and transfers.
+Do not interpret reclaimable file cache in `memory.current` as agent heap/RSS,
+or a `powersave` governor name alone as evidence that boost is disabled. CPU
+energy policy, transparent huge pages, and I/O scheduling are workload-dependent;
+there is no universal set of maximum values that guarantees the fastest node.
+
+Remaining limits: archive validation/listings and some filesystem path checks
+still do synchronous or buffered work; live backups/copies/installs can still
+contend with game I/O. Mount-restricted environments can fall back to plain
+directories without enforcing the requested disk quota. Capacity planning and
+load measurements remain necessary; these safeguards do not promise zero impact.
+
+
 ---
 
 ## Key Features

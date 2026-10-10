@@ -948,11 +948,9 @@ function ServerDetailsPage() {
  );
  if (key === 'configuration')
  return (
- isAdmin ||
- canAdminWrite ||
  hasServerPerm('server.update') ||
- hasServerPerm('server.install') ||
- hasServerPerm('file.write')
+ hasServerPerm('server.read') ||
+ canAdminWrite
  );
  if (key === 'modManager') return Boolean(modManagerConfig);
  if (key === 'pluginManager') return Boolean(pluginManagerConfig);
@@ -1388,13 +1386,7 @@ function ServerDetailsPage() {
  <ServerConfigurationTab
  serverId={serverId}
  isSuspended={isSuspended}
- canEdit={
- isAdmin ||
- canAdminWrite ||
- hasServerPerm('server.update') ||
- hasServerPerm('server.install') ||
- hasServerPerm('file.write')
- }
+ canEdit={canAdminWrite || hasServerPerm('server.update')}
  server={server}
  startupCommand={startupCommand}
  onStartupCommandChange={setStartupCommand}

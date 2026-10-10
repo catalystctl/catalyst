@@ -2,6 +2,60 @@
 
 use super::*;
 
+/// Retain a bounded tail for installer diagnostics. Complete output is relayed
+/// immediately to the panel, so keeping it all in agent memory only harms nodes
+/// that are already busy installing games.
+fn append_installer_diagnostic(buffer: &mut String, chunk: &str, max_bytes: usize) {
+    if chunk.len() >= max_bytes {
+        let mut start = chunk.len() - max_bytes;
+        while !chunk.is_char_boundary(start) {
+            start += 1;
+        }
+        buffer.clear();
+        buffer.push_str(&chunk[start..]);
+        return;
+    }
+    let mut excess = buffer
+        .len()
+        .saturating_add(chunk.len())
+        .saturating_sub(max_bytes);
+    while !buffer.is_char_boundary(excess) {
+        excess += 1;
+    }
+    buffer.drain(..excess);
+    buffer.push_str(chunk);
+}
+
+#[derive(Default)]
+struct InstallerMarkers {
+    restart_message: bool,
+    steamcmd_script: bool,
+    restarting: bool,
+    disk_write_failed: bool,
+}
+
+impl InstallerMarkers {
+    fn record(&mut self, output: &str) {
+        self.restart_message |=
+            output.contains("Restarting steamcmd") || output.contains("Restarting SteamCMD");
+        self.steamcmd_script |= output.contains("steamcmd.sh");
+        self.restarting |= output.contains("Restarting");
+        self.disk_write_failed |= output.contains("0x202");
+    }
+
+    fn steamcmd_restart(&self) -> bool {
+        self.restart_message || (self.steamcmd_script && self.restarting)
+    }
+}
+
+struct InstallerAttemptResult {
+    exit_code: i32,
+    stdout: String,
+    stderr: String,
+    steamcmd_restart: bool,
+    disk_write_failed: bool,
+}
+
 impl WebSocketHandler {
     pub(crate) async fn spawn_health_checker(&self) {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
@@ -76,13 +130,6 @@ impl WebSocketHandler {
         }
     }
 
-    fn is_steamcmd_restart(stdout: &str, stderr: &str) -> bool {
-        let combined = format!("{} {}", stdout, stderr);
-        combined.contains("Restarting steamcmd")
-            || combined.contains("Restarting SteamCMD")
-            || (combined.contains("steamcmd.sh") && combined.contains("Restarting"))
-    }
-
     async fn run_installer_attempt(
         &self,
         server_id: &str,
@@ -90,7 +137,7 @@ impl WebSocketHandler {
         final_script: &str,
         env_map: &HashMap<String, String>,
         host_server_dir: &str,
-    ) -> AgentResult<(i32, String, String)> {
+    ) -> AgentResult<InstallerAttemptResult> {
         let installer = self
             .runtime
             .spawn_installer_container(install_image, final_script, env_map, host_server_dir)
@@ -108,68 +155,86 @@ impl WebSocketHandler {
 
         let mut stdout_pos = 0u64;
         let mut stderr_pos = 0u64;
+        // Install output is already streamed to the panel. Keep just enough
+        // tail for SteamCMD retry detection and an actionable failure reason.
+        const MAX_INSTALLER_DIAGNOSTIC_BYTES: usize = 64 * 1024;
         let mut stdout_buffer = String::new();
         let mut stderr_buffer = String::new();
+        let mut markers = InstallerMarkers::default();
 
         loop {
-            if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
-                if (stdout_pos as usize) < content.len() {
-                    let new_text = &content[stdout_pos as usize..];
-                    let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        let payload = format!("{}\n", line);
-                        stdout_buffer.push_str(&payload);
-                        batch.push_str(&payload);
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                            self.emit_console_output(server_id, "stdout", &batch)
-                                .await?;
-                            batch.clear();
-                        }
-                    }
-                    if !batch.is_empty() {
+            if let Ok(new_text) =
+                super::console::read_new_tail_bytes(&installer.stdout_path, &mut stdout_pos).await
+            {
+                markers.record(&new_text);
+                let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
+                let mut batch = String::new();
+                for line in lines {
+                    let payload = format!("{}\n", line);
+                    append_installer_diagnostic(
+                        &mut stdout_buffer,
+                        &payload,
+                        MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                    );
+                    batch.push_str(&payload);
+                    if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
                         self.emit_console_output(server_id, "stdout", &batch)
                             .await?;
+                        batch.clear();
                     }
-                    stdout_pos += processed_len as u64;
                 }
+                if !batch.is_empty() {
+                    self.emit_console_output(server_id, "stdout", &batch)
+                        .await?;
+                }
+                stdout_pos += (new_text.len() - trailing.len()) as u64;
             }
 
-            if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
-                if (stderr_pos as usize) < content.len() {
-                    let new_text = &content[stderr_pos as usize..];
-                    let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
-                    let processed_len = new_text.len() - trailing.len();
-                    let mut batch = String::new();
-                    for line in lines {
-                        let payload = format!("{}\n", line);
-                        stderr_buffer.push_str(&payload);
-                        batch.push_str(&payload);
-                        if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
-                            self.emit_console_output(server_id, "stderr", &batch)
-                                .await?;
-                            batch.clear();
-                        }
-                    }
-                    if !batch.is_empty() {
+            if let Ok(new_text) =
+                super::console::read_new_tail_bytes(&installer.stderr_path, &mut stderr_pos).await
+            {
+                markers.record(&new_text);
+                let (lines, trailing) = shell_utils::split_terminal_lines(&new_text);
+                let mut batch = String::new();
+                for line in lines {
+                    let payload = format!("{}\n", line);
+                    append_installer_diagnostic(
+                        &mut stderr_buffer,
+                        &payload,
+                        MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                    );
+                    batch.push_str(&payload);
+                    if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
                         self.emit_console_output(server_id, "stderr", &batch)
                             .await?;
+                        batch.clear();
                     }
-                    stderr_pos += processed_len as u64;
                 }
+                if !batch.is_empty() {
+                    self.emit_console_output(server_id, "stderr", &batch)
+                        .await?;
+                }
+                stderr_pos += (new_text.len() - trailing.len()) as u64;
             }
 
             match tokio::time::timeout(Duration::from_millis(200), installer.wait()).await {
                 Ok(Ok(exit_code)) => {
-                    if let Ok(content) = tokio::fs::read_to_string(&installer.stdout_path).await {
-                        if (stdout_pos as usize) < content.len() {
-                            let new_text = &content[stdout_pos as usize..];
+                    if let Ok(content) =
+                        super::console::read_new_tail_bytes(&installer.stdout_path, &mut stdout_pos)
+                            .await
+                    {
+                        if !content.is_empty() {
+                            let new_text = &content;
+                            markers.record(new_text);
                             let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
                             let mut batch = String::new();
                             for line in lines {
                                 let payload = format!("{}\n", line);
-                                stdout_buffer.push_str(&payload);
+                                append_installer_diagnostic(
+                                    &mut stdout_buffer,
+                                    &payload,
+                                    MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                                );
                                 batch.push_str(&payload);
                                 if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
                                     self.emit_console_output(server_id, "stdout", &batch)
@@ -179,7 +244,11 @@ impl WebSocketHandler {
                             }
                             if !trailing.is_empty() {
                                 let payload = format!("{}\n", trailing);
-                                stdout_buffer.push_str(&payload);
+                                append_installer_diagnostic(
+                                    &mut stdout_buffer,
+                                    &payload,
+                                    MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                                );
                                 batch.push_str(&payload);
                             }
                             if !batch.is_empty() {
@@ -188,14 +257,22 @@ impl WebSocketHandler {
                             }
                         }
                     }
-                    if let Ok(content) = tokio::fs::read_to_string(&installer.stderr_path).await {
-                        if (stderr_pos as usize) < content.len() {
-                            let new_text = &content[stderr_pos as usize..];
+                    if let Ok(content) =
+                        super::console::read_new_tail_bytes(&installer.stderr_path, &mut stderr_pos)
+                            .await
+                    {
+                        if !content.is_empty() {
+                            let new_text = &content;
+                            markers.record(new_text);
                             let (lines, trailing) = shell_utils::split_terminal_lines(new_text);
                             let mut batch = String::new();
                             for line in lines {
                                 let payload = format!("{}\n", line);
-                                stderr_buffer.push_str(&payload);
+                                append_installer_diagnostic(
+                                    &mut stderr_buffer,
+                                    &payload,
+                                    MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                                );
                                 batch.push_str(&payload);
                                 if batch.len() >= MAX_CONSOLE_BATCH_BYTES {
                                     self.emit_console_output(server_id, "stderr", &batch)
@@ -205,7 +282,11 @@ impl WebSocketHandler {
                             }
                             if !trailing.is_empty() {
                                 let payload = format!("{}\n", trailing);
-                                stderr_buffer.push_str(&payload);
+                                append_installer_diagnostic(
+                                    &mut stderr_buffer,
+                                    &payload,
+                                    MAX_INSTALLER_DIAGNOSTIC_BYTES,
+                                );
                                 batch.push_str(&payload);
                             }
                             if !batch.is_empty() {
@@ -226,7 +307,13 @@ impl WebSocketHandler {
                     {
                         self.active_installs.write().await.remove(server_id);
                     }
-                    return Ok((exit_code, stdout_buffer, stderr_buffer));
+                    return Ok(InstallerAttemptResult {
+                        exit_code,
+                        stdout: stdout_buffer,
+                        stderr: stderr_buffer,
+                        steamcmd_restart: markers.steamcmd_restart(),
+                        disk_write_failed: markers.disk_write_failed,
+                    });
                 }
                 Ok(Err(e)) => {
                     let _ = self
@@ -443,7 +530,13 @@ impl WebSocketHandler {
         // SteamCMD frequently self-updates and restarts on first run, causing
         // non-zero exit codes. We detect this pattern and retry once.
         let mut attempt = 0;
-        let (exit_code, stdout_buffer, stderr_buffer) = loop {
+        let InstallerAttemptResult {
+            exit_code,
+            stdout: stdout_buffer,
+            stderr: stderr_buffer,
+            disk_write_failed,
+            ..
+        } = loop {
             attempt += 1;
             match self
                 .run_installer_attempt(
@@ -455,8 +548,7 @@ impl WebSocketHandler {
                 )
                 .await
             {
-                Ok((0, out, err)) => break (0, out, err),
-                Ok((_code, out, err)) if attempt < 2 && Self::is_steamcmd_restart(&out, &err) => {
+                Ok(result) if result.exit_code != 0 && attempt < 2 && result.steamcmd_restart => {
                     self.emit_console_output(
                         server_id,
                         "system",
@@ -465,7 +557,7 @@ impl WebSocketHandler {
                     .await?;
                     continue;
                 }
-                Ok((code, out, err)) => break (code, out, err),
+                Ok(result) => break result,
                 Err(e) => {
                     // A cancelled installer must exit quietly: the panel already
                     // reset to stopped, so do not emit an error over it.
@@ -498,7 +590,6 @@ impl WebSocketHandler {
         if exit_code != 0 {
             let stderr_trimmed = stderr_buffer.trim();
             let stdout_trimmed = stdout_buffer.trim();
-            let combined = format!("{stdout_buffer}\n{stderr_buffer}");
             let mut reason = if !stderr_trimmed.is_empty() {
                 stderr_trimmed.to_string()
             } else if !stdout_trimmed.is_empty() {
@@ -506,7 +597,7 @@ impl WebSocketHandler {
             } else {
                 "Install script failed".to_string()
             };
-            if combined.contains("0x202") {
+            if disk_write_failed {
                 reason = format!(
                     "SteamCMD 0x202: disk write failed. Catalyst gives each server a loop-mounted quota (default 10 GB). CS2 needs about 40 GB. Resize the server disk and reinstall. ({reason})"
                 );
@@ -1711,5 +1802,32 @@ mod server_lifecycle_security_tests {
         };
         clamp_auto_restart_config(&mut config);
         assert_eq!(config.max_restarts, 0);
+    }
+
+    #[test]
+    fn installer_diagnostics_retain_only_a_utf8_safe_tail() {
+        let mut output = "prefix ".repeat(256);
+        append_installer_diagnostic(&mut output, "\u{1f980}tail", 64);
+
+        assert!(output.len() <= 64);
+        assert!(output.ends_with("\u{1f980}tail"));
+        assert!(std::str::from_utf8(output.as_bytes()).is_ok());
+    }
+
+    #[test]
+    fn installer_markers_survive_diagnostic_tail_eviction() {
+        let mut markers = InstallerMarkers::default();
+        let mut tail = String::new();
+        for text in [
+            "steamcmd.sh\n",
+            "Restarting\n0x202\n",
+            &"later output\n".repeat(100),
+        ] {
+            markers.record(text);
+            append_installer_diagnostic(&mut tail, text, 64);
+        }
+        assert!(!tail.contains("steamcmd.sh"));
+        assert!(markers.steamcmd_restart());
+        assert!(markers.disk_write_failed);
     }
 }

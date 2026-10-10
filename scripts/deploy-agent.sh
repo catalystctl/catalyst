@@ -863,6 +863,11 @@ Restart=always
 RestartSec=5
 LimitNOFILE=65536
 
+# Neutral service weights; do not boost housekeeping above sibling services.
+# Game containers live in a separate hierarchy: this is not a resource cap.
+CPUWeight=100
+IOWeight=100
+
 # Security: Agent must run as root to manage containers via containerd socket
 # The agent needs unrestricted access to:
 # - /run/containerd/containerd.sock (container management)

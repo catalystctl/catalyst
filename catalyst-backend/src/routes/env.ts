@@ -46,13 +46,13 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 		return true;
 	};
 
-	app.get("/", { schema: { summary: "Get environment settings overview", tags: ["Admin", "Environment"], response: { 200: { type: "object" } } }, preHandler: authenticate }, async (request, reply) => {
+	app.get("/", { schema: { summary: "Get environment settings overview", tags: ["Admin", "Environment"], response: { 200: { type: "object", additionalProperties: true } } }, preHandler: authenticate }, async (request, reply) => {
 		if (!requireRead(request, reply)) return;
 		const overview = await getEnvOverview();
 		return reply.send({ success: true, data: overview });
 	});
 
-	app.get("/restart-status", { schema: { summary: "Get panel restart status", tags: ["Admin", "Environment"], response: { 200: { type: "object" } } }, preHandler: authenticate }, async (request, reply) => {
+	app.get("/restart-status", { schema: { summary: "Get panel restart status", tags: ["Admin", "Environment"], response: { 200: { type: "object", additionalProperties: true } } }, preHandler: authenticate }, async (request, reply) => {
 		if (!requireRead(request, reply)) return;
 		const status = await getEnvRestartStatus();
 		return reply.send({
@@ -61,7 +61,7 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 		});
 	});
 
-	app.put("/", { schema: { summary: "Update environment overrides", tags: ["Admin", "Environment"], body: { type: "object", required: ["values"], properties: { values: { type: "object", additionalProperties: { type: ["string", "null"] } } } }, response: { 200: { type: "object" }, 400: { type: "object" } } }, preHandler: authenticate }, async (request, reply) => {
+	app.put("/", { schema: { summary: "Update environment overrides", tags: ["Admin", "Environment"], body: { type: "object", required: ["values"], properties: { values: { type: "object", additionalProperties: { type: ["string", "null"] } } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true } } }, preHandler: authenticate }, async (request, reply) => {
 		if (!requireWrite(request, reply)) return;
 		const body = request.body as { values?: Record<string, string | null> } | undefined;
 		const values = body?.values;
@@ -100,7 +100,7 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 		}
 	});
 
-	app.delete("/:key", { schema: { summary: "Reset an environment override", tags: ["Admin", "Environment"], params: { type: "object", required: ["key"], properties: { key: { type: "string" } } }, response: { 200: { type: "object" }, 400: { type: "object" } } }, preHandler: authenticate }, async (request, reply) => {
+	app.delete("/:key", { schema: { summary: "Reset an environment override", tags: ["Admin", "Environment"], params: { type: "object", required: ["key"], properties: { key: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true } } }, preHandler: authenticate }, async (request, reply) => {
 		if (!requireWrite(request, reply)) return;
 		const { key } = request.params as { key: string };
 		try {
@@ -134,7 +134,7 @@ export async function envRoutes(app: FastifyInstance): Promise<void> {
 		}
 	});
 
-	app.post("/restart", { schema: { summary: "Schedule a panel restart", tags: ["Admin", "Environment"], response: { 200: { type: "object" } } }, preHandler: authenticate }, async (request, reply) => {
+	app.post("/restart", { schema: { summary: "Schedule a panel restart", tags: ["Admin", "Environment"], response: { 200: { type: "object", additionalProperties: true } } }, preHandler: authenticate }, async (request, reply) => {
 		if (!requireWrite(request, reply)) return;
 		const strategy = panelRestartStrategy();
 		await createAuditLog((request as any).user.userId, {

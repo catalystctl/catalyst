@@ -248,28 +248,6 @@ async fn validate_restore_tree(dir: &Path, canonical_base: &Path) -> AgentResult
     Ok(())
 }
 
-/// Fsync every regular file under `dir` (non-recursive into other mounts) so
-/// this server's dirty pages reach disk before archiving. Scoped replacement
-/// for the node-wide `sync` previously run before every backup.
-async fn sync_dir_tree(dir: &Path) -> std::io::Result<()> {
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(current) = stack.pop() {
-        let mut entries = tokio::fs::read_dir(&current).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let entry_path = entry.path();
-            let file_type = entry.file_type().await?;
-            if file_type.is_dir() {
-                stack.push(entry_path);
-            } else if file_type.is_file() {
-                if let Ok(f) = tokio::fs::File::open(&entry_path).await {
-                    let _ = f.sync_data().await;
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
 impl WebSocketHandler {
     pub(crate) async fn cleanup_all_uploads(&self) {
         let sessions: Vec<BackupUploadSession> = {
@@ -325,6 +303,14 @@ impl WebSocketHandler {
             .ok_or_else(|| AgentError::InvalidRequest("Missing backupName".to_string()))?;
         // Backup names become filenames: single safe segment, no `/`, no `..`.
         shell_utils::validate_safe_path_segment(backup_name, "backupName")?;
+        // One local backup pipeline at a time, including compression and
+        // encryption. Different servers otherwise compete for the same disks
+        // and CPU outside their game-container resource limits.
+        static BACKUP_GATE: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+        let _backup_permit = BACKUP_GATE
+            .acquire()
+            .await
+            .map_err(|e| AgentError::InternalError(format!("Backup semaphore closed: {}", e)))?;
         let backup_path_override = msg["backupPath"].as_str();
         let backup_id = msg["backupId"].as_str();
 
@@ -368,12 +354,10 @@ impl WebSocketHandler {
             backup_path.display()
         );
 
-        // Best-effort quiesce: warn if the server container is running (live backup),
-        // then fsync the server's own directory tree so its dirty pages hit disk
-        // before tar. A node-wide `sync` (the previous approach) flushed every
-        // filesystem on the host at once, converting all servers' accumulated
-        // dirty pages into a synchronized writeback storm that stalled every
-        // game server on the node.
+        // Live archives may be inconsistent; a source-tree fsync does not
+        // quiesce the game. tar reads dirty pages through the page cache, so
+        // forcing every source file to storage first only creates writeback
+        // contention for this server and its neighbours.
         let container_id = self.resolve_container_id(server_id, server_uuid).await;
         if !container_id.is_empty() {
             match self.runtime.is_container_running(&container_id).await {
@@ -391,24 +375,6 @@ impl WebSocketHandler {
                     );
                 }
             }
-        }
-        match sync_dir_tree(&server_dir).await {
-            Ok(()) => {
-                debug!(
-                    "server directory fsync completed before tar for backup {}",
-                    backup_name
-                );
-            }
-            Err(e) => {
-                warn!(
-                    "fsync of server directory before backup {} failed; continuing: {}",
-                    backup_name, e
-                );
-            }
-        }
-        // Best-effort: fsync the server directory metadata so directory entries are durable.
-        if let Ok(dir) = std::fs::File::open(&server_dir) {
-            let _ = dir.sync_all();
         }
 
         let archive_result = tokio::process::Command::new("tar")

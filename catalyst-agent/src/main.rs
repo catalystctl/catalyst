@@ -379,10 +379,15 @@ impl CatalystAgent {
     }
 
     async fn start_health_monitoring(&self, mut shutdown_rx: broadcast::Receiver<()>) {
-        // Configurable cadence (agent.stats_interval_secs); floor guards against
-        // a hand-built config bypassing the load-time clamp.
+        // Stats collection touches every running container. Skip missed ticks so
+        // a slow collection never creates a catch-up storm that contends with
+        // game workloads for CPU, cgroup I/O, and containerd RPC capacity.
         let interval_secs = self.config.agent.stats_interval_secs.max(1);
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        // The startup snapshot above is immediate; avoid scanning every
+        // cgroup twice during startup before workloads have even settled.
+        interval.reset();
 
         loop {
             tokio::select! {
@@ -483,8 +488,10 @@ async fn main() -> AgentResult<()> {
         }
     };
 
+    // SSH/SFTP packet-level debug logging must be opt-in: large file transfers
+    // otherwise generate avoidable formatting and journal I/O at the default.
     let filter = format!(
-        "catalyst_agent={},russh_sftp=debug,russh=debug,tokio=info",
+        "catalyst_agent={0},russh_sftp={0},russh={0},tokio=info",
         config.logging.level
     );
 

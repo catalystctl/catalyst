@@ -426,15 +426,27 @@ impl ContainerdRuntime {
             }
             Err(e) => return Err(grpc_err(e)),
         }
-        let output = Command::new("ctr")
-            .arg("-n")
-            .arg(&self.namespace)
-            .arg("images")
-            .arg("pull")
-            .arg(&qualified)
-            .output()
-            .await
-            .map_err(|e| AgentError::ContainerError(format!("pull: {}", e)))?;
+        const IMAGE_PULL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+        let output = tokio::time::timeout(
+            IMAGE_PULL_TIMEOUT,
+            Command::new("ctr")
+                .kill_on_drop(true)
+                .arg("-n")
+                .arg(&self.namespace)
+                .arg("images")
+                .arg("pull")
+                .arg(&qualified)
+                .output(),
+        )
+        .await
+        .map_err(|_| {
+            AgentError::ContainerError(format!(
+                "Image pull timed out after {}s: {}",
+                IMAGE_PULL_TIMEOUT.as_secs(),
+                qualified
+            ))
+        })?
+        .map_err(|e| AgentError::ContainerError(format!("pull: {}", e)))?;
         if !output.status.success() {
             return Err(AgentError::ContainerError(format!(
                 "Image pull failed: {}",
@@ -657,16 +669,28 @@ impl ContainerdRuntime {
     }
 
     pub(crate) async fn prepare_snapshot(&self, image: &str, key: &str) -> AgentResult<()> {
-        let _ = Command::new("ctr")
-            .arg("-n")
-            .arg(&self.namespace)
-            .arg("images")
-            .arg("unpack")
-            .arg("--snapshotter")
-            .arg("overlayfs")
-            .arg(image)
-            .output()
-            .await;
+        const IMAGE_UNPACK_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+        let _ = tokio::time::timeout(
+            IMAGE_UNPACK_TIMEOUT,
+            Command::new("ctr")
+                .kill_on_drop(true)
+                .arg("-n")
+                .arg(&self.namespace)
+                .arg("images")
+                .arg("unpack")
+                .arg("--snapshotter")
+                .arg("overlayfs")
+                .arg(image)
+                .output(),
+        )
+        .await
+        .map_err(|_| {
+            AgentError::ContainerError(format!(
+                "Image unpack timed out after {}s: {}",
+                IMAGE_UNPACK_TIMEOUT.as_secs(),
+                image
+            ))
+        })?;
 
         let mut snaps = SnapshotsClient::new(self.channel.clone());
         // Try using image ref as parent first (works on some containerd setups).
@@ -692,12 +716,10 @@ impl ContainerdRuntime {
             let req = with_namespace!(req, &self.namespace);
             match tokio::time::timeout(Duration::from_secs(10), snaps.prepare(req)).await {
                 Ok(Ok(_)) => return Ok(()),
-                _ => {
-                    warn!(
-                        "prepare snapshot with resolved parent {} failed for image {}",
-                        parent, image
-                    );
-                }
+                _ => warn!(
+                    "prepare snapshot with resolved parent {} failed for image {}",
+                    parent, image
+                ),
             }
         } else {
             warn!(

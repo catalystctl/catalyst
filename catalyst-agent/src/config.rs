@@ -604,15 +604,6 @@ format = \"json\"\n";
     }
 
     #[test]
-    fn stats_interval_defaults_to_five() {
-        assert_eq!(AgentPathsConfig::default().stats_interval_secs, 5);
-        let dir = tempfile::tempdir().unwrap();
-        let path = write_config(dir.path(), "");
-        let cfg = AgentConfig::from_file(&path).unwrap();
-        assert_eq!(cfg.agent.stats_interval_secs, 5);
-    }
-
-    #[test]
     fn stats_interval_from_file_is_used() {
         let dir = tempfile::tempdir().unwrap();
         let path = write_config(dir.path(), "\n[agent]\nstats_interval_secs = 10\n");

@@ -101,6 +101,16 @@ pub async fn chown_tree(dir: &Path) -> std::io::Result<()> {
     if !can_chown() {
         return Ok(());
     }
+    // Startup repair and archive extraction can walk millions of entries.
+    // Background async spawning alone does not isolate synchronous syscalls.
+    let dir = dir.to_path_buf();
+    tokio::task::spawn_blocking(move || chown_tree_sync(&dir))
+        .await
+        .map_err(std::io::Error::other)?
+}
+
+fn chown_tree_sync(dir: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::MetadataExt;
     let base = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
@@ -109,6 +119,9 @@ pub async fn chown_tree(dir: &Path) -> std::io::Result<()> {
             Err(_) => continue,
         };
         if meta.file_type().is_symlink() {
+            if meta.uid() == CONTAINER_UID && meta.gid() == CONTAINER_GID {
+                continue;
+            }
             // Lchown the link itself only when it stays inside the base;
             // never follow it to a host target.
             let target = std::fs::read_link(&current).unwrap_or_default();
@@ -158,6 +171,11 @@ pub async fn chown_tree(dir: &Path) -> std::io::Result<()> {
             for entry in entries.flatten() {
                 stack.push(entry.path());
             }
+        }
+        // An idempotent startup repair must not dirty every already-correct
+        // inode and trigger a metadata writeback storm on game storage.
+        if meta.uid() == CONTAINER_UID && meta.gid() == CONTAINER_GID {
+            continue;
         }
         if let Err(e) =
             std::os::unix::fs::lchown(&current, Some(CONTAINER_UID), Some(CONTAINER_GID))

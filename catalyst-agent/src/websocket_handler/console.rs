@@ -12,7 +12,7 @@ use super::*;
 /// this helper leaves `pos` untouched except when it must resync: after a
 /// truncate/rotate (pos > len, restart from 0) or when the appended chunk is
 /// not valid UTF-8 (skip it rather than wedge the tail on the same bytes).
-async fn read_new_tail_bytes(path: &Path, pos: &mut u64) -> std::io::Result<String> {
+pub(crate) async fn read_new_tail_bytes(path: &Path, pos: &mut u64) -> std::io::Result<String> {
     let meta = tokio::fs::metadata(path).await?;
     let len = meta.len();
     if *pos > len {
@@ -25,10 +25,22 @@ async fn read_new_tail_bytes(path: &Path, pos: &mut u64) -> std::io::Result<Stri
     use tokio::io::{AsyncReadExt, AsyncSeekExt};
     let mut file = tokio::fs::File::open(path).await?;
     file.seek(std::io::SeekFrom::Start(*pos)).await?;
+    // Read only the observed suffix, not bytes appended indefinitely while
+    // draining. Do not cut arbitrary UTF-8 or terminal-line boundaries.
     let mut buf = Vec::with_capacity((len - *pos) as usize);
-    file.read_to_end(&mut buf).await?;
+    file.take(len - *pos).read_to_end(&mut buf).await?;
     match String::from_utf8(buf) {
         Ok(text) => Ok(text),
+        Err(error) if error.utf8_error().error_len().is_none() => {
+            // A code point can span separate game writes (or this read's
+            // snapshot boundary). Return the valid prefix and hold the partial
+            // bytes below the caller's cursor until the next poll completes it.
+            let valid_len = error.utf8_error().valid_up_to();
+            let mut bytes = error.into_bytes();
+            bytes.truncate(valid_len);
+            String::from_utf8(bytes)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+        }
         Err(_) => {
             // Skip the undecodable chunk (byte offsets stay consistent) and
             // resume from EOF instead of re-reading the same bytes forever.
@@ -41,6 +53,11 @@ async fn read_new_tail_bytes(path: &Path, pos: &mut u64) -> std::io::Result<Stri
         }
     }
 }
+
+/// Container exits are also delivered by the event monitor. Polling here is a
+/// fallback, so keep a bounded detection delay instead of issuing one gRPC
+/// task-status request per log-tail iteration per running server.
+const CONSOLE_STATE_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
 impl WebSocketHandler {
     pub(crate) async fn resume_console(&self, msg: &Value) -> AgentResult<()> {
@@ -827,15 +844,20 @@ impl WebSocketHandler {
         }
 
         let mut loop_count = 0u32;
+        let mut running = true;
+        let mut next_state_poll = std::time::Instant::now();
 
         // Tail the stdout/stderr files
         loop {
             loop_count += 1;
-            let running = self
-                .runtime
-                .is_container_running(container_id)
-                .await
-                .unwrap_or(false);
+            if std::time::Instant::now() >= next_state_poll {
+                running = self
+                    .runtime
+                    .is_container_running(container_id)
+                    .await
+                    .unwrap_or(false);
+                next_state_poll = std::time::Instant::now() + CONSOLE_STATE_POLL_INTERVAL;
+            }
             let mut had_data = false;
             // P1-25: console_output is dropped when no live connection exists,
             // so hold the read offsets while the socket is down — skip reads
@@ -1224,5 +1246,29 @@ mod console_tail_tests {
         tokio::fs::write(&path, "line1\nline2\n").await.unwrap();
         let second = read_new_tail_bytes(&path, &mut pos).await.unwrap();
         assert_eq!(second, "line1\nline2\n");
+    }
+
+    #[tokio::test]
+    async fn preserves_utf8_split_across_appends() {
+        use tokio::io::AsyncWriteExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdout");
+        tokio::fs::write(&path, b"first\n\xf0\x9f").await.unwrap();
+        let mut pos = 0;
+        let prefix = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(prefix, "first\n");
+        assert_eq!(pos, 0);
+        pos += prefix.len() as u64;
+
+        let mut file = tokio::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .await
+            .unwrap();
+        file.write_all(b"\xa6\x80\n").await.unwrap();
+        file.flush().await.unwrap();
+        let suffix = read_new_tail_bytes(&path, &mut pos).await.unwrap();
+        assert_eq!(suffix, "\u{1f980}\n");
+        assert_eq!(pos, prefix.len() as u64);
     }
 }

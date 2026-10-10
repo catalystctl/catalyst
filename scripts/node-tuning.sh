@@ -124,8 +124,10 @@ LimitNOFILE=1048576
 LimitNOFILESoft=1048576
 # Bounded: infinity lets a fork bomb wedge the node. Matches the agent unit.
 TasksMax=8192
-CPUWeight=1000
-IOWeight=1000
+# Neutral service weights; do not boost housekeeping above sibling services.
+# Game containers live in a separate hierarchy: this is not a resource cap.
+CPUWeight=100
+IOWeight=100
 # Mirrors the hardening in deploy-agent.sh write_systemd_unit (documented there).
 # @mount is required: mount(2)/umount2(2) are not in @system-service, and without
 # it loop mounts via nsenter die with SIGSYS.

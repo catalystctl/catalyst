@@ -34,15 +34,12 @@ use crate::{
 /// Process-wide slot for layers that hold no `WebSocketHandler` reference —
 /// currently the SFTP server — to push unsolicited control-plane events.
 ///
-/// Holds what a send actually needs (the live write half and the storage
-/// manager for the disconnect buffer) rather than the handler itself, so it
-/// needs no `Arc<WebSocketHandler>` and cannot create a reference cycle. The
-/// write half is refreshed on every connect and cleared on teardown, so the
-/// slot always reflects the live connection.
+/// A bounded notification queue owns no handler reference. One worker shares
+/// the live write slot and disk buffer, avoiding one detached task per SFTP
+/// mutation when the panel is slow or disconnected.
 #[derive(Clone)]
 pub struct OutboundEventChannel {
-    write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
-    storage_manager: Arc<StorageManager>,
+    sender: tokio::sync::mpsc::Sender<String>,
 }
 
 static OUTBOUND_EVENT_CHANNEL: OnceLock<OutboundEventChannel> = OnceLock::new();
@@ -53,49 +50,58 @@ static OUTBOUND_EVENT_CHANNEL: OnceLock<OutboundEventChannel> = OnceLock::new();
 pub fn install_outbound_event_channel(
     write: Arc<RwLock<Option<Arc<tokio::sync::Mutex<WsWrite>>>>>,
     storage_manager: Arc<StorageManager>,
+    backend_connected: Arc<RwLock<bool>>,
 ) {
-    let _ = OUTBOUND_EVENT_CHANNEL.set(OutboundEventChannel {
-        write,
-        storage_manager,
+    let (sender, mut receiver) = tokio::sync::mpsc::channel::<String>(256);
+    if OUTBOUND_EVENT_CHANNEL
+        .set(OutboundEventChannel { sender })
+        .is_err()
+    {
+        return;
+    }
+    tokio::spawn(async move {
+        while let Some(payload_text) = receiver.recv().await {
+            let writer = loop {
+                // Keep the connection-state read guard while snapshotting the
+                // writer, so reconnect cannot publish a new pre-auth sink under
+                // an old authenticated state. Do not hold guards across sends.
+                let connected = backend_connected.read().await;
+                let writer = write.read().await.clone();
+                if writer.is_none() || *connected {
+                    break writer;
+                }
+                drop(connected);
+                // A socket exists but its nonce handshake is not accepted yet.
+                // Keep this advisory event in the bounded queue until verified,
+                // or buffer it once teardown clears the failed socket.
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            };
+            if let Some(ws) = writer {
+                if send_ws_with_timeout(&ws, Message::Text(payload_text.clone().into()))
+                    .await
+                    .is_ok()
+                {
+                    continue;
+                }
+                warn!("Outbound event WS send failed; buffering for replay");
+            }
+            if let Err(e) = storage_manager.append_buffered_event(&payload_text).await {
+                warn!("Failed to buffer outbound event for replay: {}", e);
+            }
+        }
     });
 }
 
 /// Fire-and-forget dispatch of an already-serialized event payload.
 ///
-/// Returns `false` when the channel is not installed yet or the agent is
-/// shutting down. Callers must treat `false` as "dropped", never as an error:
-/// a missing notification must not fail the file operation that triggered it.
-/// The send runs on a spawned task, so callers never block or observe latency.
+/// Returns `false` when uninstalled, shutting down, or the 256-event queue is
+/// full. File-change notifications are advisory: dropping one must never fail
+/// the file operation. Critical lifecycle events use send_or_buffer_event.
+/// Enqueue is nonblocking and does not spawn another Tokio task.
 pub fn dispatch_outbound_event(payload_text: String) -> bool {
-    let Some(channel) = OUTBOUND_EVENT_CHANNEL.get().cloned() else {
-        return false;
-    };
-    tokio::spawn(async move {
-        // Mirrors send_or_buffer_event: send on the live socket, or persist for
-        // replay after the next reconnect — no new queue is invented here.
-        let writer = { channel.write.read().await.clone() };
-        if let Some(ws) = writer {
-            let sent = tokio::time::timeout(
-                WS_SEND_TIMEOUT,
-                ws.lock()
-                    .await
-                    .send(Message::Text(payload_text.clone().into())),
-            )
-            .await;
-            if matches!(sent, Ok(Ok(()))) {
-                return;
-            }
-            warn!("Outbound event WS send failed; buffering for replay");
-        }
-        if let Err(e) = channel
-            .storage_manager
-            .append_buffered_event(&payload_text)
-            .await
-        {
-            warn!("Failed to buffer outbound event for replay: {}", e);
-        }
-    });
-    true
+    OUTBOUND_EVENT_CHANNEL
+        .get()
+        .is_some_and(|channel| channel.sender.try_send(payload_text).is_ok())
 }
 
 pub(crate) type WsStream =
@@ -1316,7 +1322,11 @@ impl WebSocketHandler {
         // handler reference) can report file changes. Shares the same write
         // slot and storage manager, so it follows this connection's lifecycle
         // without a second queue.
-        install_outbound_event_channel(self.write.clone(), self.storage_manager.clone());
+        install_outbound_event_channel(
+            self.write.clone(),
+            self.storage_manager.clone(),
+            self.backend_connected.clone(),
+        );
 
         // Spawn periodic log rotation task (every 5 minutes)
         {
@@ -1640,6 +1650,7 @@ impl WebSocketHandler {
         let write_clone = write.clone();
         connection_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(WS_HEARTBEAT_INTERVAL);
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 debug!("Sending heartbeat");
@@ -1679,6 +1690,7 @@ impl WebSocketHandler {
         let handler_clone = self.clone();
         connection_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(30));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 debug!("Running periodic state reconciliation");
@@ -1710,6 +1722,7 @@ impl WebSocketHandler {
         let handler_clone = self.clone();
         connection_tasks.push(tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 handler_clone.cleanup_stale_uploads().await;

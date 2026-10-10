@@ -2,6 +2,56 @@
 
 use super::*;
 
+struct HostStats {
+    cpu_percent: f32,
+    memory_usage_mb: u64,
+    memory_total_mb: u64,
+    disk_usage_mb: u64,
+    disk_total_mb: u64,
+    network_rx_bytes: u64,
+    network_tx_bytes: u64,
+}
+
+/// Reuse CPU baselines and interface storage. All proc/sysfs reads and statvfs
+/// run on the blocking pool, not a Tokio worker serving game-control traffic.
+async fn collect_host_stats(data_dir: PathBuf) -> AgentResult<HostStats> {
+    static SAMPLER: std::sync::LazyLock<std::sync::Mutex<(System, Networks)>> =
+        std::sync::LazyLock::new(|| {
+            let mut system = System::new();
+            system.refresh_cpu_usage();
+            // Only the initial sample needs a second baseline. Later reports
+            // measure CPU over the reporting interval rather than 200 ms.
+            std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+            std::sync::Mutex::new((system, Networks::new()))
+        });
+    tokio::task::spawn_blocking(move || {
+        let mut sampler = SAMPLER.lock().unwrap_or_else(|p| p.into_inner());
+        let (system, networks) = &mut *sampler;
+        system.refresh_cpu_usage();
+        system.refresh_memory();
+        networks.refresh(true);
+        let mut network_rx_bytes = 0u64;
+        let mut network_tx_bytes = 0u64;
+        for (name, data) in networks.list() {
+            if is_physical_interface(name) {
+                network_rx_bytes = network_rx_bytes.saturating_add(data.total_received());
+                network_tx_bytes = network_tx_bytes.saturating_add(data.total_transmitted());
+            }
+        }
+        let (disk_usage_mb, disk_total_mb) = data_dir_disk_usage_mb(&data_dir);
+        HostStats {
+            cpu_percent: sanitize_cpu_percent(system.global_cpu_usage()),
+            memory_usage_mb: system.used_memory() / (1024 * 1024),
+            memory_total_mb: system.total_memory() / (1024 * 1024),
+            disk_usage_mb,
+            disk_total_mb,
+            network_rx_bytes,
+            network_tx_bytes,
+        }
+    })
+    .await
+    .map_err(|e| AgentError::InternalError(format!("Host metrics task failed: {}", e)))
+}
 /// Convert ContainerStats cpu_throttling into wire fields: cumulative
 /// throttled time and the throttled-periods ratio.
 fn throttling_fields(t: &Option<(u64, u64, u64)>) -> (Option<u64>, Option<f64>) {
@@ -52,53 +102,22 @@ impl WebSocketHandler {
     pub async fn send_health_report(&self) -> AgentResult<()> {
         debug!("Sending health report");
         let containers = self.runtime.list_containers().await?;
-        // First sample after System::new() is unreliable (no prior baseline).
-        // Double-refresh with a short sleep so CPU % is meaningful.
-        let mut system = System::new();
-        system.refresh_cpu_all();
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        system.refresh_cpu_all();
-        system.refresh_memory();
-        let cpu_percent = sanitize_cpu_percent(system.global_cpu_usage());
-        // sysinfo reports memory in bytes; convert to MiB.
-        let memory_usage_mb = system.used_memory() / (1024 * 1024);
-        let memory_total_mb = system.total_memory() / (1024 * 1024);
-
-        // Disk usage is measured on the filesystem that actually holds the
-        // server data dir. Summing every mount double/triple-counts loop
-        // images, bind mounts, tmpfs, and overlayfs stacked on the same
-        // underlying device.
-        let (disk_usage_mb, disk_total_mb) = data_dir_disk_usage_mb(&self.config.server.data_dir);
-
-        // Aggregate host network totals across physical interfaces only.
-        // Virtual interfaces (lo, veth, bridges) mirror container traffic and
-        // would inflate the counters several times over.
-        let mut networks = Networks::new_with_refreshed_list();
-        networks.refresh(true);
-        let mut total_network_rx_bytes: u64 = 0;
-        let mut total_network_tx_bytes: u64 = 0;
-        for (name, data) in networks.list() {
-            if !is_physical_interface(name) {
-                continue;
-            }
-            total_network_rx_bytes += data.total_received();
-            total_network_tx_bytes += data.total_transmitted();
-        }
+        let stats = collect_host_stats(self.config.server.data_dir.clone()).await?;
 
         let health = HealthReport {
             ty: "health_report",
             nodeId: &self.config.server.node_id,
             timestamp: chrono::Utc::now().timestamp_millis(),
             agentVersion: env!("CARGO_PKG_VERSION"),
-            cpuPercent: cpu_percent,
-            memoryUsageMb: memory_usage_mb,
-            memoryTotalMb: memory_total_mb,
-            diskUsageMb: disk_usage_mb,
-            diskTotalMb: disk_total_mb,
+            cpuPercent: stats.cpu_percent,
+            memoryUsageMb: stats.memory_usage_mb,
+            memoryTotalMb: stats.memory_total_mb,
+            diskUsageMb: stats.disk_usage_mb,
+            diskTotalMb: stats.disk_total_mb,
             containerCount: containers.iter().filter(|c| c.managed).count(),
             uptimeSeconds: get_uptime().await,
-            networkRxBytes: total_network_rx_bytes,
-            networkTxBytes: total_network_tx_bytes,
+            networkRxBytes: stats.network_rx_bytes,
+            networkTxBytes: stats.network_tx_bytes,
         };
         let health_text = serde_json::to_string(&health).unwrap_or_default();
 

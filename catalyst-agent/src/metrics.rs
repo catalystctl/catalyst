@@ -35,11 +35,16 @@ impl AgentMetrics {
     /// Update resident set size metric from current process memory usage.
     pub fn update_memory_usage(&self) {
         let mut system = System::new();
-        system.refresh_memory();
-
         if let Ok(pid) = sysinfo::get_current_pid() {
-            use sysinfo::ProcessesToUpdate;
-            system.refresh_processes(ProcessesToUpdate::Some(&[pid]), false);
+            // RSS needs neither host memory, process CPU/disk counters, nor
+            // every Tokio/blocking-pool thread under /proc/<pid>/task.
+            system.refresh_processes_specifics(
+                sysinfo::ProcessesToUpdate::Some(&[pid]),
+                false,
+                sysinfo::ProcessRefreshKind::nothing()
+                    .with_memory()
+                    .without_tasks(),
+            );
             if let Some(process) = system.process(pid) {
                 let rss_bytes = process.memory();
                 self.memory_rss_bytes.store(rss_bytes, Ordering::Relaxed);

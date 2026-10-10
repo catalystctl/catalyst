@@ -2,22 +2,28 @@
 
 use super::*;
 
-/// One-time probe: does this kernel support `cpu.max.burst` (cgroup v2,
-/// kernel >= 5.14)? Writing burst to an older kernel with a modern runc
-/// fails task creation outright, so the spec must omit the field there.
-/// Probed once via a scratch cgroup rather than parsed from uname.
+/// Detect the actual cgroup interface once, without creating a scratch cgroup.
+/// ProtectControlGroups makes the agent's hierarchy read-only, and the v2 root
+/// has no cpu.max.burst file even when its controller-enabled children do.
 pub fn kernel_supports_cpu_burst() -> bool {
-    static SUPPORTED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *SUPPORTED.get_or_init(|| {
-        let probe = std::path::Path::new("/sys/fs/cgroup/catalyst/.burst-probe");
-        if std::fs::create_dir_all(probe).is_err() {
-            // Can't create a probe group (rootless agent, read-only cgroup
-            // mount): assume supported only if the file exists at the root.
-            return std::path::Path::new("/sys/fs/cgroup/cpu.max.burst").exists();
-        }
-        let supported = probe.join("cpu.max.burst").exists();
-        let _ = std::fs::remove_dir(probe);
-        supported
+    static SUPPORTED: std::sync::LazyLock<bool> =
+        std::sync::LazyLock::new(|| cpu_burst_supported_at(Path::new("/sys/fs/cgroup")));
+    *SUPPORTED
+}
+
+fn cpu_burst_supported_at(root: &Path) -> bool {
+    // A cgroup-namespaced agent may see its non-root group at the mount root.
+    if root.join("cpu.max.burst").exists() {
+        return true;
+    }
+    // On a host, inspect existing first-level groups (e.g. system.slice or
+    // the configured container namespace). CPU limits already require the
+    // controller; the presence of its burst file establishes kernel support.
+    fs::read_dir(root).is_ok_and(|entries| {
+        entries.flatten().any(|entry| {
+            entry.file_type().is_ok_and(|kind| kind.is_dir())
+                && entry.path().join("cpu.max.burst").exists()
+        })
     })
 }
 
@@ -537,6 +543,75 @@ pub fn open_fifo_rdwr(path: &Path) -> AgentResult<File> {
     Ok(file)
 }
 
+/// Bound work inside the blocking closure: dropping a spawn_blocking join
+/// handle does not cancel a FIFO open or write already running on its worker.
+pub(super) fn write_fifo_until(
+    file: &File,
+    mut bytes: &[u8],
+    deadline: Instant,
+) -> std::io::Result<()> {
+    use std::os::unix::io::AsRawFd;
+    let flags = fcntl(file, FcntlArg::F_GETFL)?;
+    fcntl(
+        file,
+        FcntlArg::F_SETFL(OFlag::from_bits_truncate(flags) | OFlag::O_NONBLOCK),
+    )?;
+    while !bytes.is_empty() {
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "stdin write timed out",
+            ));
+        }
+        // SAFETY: the borrowed file owns a valid descriptor; bytes stays live
+        // and readable for the entire write call.
+        let n = unsafe { libc::write(file.as_raw_fd(), bytes.as_ptr().cast(), bytes.len()) };
+        if n > 0 {
+            bytes = &bytes[n as usize..];
+        } else if n == 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::WriteZero,
+                "stdin FIFO wrote zero bytes",
+            ));
+        } else {
+            let error = std::io::Error::last_os_error();
+            match error.kind() {
+                std::io::ErrorKind::Interrupted => continue,
+                std::io::ErrorKind::WouldBlock => std::thread::sleep(Duration::from_millis(10)),
+                _ => return Err(error),
+            }
+        }
+    }
+    Ok(())
+}
+
+pub(super) fn write_fifo_path_until(
+    path: &Path,
+    bytes: &[u8],
+    deadline: Instant,
+) -> std::io::Result<()> {
+    loop {
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "stdin FIFO reader did not open",
+            ));
+        }
+        match fs::OpenOptions::new()
+            .write(true)
+            .custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC)
+            .open(path)
+        {
+            Ok(file) => return write_fifo_until(&file, bytes, deadline),
+            Err(error) if error.raw_os_error() == Some(libc::ENXIO) => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
 pub fn set_dir_perms(path: &Path, mode: u32) {
     if let Ok(md) = fs::metadata(path) {
         let mut p = md.permissions();
@@ -751,5 +826,89 @@ mod cni_plugin_path_tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "nameserver 1.1.1.1\n");
         let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o644, "uid 1000 must be able to read resolv.conf");
+    }
+
+    #[test]
+    fn fifo_without_reader_returns_timeout_instead_of_parking_worker() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdin");
+        create_fifo(&path).unwrap();
+        let error = write_fifo_path_until(
+            &path,
+            b"command\n",
+            Instant::now() + Duration::from_millis(50),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn full_fifo_returns_timeout_when_game_stops_reading() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdin");
+        create_fifo(&path).unwrap();
+        let file = open_fifo_rdwr(&path).unwrap();
+        let payload = vec![b'x'; 2 * 1024 * 1024];
+        let error = write_fifo_until(&file, &payload, Instant::now() + Duration::from_millis(50))
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+    }
+
+    #[test]
+    fn fifo_delivers_input_byte_exactly() {
+        use std::io::Read;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdin");
+        create_fifo(&path).unwrap();
+        let mut reader = open_fifo_rdwr(&path).unwrap();
+        write_fifo_path_until(
+            &path,
+            b"say hello\n",
+            Instant::now() + Duration::from_secs(1),
+        )
+        .unwrap();
+        let mut received = [0; 10];
+        reader.read_exact(&mut received).unwrap();
+        assert_eq!(&received, b"say hello\n");
+    }
+
+    #[test]
+    fn detects_cpu_burst_on_children_when_host_root_has_no_interface() {
+        let dir = tempfile::tempdir().unwrap();
+        let slice = dir.path().join("system.slice");
+        fs::create_dir(&slice).unwrap();
+        fs::write(slice.join("cpu.max.burst"), "0\n").unwrap();
+        assert!(!dir.path().join("cpu.max.burst").exists());
+        assert!(cpu_burst_supported_at(dir.path()));
+        assert!(!dir.path().join("catalyst").exists());
+    }
+
+    #[test]
+    fn detects_cpu_burst_at_namespaced_root_and_omits_unsupported_interface() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!cpu_burst_supported_at(dir.path()));
+        fs::write(dir.path().join("cpu.max.burst"), "0\n").unwrap();
+        assert!(cpu_burst_supported_at(dir.path()));
+    }
+
+    #[test]
+    fn expired_fifo_work_does_not_deliver_stale_input() {
+        use std::io::Read;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("stdin");
+        create_fifo(&path).unwrap();
+        let mut reader = open_fifo_rdwr(&path).unwrap();
+        let error = write_fifo_until(
+            &reader,
+            b"stale\n",
+            Instant::now() - Duration::from_millis(1),
+        )
+        .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        let mut byte = [0];
+        assert_eq!(
+            reader.read(&mut byte).unwrap_err().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
     }
 }

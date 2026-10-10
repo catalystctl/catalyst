@@ -15,7 +15,10 @@ use crate::file_manager::FileManager;
 use crate::net_utils;
 
 const POLL_CONCURRENCY: usize = 4;
-const MAX_CONCURRENT_REQUESTS: usize = 50; // Max concurrent file operations
+// Metadata requests are cheap, but uploads, downloads, archive operations, and
+// fsyncs share disks and memory with game containers. Bound active work tightly.
+const MAX_CONCURRENT_REQUESTS: usize = 16;
+const MAX_QUEUED_REQUESTS: usize = 128;
 const RETRY_DELAY: Duration = Duration::from_secs(2);
 const MAX_RETRY_DELAY: Duration = Duration::from_secs(30);
 const MAX_INSTALL_URL_REDIRECTS: usize = 10;
@@ -126,14 +129,41 @@ impl FileTunnelClient {
         );
 
         let mut handles = Vec::new();
+        let (request_queue, mut pending) =
+            tokio::sync::mpsc::channel::<TunnelRequest>(MAX_QUEUED_REQUESTS);
+        let client = self.client.clone();
+        let base_url = self.base_url.clone();
+        let node_id = self.config.server.node_id.clone();
+        let api_key = self.config.server.api_key.clone();
+        let file_manager = self.file_manager.clone();
+        let semaphore = self.request_semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            while let Some(request) = pending.recv().await {
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(permit) => permit,
+                    Err(error) => {
+                        error!("File tunnel semaphore closed: {}", error);
+                        return;
+                    }
+                };
+                let client = client.clone();
+                let base_url = base_url.clone();
+                let node_id = node_id.clone();
+                let api_key = api_key.clone();
+                let fm = file_manager.clone();
+                tokio::spawn(async move {
+                    let _permit = permit;
+                    process_request(client, base_url, node_id, api_key, fm, request).await;
+                });
+            }
+        }));
         for i in 0..POLL_CONCURRENCY {
             let client = self.client.clone();
             let base_url = self.base_url.clone();
             let node_id = self.config.server.node_id.clone();
             let api_key = self.config.server.api_key.clone();
-            let file_manager = self.file_manager.clone();
             let backend_connected = self.backend_connected.clone();
-            let request_semaphore = self.request_semaphore.clone();
+            let request_queue = request_queue.clone();
 
             handles.push(tokio::spawn(async move {
                 poll_worker(
@@ -142,9 +172,8 @@ impl FileTunnelClient {
                     base_url,
                     node_id,
                     api_key,
-                    file_manager,
                     backend_connected,
-                    request_semaphore,
+                    request_queue,
                 )
                 .await;
             }));
@@ -174,9 +203,8 @@ async fn poll_worker(
     base_url: String,
     node_id: String,
     api_key: String,
-    file_manager: Arc<FileManager>,
     backend_connected: Arc<RwLock<bool>>,
-    request_semaphore: Arc<Semaphore>,
+    request_queue: tokio::sync::mpsc::Sender<TunnelRequest>,
 ) {
     let poll_url = format!("{}/api/internal/file-tunnel/poll", base_url);
     let mut retry_delay = RETRY_DELAY;
@@ -209,28 +237,22 @@ async fn poll_worker(
                 match resp.json::<PollResponse>().await {
                     Ok(poll) => {
                         for request in poll.requests {
-                            let client = client.clone();
-                            let base_url = base_url.clone();
-                            let node_id = node_id.clone();
-                            let api_key = api_key.clone();
-                            let fm = file_manager.clone();
-                            let semaphore = request_semaphore.clone();
-
-                            // Process each request concurrently, limited by semaphore
-                            tokio::spawn(async move {
-                                // Acquire permit before processing to limit concurrency
-                                match semaphore.acquire().await {
-                                    Ok(_permit) => {
-                                        process_request(
-                                            client, base_url, node_id, api_key, fm, request,
-                                        )
-                                        .await;
-                                    }
-                                    Err(e) => {
-                                        error!("Failed to acquire semaphore permit: {}", e);
-                                    }
-                                }
-                            });
+                            // Keep long-polling responsive without creating one
+                            // waiting task per request. Overload is an explicit
+                            // operation error, not silent loss or unbounded RAM.
+                            if let Err(error) = request_queue.try_send(request) {
+                                let request = error.into_inner();
+                                let ctx = TunnelCtx {
+                                    client: &client,
+                                    base_url: &base_url,
+                                    node_id: &node_id,
+                                    api_key: &api_key,
+                                    request_id: &request.request_id,
+                                };
+                                send_json_response(&ctx, false, None, Some(
+                                    "Node file-operation queue is full or unavailable; retry after active transfers finish".to_string(),
+                                )).await;
+                            }
                         }
                     }
                     Err(e) => {
@@ -327,12 +349,55 @@ async fn handle_list(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest)
 }
 
 async fn handle_download(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
-    match fm.read_file(&req.server_uuid, &req.path).await {
-        Ok(data) => {
-            send_stream_response(ctx, true, None, data).await;
+    // Stream fixed-size chunks from a no-follow descriptor. Snapshot length
+    // preserves the panel limit even if a game keeps appending to the file.
+    let file_result = async {
+        let path = fm.resolve_path(&req.server_uuid, &req.path)?;
+        let (file, len) = tokio::task::spawn_blocking(move || {
+            let file = crate::file_manager::open_no_follow(&path, false)?;
+            let len = file.metadata()?.len();
+            Ok::<_, std::io::Error>((file, len))
+        })
+        .await
+        .map_err(|e| crate::AgentError::InternalError(format!("Download open task: {}", e)))??;
+        if len > fm.max_file_size() {
+            return Err(crate::AgentError::InvalidRequest(format!(
+                "File exceeds maximum size of {} bytes",
+                fm.max_file_size()
+            )));
+        }
+        Ok::<_, crate::AgentError>((tokio::fs::File::from_std(file), len))
+    }
+    .await;
+    match file_result {
+        Ok((file, len)) => {
+            let stream =
+                futures::stream::try_unfold((file, len), |(mut file, remaining)| async move {
+                    use tokio::io::AsyncReadExt;
+                    if remaining == 0 {
+                        return Ok::<_, std::io::Error>(None);
+                    }
+                    let mut chunk = vec![0; remaining.min(64 * 1024) as usize];
+                    let n = file.read(&mut chunk).await?;
+                    if n == 0 {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::UnexpectedEof,
+                            "Download source truncated during transfer",
+                        ));
+                    }
+                    chunk.truncate(n);
+                    Ok(Some((chunk, (file, remaining - n as u64))))
+                });
+            send_stream_response(ctx, true, None, reqwest::Body::wrap_stream(stream)).await;
         }
         Err(e) => {
-            send_stream_response(ctx, false, Some(e.to_string()), vec![]).await;
+            send_stream_response(
+                ctx,
+                false,
+                Some(e.to_string()),
+                reqwest::Body::from(Vec::<u8>::new()),
+            )
+            .await;
         }
     }
 }
@@ -850,7 +915,7 @@ async fn send_stream_response(
     ctx: &TunnelCtx<'_>,
     success: bool,
     error: Option<String>,
-    body: Vec<u8>,
+    body: reqwest::Body,
 ) {
     let url = format!(
         "{}/api/internal/file-tunnel/response/{}/stream",

@@ -480,7 +480,9 @@ impl ContainerdRuntime {
         }
         let cfg =
             serde_json::to_string(config).map_err(|e| AgentError::ContainerError(e.to_string()))?;
+        const CNI_PLUGIN_TIMEOUT: Duration = Duration::from_secs(30);
         let mut child = Command::new(&ppath)
+            .kill_on_drop(true)
             .env("CNI_COMMAND", command)
             .env("CNI_CONTAINERID", cid)
             .env("CNI_NETNS", netns)
@@ -491,12 +493,23 @@ impl ContainerdRuntime {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(|e| AgentError::ContainerError(format!("CNI: {}", e)))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            use tokio::io::AsyncWriteExt;
-            stdin.write_all(cfg.as_bytes()).await?;
-            drop(stdin);
-        }
-        let out = child.wait_with_output().await?;
+        let out = tokio::time::timeout(CNI_PLUGIN_TIMEOUT, async move {
+            if let Some(mut stdin) = child.stdin.take() {
+                use tokio::io::AsyncWriteExt;
+                stdin.write_all(cfg.as_bytes()).await?;
+                drop(stdin);
+            }
+            child.wait_with_output().await
+        })
+        .await
+        .map_err(|_| {
+            AgentError::ContainerError(format!(
+                "CNI {} plugin timed out after {}s",
+                ptype,
+                CNI_PLUGIN_TIMEOUT.as_secs()
+            ))
+        })?
+        .map_err(AgentError::from)?;
         if !out.status.success() {
             let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
             let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();

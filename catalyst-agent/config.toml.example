@@ -131,4 +131,6 @@ format = "json"
 # release_repo = "catalystctl/catalyst"
 
 # Interval between resource-stats/health reports, in seconds (default: 5, min: 1).
+# Missed samples are skipped, not replayed in a catch-up burst.
+# Increase to 10-30 on dense nodes when graph freshness permits fewer cgroup reads.
 # stats_interval_secs = 5

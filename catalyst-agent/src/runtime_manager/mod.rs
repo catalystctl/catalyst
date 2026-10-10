@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
-use std::io::Write;
 use std::net::Ipv4Addr;
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
