@@ -68,7 +68,7 @@ export function fileTunnelRoutes(
   app.get(
     "/api/internal/file-tunnel/poll",
     {
-      schema: { summary: "Poll pending file-tunnel requests", tags: ["File tunnel"], response: { 200: { type: "object", properties: { requests: { type: "array", items: { type: "object" } } } }, 401: { type: "object" }, 500: { type: "object" } } },
+      schema: { summary: "Poll pending file-tunnel requests", tags: ["File tunnel"], response: { 200: { type: "object", properties: { requests: { type: "array", items: { type: "object", required: ["requestId", "nodeId", "operation", "serverUuid", "path"], properties: { requestId: { type: "string" }, nodeId: { type: "string" }, operation: { type: "string" }, serverUuid: { type: "string" }, path: { type: "string" }, data: { type: "object", additionalProperties: true } } } } } }, 401: { type: "object" }, 500: { type: "object" } } },
       config: {
         rateLimit: {
           max: async () => {

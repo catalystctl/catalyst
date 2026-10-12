@@ -98,6 +98,7 @@ describe("server file download streamed tunnel responses", () => {
       "/backup.tar.gz",
       undefined,
       undefined,
+      { streamResponse: true },
     );
     await app.close();
   });

@@ -22,7 +22,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     data?: Record<string, unknown>,
     uploadData?: Buffer,
   ) => {
-    return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData);
+    return fileTunnel.queueRequest(nodeId, operation, serverUuid, filePath, data, uploadData, { streamResponse: true });
   };
 
   /**

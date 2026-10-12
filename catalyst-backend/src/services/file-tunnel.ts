@@ -40,6 +40,7 @@ interface PendingRequest {
   reject: (error: Error) => void;
   timer: ReturnType<typeof setTimeout>;
   createdAt: number;
+  streamResponse: boolean;
 }
 
 interface WaitingPoller {
@@ -122,6 +123,13 @@ export class FileTunnelService {
       } finally {
         await handle.close();
       }
+      // Existing RPC consumers (including installed plugins) expect a Buffer.
+      // Only callers that explicitly opt in own a response stream.
+      if (!pending.streamResponse) {
+        const body = await fsp.readFile(filePath);
+        await fsp.unlink(filePath);
+        return this.resolveRequest(requestId, nodeId, { requestId, ...metadata, body, bodySize: size });
+      }
       const stream = fs.createReadStream(filePath);
       const remove = () => {
         stream.removeListener("close", remove);
@@ -130,7 +138,9 @@ export class FileTunnelService {
       };
       stream.once("close", remove);
       stream.once("error", remove);
-      return this.resolveRequest(requestId, nodeId, { requestId, ...metadata, stream, bodySize: size });
+      const resolved = this.resolveRequest(requestId, nodeId, { requestId, ...metadata, stream, bodySize: size });
+      if (!resolved) stream.destroy();
+      return resolved;
     } catch (error) {
       source.destroy(error instanceof Error ? error : undefined);
       await fsp.unlink(filePath).catch(() => {});
@@ -159,7 +169,7 @@ export class FileTunnelService {
     filePath: string,
     data?: Record<string, unknown>,
     uploadData?: Buffer,
-    options?: { bypassToken?: string; stagedFile?: { filePath: string; size: number } }
+    options?: { bypassToken?: string; stagedFile?: { filePath: string; size: number }; streamResponse?: boolean }
   ): Promise<FileTunnelResponse> {
     const settings = await getSecuritySettings();
 
@@ -264,6 +274,7 @@ export class FileTunnelService {
         reject,
         timer,
         createdAt: Date.now(),
+        streamResponse: options?.streamResponse ?? false,
       });
 
       // Try to deliver to a waiting poller immediately
@@ -435,7 +446,9 @@ export class FileTunnelService {
     }
   }
 
-  destroy() {
+  /** Tears the service down. Await the result before staging into the same
+   * temp directory again (a later `mkdir` would otherwise race the removal). */
+  destroy(): Promise<void> {
     clearInterval(this.cleanupTimer);
     // Reject all pending requests
     for (const [, pending] of this.pending) {
@@ -458,7 +471,7 @@ export class FileTunnelService {
       void fsp.unlink(entry.filePath).catch(() => {});
     }
     this.uploads.clear();
-    // Attempt to remove temp directory
-    void fsp.rm(this.tempDir, { recursive: true, force: true }).catch(() => {});
+    // Remove the temp directory. Returned so callers can await completion.
+    return fsp.rm(this.tempDir, { recursive: true, force: true }).catch(() => {});
   }
 }

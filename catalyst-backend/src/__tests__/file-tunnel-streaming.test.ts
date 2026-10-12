@@ -20,8 +20,8 @@ const logger = {
   warn: vi.fn(),
 } as any;
 
-async function queue(service: FileTunnelService, nodeId = "node-1") {
-  const response = service.queueRequest(nodeId, "download", "server-1", "/file");
+async function queue(service: FileTunnelService, nodeId = "node-1", streamResponse = true) {
+  const response = service.queueRequest(nodeId, "download", "server-1", "/file", undefined, undefined, { streamResponse });
   const requests = await service.pollRequests(nodeId);
   expect(requests).toHaveLength(1);
   return { response, requestId: requests[0].requestId };
@@ -34,8 +34,22 @@ async function exists(filePath: string) {
 describe("FileTunnelService staged response streams", () => {
   let service: FileTunnelService;
 
-  afterEach(() => {
-    service?.destroy();
+  afterEach(async () => {
+    await service?.destroy();
+  });
+
+  it("preserves buffered downloads for existing plugin and RPC consumers", async () => {
+    service = new FileTunnelService(logger);
+    const response = service.queueRequest("node-1", "download", "server-1", "/file");
+    const [request] = await service.pollRequests("node-1");
+    const bytes = Buffer.from([0, 255, 128, 42]);
+    expect(await service.stageResponseStream(request.requestId, "node-1", Readable.from([bytes]), 100, {
+      success: true,
+    })).toBe(true);
+    const result = await response;
+    expect(result.body).toEqual(bytes);
+    expect(result.stream).toBeUndefined();
+    expect(await exists(path.join("/tmp", "catalyst-uploads", `response-${request.requestId}.bin`))).toBe(false);
   });
 
   it("stages a response without retaining bytes, returns a readable stream, and removes it on close", async () => {
