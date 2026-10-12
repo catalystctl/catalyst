@@ -188,8 +188,8 @@ function loadConfig() {
       s3Endpoint: process.env.BACKUP_S3_ENDPOINT,
       s3Region: process.env.BACKUP_S3_REGION,
       s3Bucket: process.env.BACKUP_S3_BUCKET,
-      s3AccessKeyId: process.env.BACKUP_S3_ACCESS_KEY_ID,
-      s3SecretAccessKey: process.env.BACKUP_S3_SECRET_ACCESS_KEY,
+      s3AccessKeyId: process.env.BACKUP_S3_ACCESS_KEY,
+      s3SecretAccessKey: process.env.BACKUP_S3_SECRET_KEY,
     },
     serverData: {
       dir: process.env.SERVER_DATA_DIR,
