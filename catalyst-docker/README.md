@@ -475,6 +475,23 @@ BACKEND_PORT=127.0.0.1:3001
 > for advanced setups (e.g. a proxy you own targets a nonstandard container
 > port); it does not affect which port users type into the browser.
 
+### 502 on every /api request
+
+The SPA loads but `/api`, `/auth` and `/ws` all return 502 — nginx cannot
+resolve the backend. Look for the resolver error in the frontend log:
+
+```bash
+docker compose logs frontend | grep -i 'backend could not be resolved'
+```
+
+The bundled compose stack proxies to a fixed `backend:PORT`, which libc
+resolves at startup. If you run the frontend image directly (Kubernetes, Podman,
+host networking) and hit this, set `BACKEND_HOST` — and `NGINX_LOCAL_RESOLVERS`
+if the container's own DNS is wrong — as described in
+[Customizing the nginx configuration](#customizing-the-nginx-configuration-advanced).
+`wget http://backend:3000/health` succeeding inside the container while nginx
+logs a resolve failure is the signature of a resolver mismatch.
+
 ### Customizing the nginx configuration (advanced)
 
 The frontend container renders its nginx config from a template at startup
@@ -493,6 +510,19 @@ services:
 
 Then `docker compose up -d`. Verify your render with:
 `docker compose exec frontend grep listen /etc/nginx/conf.d/default.conf`
+
+The image's built-in template (used when you don't mount an override) resolves
+the backend at request time through nginx's resolver, pointed at the
+container's own `/etc/resolv.conf` by
+`docker-entrypoint.d/16-backend-host.envsh`. Two environment variables tune it:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `BACKEND_HOST` | `backend` | Backend hostname. A short name is qualified with a `resolv.conf` search domain when it only resolves that way (a Kubernetes Service, for example); set an FQDN to override. |
+| `NGINX_LOCAL_RESOLVERS` | from `/etc/resolv.conf` | Nameservers nginx resolves `BACKEND_HOST` against. Set `NGINX_ENTRYPOINT_LOCAL_RESOLVERS=0` to stop the image deriving it. |
+
+The bundled compose stack mounts `catalyst-docker/nginx/default.conf.template`
+instead, which keeps a static `proxy_pass` and needs neither variable.
 
 ### Database connection issues
 

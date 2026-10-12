@@ -55,18 +55,28 @@ FROM nginx:alpine
 # Remove default config
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Defaults for the two ports substituted into the config template: PORT is the
+# Defaults for the values substituted into the config template: PORT is the
 # container's own listen port, BACKEND_UPSTREAM_PORT the backend upstream port
-# (set from BACKEND_INTERNAL_PORT by the compose stack). Both are overridable
-# at runtime (compose passes them explicitly).
+# (set from BACKEND_INTERNAL_PORT by the compose stack), BACKEND_HOST the
+# backend hostname. All are overridable at runtime (compose passes them
+# explicitly). NGINX_ENTRYPOINT_LOCAL_RESOLVERS makes the nginx image export
+# NGINX_LOCAL_RESOLVERS (the nameservers from /etc/resolv.conf) so the template
+# can point nginx's runtime resolver at the DNS the container actually uses.
 ENV PORT=80
 ENV BACKEND_UPSTREAM_PORT=3000
+ENV BACKEND_HOST=backend
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 # Copy nginx config (proxies /api, /auth, /ws, /docs to backend).
 # Installed as a template: the nginx image's entrypoint renders
 # /etc/nginx/templates/*.template with envsubst, substituting ${PORT}
 # from the environment (backend-style PORT env var, defaults to 80).
 COPY catalyst-frontend/nginx.conf /etc/nginx/templates/default.conf.template
+
+# Qualify BACKEND_HOST with a resolv.conf search domain when the short name only
+# resolves that way; nginx's own resolver ignores search domains.
+COPY catalyst-frontend/docker-entrypoint.d/16-backend-host.envsh /docker-entrypoint.d/16-backend-host.envsh
+RUN chmod +x /docker-entrypoint.d/16-backend-host.envsh
 
 # Copy built assets
 COPY --from=build /app/catalyst-frontend/dist /usr/share/nginx/html

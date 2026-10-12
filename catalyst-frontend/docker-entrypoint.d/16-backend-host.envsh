@@ -1,0 +1,45 @@
+#!/bin/sh
+# nginx's `resolver` directive ignores the `search` list in /etc/resolv.conf, so
+# a short upstream name that only resolves through a search domain (a Kubernetes
+# Service reached as backend.<namespace>.svc.cluster.local, for example) fails
+# with "backend could not be resolved" even when the DNS server is correct.
+#
+# The nginx image sources every *.envsh in /docker-entrypoint.d/ before running
+# 20-envsubst-on-templates.sh, so the exports below reach the rendered config.
+# Qualify BACKEND_HOST here, where the container's libc resolver — which does
+# honour search domains — is available.
+#
+# BACKEND_HOST and NGINX_LOCAL_RESOLVERS are overridable from the environment.
+# NGINX_LOCAL_RESOLVERS is filled from /etc/resolv.conf by the image's
+# 15-local-resolvers.envsh, enabled by NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 in the
+# Dockerfile. RESOLV_CONF only exists so the test suite can point the search
+# lookup at a fixture.
+
+# Keep the `resolver` directive valid even when /etc/resolv.conf lists no
+# nameserver at all; nginx refuses to start with an empty resolver.
+if [ -z "${NGINX_LOCAL_RESOLVERS:-}" ]; then
+    NGINX_LOCAL_RESOLVERS="127.0.0.11"
+fi
+export NGINX_LOCAL_RESOLVERS
+
+host="${BACKEND_HOST:-backend}"
+resolv_conf="${RESOLV_CONF:-/etc/resolv.conf}"
+
+# An FQDN or an IP literal already resolves without a search domain.
+case "$host" in
+    *.* | *:*) ;;
+    *)
+        # First search domain wins. Each probe is bounded so an unreachable DNS
+        # server cannot delay container startup.
+        domains="$(sed -n 's/^search[[:space:]]*//p' "$resolv_conf" | head -n 1)"
+        # shellcheck disable=SC2086  # deliberate word splitting on the search list
+        for domain in $domains; do
+            if timeout 3 getent hosts "$host.$domain" >/dev/null 2>&1; then
+                host="$host.$domain"
+                break
+            fi
+        done
+        ;;
+esac
+
+export BACKEND_HOST="$host"
