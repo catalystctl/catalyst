@@ -147,7 +147,7 @@ export async function serverFilesRoutes(app: FastifyInstance) {
   // Get valid game version tags for a provider (used for autocomplete)
   app.get(
     "/:serverId/files/download",
-    { schema: { summary: "Download a file", description: "Download a file.", tags: ["Files"], produces: ["application/octet-stream"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/octet-stream" }, 400: { type: "object" }, 403: { type: "object" }, 404: { type: "object" }, 503: { type: "object" }, 504: { type: "object" } } },
+    { schema: { summary: "Download a file", description: "Download a file.", tags: ["Files"], produces: ["application/octet-stream"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/octet-stream" }, 400: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true }, 503: { type: "object", additionalProperties: true }, 504: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },

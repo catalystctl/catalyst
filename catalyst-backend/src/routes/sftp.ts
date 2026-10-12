@@ -162,7 +162,7 @@ export async function sftpRoutes(app: FastifyInstance) {
 	app.post(
 		"/api/sftp/rotate-token",
 		{
-			schema: { summary: "Rotate an SFTP token", tags: ["SFTP"], body: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" }, ttlMs: { type: "number" } } }, response: { 200: { type: "object" }, 400: { type: "object" }, 403: { type: "object" }, 404: { type: "object" } } },
+			schema: { summary: "Rotate an SFTP token", tags: ["SFTP"], body: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" }, ttlMs: { type: "number" } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true } } },
 			preHandler: [authenticate],
 			config: { requiredPermission: "file.read" },
 		},
@@ -237,7 +237,7 @@ export async function sftpRoutes(app: FastifyInstance) {
 	app.get(
 		"/api/sftp/tokens",
 		{
-			schema: { summary: "List SFTP tokens", tags: ["SFTP"], querystring: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object" }, 400: { type: "object" }, 403: { type: "object" }, 404: { type: "object" } } },
+			schema: { summary: "List SFTP tokens", tags: ["SFTP"], querystring: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true } } },
 			preHandler: [authenticate],
 			config: { requiredPermission: "file.read" },
 		},

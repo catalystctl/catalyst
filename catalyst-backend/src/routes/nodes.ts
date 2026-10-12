@@ -2939,7 +2939,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 	// Agents do not open a dedicated log socket; this is the true stream surface.
 	app.get(
 		"/:nodeId/agent/logs/stream",
-		{ schema: { summary: "Stream agent logs", description: "Stream agent logs.", tags: ["Nodes"], produces: ["text/event-stream"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "string" }, 403: { type: "object" }, 404: { type: "object" }, 503: { type: "object" } } },
+		{ schema: { summary: "Stream agent logs", description: "Stream agent logs.", tags: ["Nodes"], produces: ["text/event-stream"], params: { type: "object", required: ['nodeId'], properties: { nodeId: { type: "string" } } }, response: { 200: { type: "string" }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true }, 503: { type: "object", additionalProperties: true } } },
 			onRequest: [app.authenticate],
 			config: { rateLimit: false },
 		},

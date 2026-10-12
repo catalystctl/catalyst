@@ -40,7 +40,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         tags: ['Console'],
         produces: ['text/event-stream'],
         params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
-        response: { 200: { type: 'string' }, 401: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 503: { type: 'object' } },
+        response: { 200: { type: 'string' }, 401: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true }, 404: { type: 'object', additionalProperties: true }, 503: { type: 'object', additionalProperties: true } },
       },
     },
     async (request, reply) => {
@@ -172,7 +172,7 @@ export function consoleStreamRoutes(app: FastifyInstance, wsGateway: WebSocketGa
         tags: ['Console'],
         params: { type: 'object', required: ['serverId'], properties: { serverId: { type: 'string' } } },
         body: { type: 'object', required: ['command'], properties: { command: { type: 'string', minLength: 1, maxLength: 4096 } } },
-        response: { 202: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' }, 404: { type: 'object' }, 500: { type: 'object' } },
+        response: { 202: { type: 'object', additionalProperties: true }, 400: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true }, 404: { type: 'object', additionalProperties: true }, 500: { type: 'object', additionalProperties: true } },
       },
     },
     async (request, reply) => {

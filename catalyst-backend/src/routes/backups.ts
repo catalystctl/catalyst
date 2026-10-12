@@ -544,7 +544,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Download a backup
   app.get(
     "/:serverId/backups/:backupId/download",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Download a server backup", tags: ["Backups"], produces: ["application/gzip"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/gzip" }, 401: { type: "object" }, 403: { type: "object" }, 404: { type: "object" }, 423: { type: "object" }, 500: { type: "object" } } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Download a server backup", tags: ["Backups"], produces: ["application/gzip"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/gzip" }, 401: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true }, 423: { type: "object", additionalProperties: true }, 500: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;

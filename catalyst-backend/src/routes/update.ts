@@ -40,7 +40,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// Get update status (admin read)
 	app.get(
 		'/status',
-		{ schema: { summary: 'Get panel update status', tags: ['Update'], response: { 200: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+		{ schema: { summary: 'Get panel update status', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.read')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -71,7 +71,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// the editable controls without triggering a release check.
 	app.get(
 		'/settings',
-		{ schema: { summary: 'Get automatic update settings', tags: ['Update'], response: { 200: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+		{ schema: { summary: 'Get automatic update settings', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.read')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
@@ -97,7 +97,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// and the change is published so other workers drop their cached copy.
 	app.put(
 		'/settings',
-     { schema: { summary: 'Update automatic update settings', tags: ['Update'], response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+     { schema: { summary: 'Update automatic update settings', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 400: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.write')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
@@ -166,7 +166,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// via hasGrant implications).
 	app.post(
 		'/check',
-		{ schema: { summary: 'Check for a panel update', tags: ['Update'], response: { 200: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+		{ schema: { summary: 'Check for a panel update', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'update.trigger')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Update trigger permission required');
@@ -187,7 +187,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// implications).
 	app.post(
 		'/trigger',
-		{ schema: { summary: 'Trigger a panel update', tags: ['Update'], response: { 200: { type: 'object' }, 400: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+		{ schema: { summary: 'Trigger a panel update', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 400: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'update.trigger')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Update trigger permission required');
@@ -212,7 +212,7 @@ export async function updateRoutes(app: FastifyInstance) {
 	// update is running so users can see what the panel is doing.
 	app.get(
 		'/state',
-		{ schema: { summary: 'Get live panel update state', tags: ['Update'], response: { 200: { type: 'object' }, 403: { type: 'object' } } }, preHandler: [authenticate] },
+		{ schema: { summary: 'Get live panel update state', tags: ['Update'], response: { 200: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true } } }, preHandler: [authenticate] },
 		async (request: FastifyRequest, reply: FastifyReply) => {
 			if (!checkPerm(request, 'admin.read')) {
 				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');

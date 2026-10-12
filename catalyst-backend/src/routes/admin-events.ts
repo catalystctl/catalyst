@@ -104,7 +104,7 @@ export function adminEventsRoutes(app: FastifyInstance, wsGateway: WebSocketGate
 
   app.get(
     '/',
-    { schema: { summary: 'Subscribe to admin events', tags: ['Admin events'], produces: ['text/event-stream'], response: { 401: { type: 'object' }, 403: { type: 'object' }, 503: { type: 'object' } } }, config: { rateLimit: false } },
+    { schema: { summary: 'Subscribe to admin events', tags: ['Admin events'], produces: ['text/event-stream'], response: { 401: { type: 'object', additionalProperties: true }, 403: { type: 'object', additionalProperties: true }, 503: { type: 'object', additionalProperties: true } } }, config: { rateLimit: false } },
     async (request, reply) => {
       // Authenticate
       let userId: string | null = null;

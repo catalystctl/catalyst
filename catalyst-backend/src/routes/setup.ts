@@ -212,7 +212,7 @@ export async function setupRoutes(app: FastifyInstance) {
 	// only the registry entries explicitly flagged `setup` — never secrets.
 	app.get(
 		"/environment",
-		{ schema: { summary: "List setup-available environment settings", tags: ["Setup"], response: { 200: { type: "object" } } } },
+		{ schema: { summary: "List setup-available environment settings", tags: ["Setup"], response: { 200: { type: "object", additionalProperties: true } } } },
 		async (_request: FastifyRequest, reply: FastifyReply) => {
 			reply.header("Cache-Control", "no-store");
 			return reply.send({ success: true, data: getSetupEnvVars() });
@@ -371,7 +371,7 @@ export async function setupRoutes(app: FastifyInstance) {
 	app.post(
 		"/complete",
 		{
-			schema: { summary: "Complete initial panel setup", tags: ["Setup"], body: { type: "object", required: ["email", "username", "password"], properties: { email: { type: "string", format: "email" }, username: { type: "string", minLength: 2, maxLength: 32 }, password: { type: "string", minLength: 8 }, panelName: { type: "string", minLength: 1, maxLength: 50 }, primaryColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, secondaryColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, accentColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, defaultTheme: { type: "string", enum: ["light", "dark"] }, logoUrl: { type: "string" }, metadata: { type: "object" }, environment: { type: "object", additionalProperties: { type: "string" } } } }, response: { 200: { type: "object" }, 400: { type: "object" }, 409: { type: "object" } } },
+			schema: { summary: "Complete initial panel setup", tags: ["Setup"], body: { type: "object", required: ["email", "username", "password"], properties: { email: { type: "string", format: "email" }, username: { type: "string", minLength: 2, maxLength: 32 }, password: { type: "string", minLength: 8 }, panelName: { type: "string", minLength: 1, maxLength: 50 }, primaryColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, secondaryColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, accentColor: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" }, defaultTheme: { type: "string", enum: ["light", "dark"] }, logoUrl: { type: "string" }, metadata: { type: "object", additionalProperties: true }, environment: { type: "object", additionalProperties: { type: "string" } } } }, response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true }, 409: { type: "object", additionalProperties: true } } },
 			config: {
 				rateLimit: { max: 5, timeWindow: "1 minute" },
 			},
