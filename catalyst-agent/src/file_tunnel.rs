@@ -402,7 +402,19 @@ async fn handle_download(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequ
     }
 }
 
+/// Explicit permission mode requested by the panel for a write/create/upload,
+/// if any. When absent the agent preserves the destination's mode (or uses a
+/// readable default) — see `file_manager::resolve_written_file_mode`.
+fn requested_mode(req: &TunnelRequest) -> Option<u32> {
+    req.data
+        .as_ref()
+        .and_then(|d| d.get("mode"))
+        .and_then(|v| v.as_u64())
+        .map(|m| m as u32)
+}
+
 async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest) {
+    let req_mode = requested_mode(req);
     // Fetch upload data from backend and stream directly to file
     let upload_url = format!(
         "{}/api/internal/file-tunnel/upload/{}",
@@ -439,18 +451,28 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
             // Resolve the destination now (it passed resolve_path via the
             // write_stream call) and rename the temp onto it.
             match fm.resolve_path(&req.server_uuid, &req.path) {
-                Ok(dest) => match tokio::fs::rename(&temp_path, &dest).await {
-                    Ok(()) => {
-                        drop(temp);
-                        crate::ownership::ensure_container_owned(fm.data_dir(), &dest).await;
-                        send_json_response(ctx, true, None, None).await;
+                Ok(dest) => {
+                    // The upload temp is 0600 and rename(2) carries that mode
+                    // onto the destination, so capture what to apply first:
+                    // the replaced file's mode, else a readable default.
+                    let dest_mode = crate::file_manager::resolve_written_file_mode(
+                        crate::file_manager::existing_file_mode(&dest).await,
+                        req_mode,
+                    );
+                    match tokio::fs::rename(&temp_path, &dest).await {
+                        Ok(()) => {
+                            drop(temp);
+                            crate::file_manager::apply_file_mode(&dest, dest_mode).await;
+                            crate::ownership::ensure_container_owned(fm.data_dir(), &dest).await;
+                            send_json_response(ctx, true, None, None).await;
+                        }
+                        Err(e) => {
+                            drop(temp);
+                            let _ = tokio::fs::remove_file(&temp_path).await;
+                            send_json_response(ctx, false, None, Some(e.to_string())).await;
+                        }
                     }
-                    Err(e) => {
-                        drop(temp);
-                        let _ = tokio::fs::remove_file(&temp_path).await;
-                        send_json_response(ctx, false, None, Some(e.to_string())).await;
-                    }
-                },
+                }
                 Err(e) => {
                     drop(temp);
                     let _ = tokio::fs::remove_file(&temp_path).await;
@@ -483,6 +505,15 @@ async fn handle_write(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelRequest
 
     match fm.write_file(&req.server_uuid, &req.path, content).await {
         Ok(()) => {
+            if let Some(mode) = requested_mode(req) {
+                // set_permissions strips setuid/setgid/sticky and logs failures.
+                if let Err(e) = fm.set_permissions(&req.server_uuid, &req.path, mode).await {
+                    warn!(
+                        "Failed to apply requested mode {:o} to {}: {}",
+                        mode, req.path, e
+                    );
+                }
+            }
             send_json_response(ctx, true, None, None).await;
         }
         Err(e) => {
@@ -510,6 +541,14 @@ async fn handle_create(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
         .await
     {
         Ok(()) => {
+            if let Some(mode) = requested_mode(req) {
+                if let Err(e) = fm.set_permissions(&req.server_uuid, &req.path, mode).await {
+                    warn!(
+                        "Failed to apply requested mode {:o} to {}: {}",
+                        mode, req.path, e
+                    );
+                }
+            }
             send_json_response(ctx, true, None, None).await;
         }
         Err(e) => {
@@ -801,6 +840,12 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
         };
 
         let mut written: u64 = 0;
+        // Temp is 0600 and rename(2) carries that mode onto `dest`; capture
+        // what to apply now that the destination is resolved.
+        let dest_mode = crate::file_manager::resolve_written_file_mode(
+            crate::file_manager::existing_file_mode(&dest).await,
+            None,
+        );
         let mut stream = response.bytes_stream();
         while let Some(chunk) = stream.next().await {
             let chunk = match chunk {
@@ -856,6 +901,8 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
             return;
         }
+
+        crate::file_manager::apply_file_mode(&dest, dest_mode).await;
 
         // Hand the downloaded file (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(fm.data_dir(), &dest).await;

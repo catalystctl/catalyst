@@ -12,6 +12,54 @@ pub(crate) const MAX_ARCHIVE_MEMBERS: usize = 50_000;
 pub(crate) const MAX_ARCHIVE_TOTAL_BYTES: u64 = 10 * 1024 * 1024 * 1024; // 10 GiB uncompressed
 pub(crate) const MAX_ARCHIVE_RATIO: u64 = 100; // uncompressed may not exceed 100x compressed
 
+/// Mode for an agent-written file with no existing counterpart to preserve:
+/// owner read/write, everyone else read. Executable bits are never added
+/// implicitly — callers that need them pass an explicit mode.
+pub const DEFAULT_WRITTEN_FILE_MODE: u32 = 0o644;
+
+/// Permission bits that must never end up on server data: setuid, setgid and
+/// sticky allow a container-controlled file to escalate privilege.
+const FORBIDDEN_MODE_BITS: u32 = 0o7000;
+
+/// Mode to give a file the agent just wrote, applied after the temp→
+/// destination rename.
+///
+/// Every agent write goes through an O_EXCL temp created 0600 (SECURITY: no
+/// readable window while bytes are in flight), and `rename(2)` carries that
+/// mode onto the destination. Left alone, *every* agent-written file would
+/// land 0600, so a replaced or re-uploaded game binary or script loses its
+/// execute bit and the container dies with exit 126 "Permission denied".
+///
+/// Precedence: an explicit caller-supplied mode, then the mode of the file
+/// being replaced (re-uploading `hlds_run` keeps 0755), then
+/// [`DEFAULT_WRITTEN_FILE_MODE`]. setuid/setgid/sticky are always stripped.
+pub fn resolve_written_file_mode(existing: Option<u32>, explicit: Option<u32>) -> u32 {
+    explicit
+        .or(existing)
+        .map(|mode| mode & !FORBIDDEN_MODE_BITS)
+        .unwrap_or(DEFAULT_WRITTEN_FILE_MODE)
+}
+
+/// Mode of the regular file at `path`, or `None` when nothing is there.
+///
+/// Uses `symlink_metadata` so a symlink planted at the destination
+/// contributes nothing: the rename replaces the link itself, never its
+/// target, and preserving a link's mode would be meaningless.
+pub async fn existing_file_mode(path: &Path) -> Option<u32> {
+    match fs::symlink_metadata(path).await {
+        Ok(meta) if meta.is_file() => Some(meta.permissions().mode() & 0o7777),
+        _ => None,
+    }
+}
+
+/// Apply `mode` to `path`, logging instead of failing: the write has already
+/// succeeded, and a chmod error must not report the operation as lost.
+pub async fn apply_file_mode(path: &Path, mode: u32) {
+    if let Err(e) = fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).await {
+        warn!("Failed to set mode {:o} on {:?}: {}", mode, path, e);
+    }
+}
+
 /// An exclusively-created temp file plus its path (std handles carry no path).
 /// Written via `as_file()`/`AsyncWriteExt` on the std handle, removed/renamed
 /// through `path()`.
@@ -789,6 +837,7 @@ impl FileManager {
         // fs::write through that name is an arbitrary host write. Create an
         // unpredictable, exclusively-created (O_EXCL) temp file instead —
         // O_EXCL fails on any pre-existing entry, including dangling symlinks.
+        let existing_mode = existing_file_mode(&full_path).await;
         let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
         let write_result =
             async {
@@ -816,6 +865,8 @@ impl FileManager {
         // The agent runs as root; hand the new file (and any created parents)
         // to the container user so the server process can modify it (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+
+        apply_file_mode(&full_path, resolve_written_file_mode(existing_mode, None)).await;
 
         info!("File written successfully: {:?}", full_path);
 
@@ -989,6 +1040,7 @@ impl FileManager {
                     max / 1024 / 1024
                 )));
             }
+            let existing_mode = existing_file_mode(&full_path).await;
             let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
             let write_result = async {
                 temp.write_all(content.as_bytes()).await.map_err(|e| {
@@ -1011,6 +1063,7 @@ impl FileManager {
                     e
                 )));
             }
+            apply_file_mode(&full_path, resolve_written_file_mode(existing_mode, None)).await;
         }
 
         // Hand the new entry (and created parents) to the container user (#237).
@@ -1051,6 +1104,7 @@ impl FileManager {
 
         // SECURITY: see write_file — O_EXCL unpredictable temp name, never a
         // container-plantable ".tmp" sibling.
+        let existing_mode = existing_file_mode(&full_path).await;
         let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
         let write_result =
             async {
@@ -1077,6 +1131,8 @@ impl FileManager {
 
         // Hand the uploaded file (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+
+        apply_file_mode(&full_path, resolve_written_file_mode(existing_mode, None)).await;
 
         info!("File bytes written: {:?} ({} bytes)", full_path, data.len());
         Ok(())
@@ -1125,6 +1181,10 @@ impl FileManager {
         }
 
         info!("File stream written: {:?} ({} bytes)", full_path, total);
+
+        // Created 0600 by create_exclusive_file; restore a usable mode (the
+        // file cannot have existed before, so there is nothing to preserve).
+        apply_file_mode(&full_path, resolve_written_file_mode(None, None)).await;
 
         // Hand the streamed file (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
@@ -2010,6 +2070,87 @@ mod tests {
             .await
             .expect("under-limit write must succeed");
         assert_eq!(fm.max_file_size(), 32);
+    }
+
+    fn mode_of(path: &Path) -> u32 {
+        std::fs::symlink_metadata(path)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777
+    }
+
+    #[test]
+    fn written_file_mode_prefers_explicit_then_existing_then_default() {
+        assert_eq!(resolve_written_file_mode(Some(0o755), Some(0o600)), 0o600);
+        assert_eq!(resolve_written_file_mode(Some(0o755), None), 0o755);
+        assert_eq!(resolve_written_file_mode(None, None), 0o644);
+        assert_eq!(DEFAULT_WRITTEN_FILE_MODE, 0o644);
+    }
+
+    #[test]
+    fn written_file_mode_strips_setuid_setgid_and_sticky() {
+        assert_eq!(resolve_written_file_mode(None, Some(0o4755)), 0o755);
+        assert_eq!(resolve_written_file_mode(None, Some(0o2755)), 0o755);
+        assert_eq!(resolve_written_file_mode(None, Some(0o1755)), 0o755);
+        assert_eq!(resolve_written_file_mode(Some(0o6755), None), 0o755);
+    }
+
+    #[tokio::test]
+    async fn overwriting_a_file_preserves_its_execute_bit() {
+        // Regression: agent writes go through a 0600 temp + rename(2), and the
+        // rename carried 0600 onto the destination. Every rewritten or
+        // re-uploaded game binary/script lost its execute bit, so the container
+        // died with exit 126 "Permission denied".
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let binary = srv.join("hlds_run");
+        std::fs::write(&binary, b"#!/bin/sh\n").unwrap();
+        std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+        fm.write_file("srv1", "hlds_run", "#!/bin/sh\necho restarted\n")
+            .await
+            .expect("overwrite must succeed");
+
+        assert_eq!(
+            mode_of(&binary),
+            0o755,
+            "execute bit must survive a rewrite"
+        );
+    }
+
+    #[tokio::test]
+    async fn overwriting_preserves_a_tight_existing_mode() {
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let secret = srv.join("token.env");
+        std::fs::write(&secret, b"a").unwrap();
+        std::fs::set_permissions(&secret, std::fs::Permissions::from_mode(0o600)).unwrap();
+
+        fm.write_file("srv1", "token.env", "b").await.unwrap();
+
+        assert_eq!(mode_of(&secret), 0o600, "a tight mode must not be widened");
+    }
+
+    #[tokio::test]
+    async fn new_files_get_a_readable_non_executable_mode() {
+        let fm = make_fm();
+        fm.write_file("srv1", "server.cfg", "hostname x")
+            .await
+            .unwrap();
+        fm.write_file_bytes("srv1", "blob.bin", b"bytes")
+            .await
+            .unwrap();
+        fm.create_entry("srv1", "notes.txt", false, "hi")
+            .await
+            .unwrap();
+
+        for name in ["server.cfg", "blob.bin", "notes.txt"] {
+            let path = fm.data_dir.join("srv1").join(name);
+            assert_eq!(mode_of(&path), 0o644, "{name} must be readable, not 0600");
+        }
     }
 
     #[test]
