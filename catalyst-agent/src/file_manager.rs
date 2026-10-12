@@ -1,3 +1,4 @@
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -60,36 +61,129 @@ pub async fn apply_file_mode(path: &Path, mode: u32) {
     }
 }
 
-/// An exclusively-created temp file plus its path (std handles carry no path).
-/// Written via `as_file()`/`AsyncWriteExt` on the std handle, removed/renamed
-/// through `path()`.
+/// Open `path` as a directory descriptor without following a symlink at the
+/// final component (`O_NOFOLLOW|O_DIRECTORY`).
+fn open_dir_nofollow(path: &Path) -> std::io::Result<OwnedFd> {
+    use std::os::unix::ffi::OsStrExt;
+    let c = std::ffi::CString::new(path.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    // SAFETY: `c` is a NUL-terminated path.
+    let fd = unsafe {
+        libc::open(
+            c.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: `fd` is a fresh descriptor we own.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+}
+
+/// Open `name` as a directory relative to `dir`, never following a symlink.
+fn open_dir_at(dir: &OwnedFd, name: &str) -> std::io::Result<OwnedFd> {
+    let c = std::ffi::CString::new(name)
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    // SAFETY: `c` is a NUL-terminated single path component.
+    let fd = unsafe {
+        libc::openat(
+            dir.as_raw_fd(),
+            c.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // SAFETY: `fd` is a fresh descriptor we own.
+    Ok(unsafe { OwnedFd::from_raw_fd(fd) })
+}
+
+/// An exclusively-created temp file, held together with the *pinned directory
+/// descriptor* it lives in.
+///
+/// SECURITY (TOCTOU): the temp file is created relative to a directory
+/// descriptor obtained by walking every component of the destination path from
+/// the jail root with `O_NOFOLLOW|O_DIRECTORY`, and it is renamed onto its
+/// destination with `renameat(2)` relative to that same descriptor. A
+/// container that swaps a component for a symlink *after* validation therefore
+/// fails the walk (ELOOP) instead of redirecting the write, which closes the
+/// check-to-use window on the write path.
 pub struct TempFile {
     file: tokio::fs::File,
+    dir: OwnedFd,
+    /// Temp name inside `dir` (unlinked on drop).
+    name: String,
+    /// Destination name inside `dir`.
+    dest: String,
+    /// Absolute destination path (logging / ownership handoff).
     path: PathBuf,
 }
 
 impl TempFile {
-    fn new(file: tokio::fs::File, path: PathBuf) -> Self {
-        Self { file, path }
-    }
     pub fn path(&self) -> &Path {
         &self.path
     }
+    /// Absolute path of the temp file itself (diagnostics only).
+    pub fn temp_path(&self) -> PathBuf {
+        match self.path.parent() {
+            Some(p) => p.join(&self.name),
+            None => PathBuf::from(&self.name),
+        }
+    }
+    /// NOTE: `tokio::fs::File` returns `Ready(Ok(n))` once the bytes are
+    /// *buffered*, not once they are written, so this resolving is not by
+    /// itself proof that the data has landed — [`Self::persist`] drains and
+    /// fsyncs before the rename for exactly that reason.
     pub async fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
         tokio::io::AsyncWriteExt::write_all(&mut self.file, buf).await
     }
     pub async fn sync_all(&mut self) -> std::io::Result<()> {
         tokio::fs::File::sync_all(&self.file).await
     }
+    /// Atomically replace the destination entry with the temp file, relative to
+    /// the pinned directory descriptor. `rename(2)` semantics: an existing
+    /// (even symlink) destination entry is replaced, never followed.
+    ///
+    /// Drains the write buffer and fsyncs first: `tokio::fs::File` reports a
+    /// write as complete as soon as the bytes are buffered, so a rename issued
+    /// straight after `write_all` could publish a file whose contents have not
+    /// landed yet (observed as a zero-length config rewrite).
+    pub async fn persist(&mut self) -> std::io::Result<()> {
+        self.file.sync_all().await?;
+        let from = std::ffi::CString::new(self.name.as_str())
+            .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+        let to = std::ffi::CString::new(self.dest.as_str())
+            .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+        // SAFETY: both names are NUL-terminated single components and `dir` is
+        // a live directory descriptor.
+        let rc = unsafe {
+            libc::renameat(
+                self.dir.as_raw_fd(),
+                from.as_ptr(),
+                self.dir.as_raw_fd(),
+                to.as_ptr(),
+            )
+        };
+        if rc != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(())
+    }
 }
 
 impl Drop for TempFile {
     fn drop(&mut self) {
-        // Best-effort: if the caller never renamed us onto the target (task
-        // cancelled, early error return), remove the temp file so cancelled
-        // writes don't litter the server directory.
-        if self.path.exists() {
-            let _ = std::fs::remove_file(&self.path);
+        // Best-effort: if the caller never persisted us (task cancelled, early
+        // error return), remove the temp file so cancelled writes don't litter
+        // the server directory. Relative to the pinned descriptor, so it can
+        // never remove anything outside that directory.
+        if let Ok(c) = std::ffi::CString::new(self.name.as_str()) {
+            // SAFETY: `c` is a NUL-terminated name inside `dir`.
+            unsafe {
+                libc::unlinkat(self.dir.as_raw_fd(), c.as_ptr(), 0);
+            }
         }
     }
 }
@@ -127,52 +221,222 @@ fn jail_base_sync(data_dir: &Path, server_id: &str) -> Result<PathBuf, AgentErro
     Ok(resolved)
 }
 
-/// Re-validate every ancestor of `dir` up to `canonical_base`: none may be
-/// a symlink and each must canonicalize inside the base. Closes the
-/// create_dir_all → use window where the container swaps a parent for a link.
-fn revalidate_ancestors(canonical_base: &Path, dir: &Path) -> AgentResult<()> {
-    let mut cur = dir.to_path_buf();
-    loop {
-        if !cur.starts_with(canonical_base) && cur != *canonical_base {
-            return Err(AgentError::PermissionDenied(
-                "Access denied: path outside data directory".to_string(),
-            ));
-        }
-        match std::fs::symlink_metadata(&cur) {
-            Ok(m) if m.file_type().is_symlink() => {
-                return Err(AgentError::PermissionDenied(
-                    "Access denied: ancestor is a symbolic link".to_string(),
-                ));
-            }
-            Ok(_) => {
-                if let Ok(c) = cur.canonicalize() {
-                    if !c.starts_with(canonical_base) {
-                        return Err(AgentError::PermissionDenied(
-                            "Access denied: path outside data directory".to_string(),
-                        ));
-                    }
-                }
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+/// In-container mount root. Every game container gets its host server
+/// directory bind-mounted at `/data` (`runtime_manager/image_and_spec.rs`), and
+/// `HOME`/`SERVER_DIR` inside the container are `/data`. Symlinks SteamCMD,
+/// Proton and game installers create are therefore frequently *absolute* under
+/// `/data`; on the host those must be re-rooted into the server's jail instead
+/// of refused.
+pub(crate) const CONTAINER_DATA_ROOT: &str = "/data";
+
+/// Maximum symlink hops while resolving one path (cycle guard).
+const MAX_SYMLINK_HOPS: usize = 40;
+
+/// Lexical containment: `p` is `jail` or lives under it. Component-wise, so
+/// `/a/bc` is correctly *not* considered to be under `/a/b`.
+fn path_within(jail: &Path, p: &Path) -> bool {
+    p == jail || p.starts_with(jail)
+}
+
+/// Split a path string into traversal components, dropping empty and `.`.
+fn path_components(s: &str) -> Vec<String> {
+    s.split('/')
+        .filter(|c| !c.is_empty() && *c != ".")
+        .map(str::to_string)
+        .collect()
+}
+
+/// Resolve `requested` inside the server `jail`, following symlinks, and return
+/// the host path iff every hop stays inside the jail.
+///
+/// Policy: symlinks *inside* the server directory are legitimate — SteamCMD,
+/// Proton, pnpm and `node_modules` all create them, and a subuser expects to be
+/// able to read and write through them. Only links that leave the jail are
+/// refused. Concretely:
+///
+/// * `..` is resolved against the jail and must not escape it;
+/// * a **relative** symlink target continues from the link's own parent;
+/// * an **absolute** symlink target under `/data` is remapped to the jail (the
+///   container's view of its own directory);
+/// * any other absolute target, or a symlink cycle, is refused.
+///
+/// When `create` is true, missing *intermediate* directories are created one
+/// component at a time with `mkdir(2)` — which fails `EEXIST` on an existing
+/// entry, including a symlink, so it can never be raced into following a
+/// planted link — and only *after* that component has been validated. This is
+/// why `create_dir_all` must never appear on a request path: it traverses (and
+/// follows) every component before any check can run.
+pub(crate) fn resolve_beneath(jail: &Path, requested: &str, create: bool) -> AgentResult<PathBuf> {
+    let jail: PathBuf = jail.canonicalize().unwrap_or_else(|_| jail.to_path_buf());
+
+    if create {
+        // The jail itself (`data_dir/<uuid>`) is not a path component, so make
+        // sure it exists before creating anything beneath it. `mkdir` is
+        // EEXIST-safe and never traverses an existing entry.
+        match std::fs::create_dir(&jail) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
             Err(e) => {
                 return Err(AgentError::FileSystemError(format!(
-                    "Cannot stat ancestor: {}",
+                    "Failed to create server directory: {}",
+                    e
+                )))
+            }
+        }
+    }
+
+    let mut queue: std::collections::VecDeque<String> =
+        path_components(requested).into_iter().collect();
+    let mut cur = jail.clone();
+    let mut hops = 0usize;
+
+    while let Some(comp) = queue.pop_front() {
+        if comp == ".." {
+            cur.pop();
+            if !path_within(&jail, &cur) {
+                return Err(AgentError::PermissionDenied(
+                    "Access denied: path outside data directory".to_string(),
+                ));
+            }
+            continue;
+        }
+
+        let cand = cur.join(&comp);
+        match std::fs::symlink_metadata(&cand) {
+            Ok(meta) if meta.file_type().is_symlink() => {
+                hops += 1;
+                if hops > MAX_SYMLINK_HOPS {
+                    return Err(AgentError::PermissionDenied(
+                        "Access denied: symbolic link loop".to_string(),
+                    ));
+                }
+                let target = std::fs::read_link(&cand).map_err(|e| {
+                    AgentError::FileSystemError(format!("Cannot read symbolic link: {}", e))
+                })?;
+                let mut expanded: std::collections::VecDeque<String> = if target.is_absolute() {
+                    let t = target.to_string_lossy();
+                    if t == CONTAINER_DATA_ROOT
+                        || t.starts_with(&format!("{}/", CONTAINER_DATA_ROOT))
+                    {
+                        cur = jail.clone();
+                        let rest = t
+                            .strip_prefix(CONTAINER_DATA_ROOT)
+                            .unwrap_or("")
+                            .trim_start_matches('/');
+                        path_components(rest).into_iter().collect()
+                    } else {
+                        return Err(AgentError::PermissionDenied(format!(
+                            "Access denied: symbolic link leaves the server directory: {}",
+                            cand.display()
+                        )));
+                    }
+                } else {
+                    cur = cand.parent().map(Path::to_path_buf).unwrap_or(cur);
+                    path_components(&target.to_string_lossy())
+                        .into_iter()
+                        .collect()
+                };
+                expanded.extend(queue.drain(..));
+                queue = expanded;
+                continue;
+            }
+            Ok(_) => {
+                cur = cand;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                // Only an *intermediate* component is auto-created; the final
+                // component is left to the caller (O_EXCL temp + rename, or an
+                // explicit mkdir), so a dangling final symlink is never
+                // silently materialised.
+                if !queue.is_empty() {
+                    if !create {
+                        return Err(AgentError::FileSystemError(format!(
+                            "Cannot access path: {}",
+                            cand.display()
+                        )));
+                    }
+                    std::fs::create_dir(&cand).map_err(|e| {
+                        AgentError::FileSystemError(format!("Failed to create dir: {}", e))
+                    })?;
+                }
+                cur = cand;
+            }
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Cannot access path: {}",
                     e
                 )));
             }
         }
-        if cur == *canonical_base {
-            break;
-        }
-        match cur.parent() {
-            Some(p) if p != cur => cur = p.to_path_buf(),
-            _ => break,
-        }
-        if !dir.starts_with(canonical_base) && cur == *canonical_base {
-            break;
+
+        if !path_within(&jail, &cur) {
+            return Err(AgentError::PermissionDenied(
+                "Access denied: path outside data directory".to_string(),
+            ));
         }
     }
-    Ok(())
+
+    Ok(cur)
+}
+
+/// Resolve a path inside `jail` and create it as a directory (plus any missing
+/// parents), validating every component *before* its `mkdir`. Idempotent: an
+/// existing directory is not an error. Returns the resolved host path.
+pub(crate) fn ensure_dir_beneath(jail: &Path, requested: &str) -> AgentResult<PathBuf> {
+    let target = resolve_beneath(jail, requested, true)?;
+    match std::fs::create_dir(&target) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+        Err(e) => {
+            return Err(AgentError::FileSystemError(format!(
+                "Failed to create dir: {}",
+                e
+            )))
+        }
+    }
+    Ok(target)
+}
+
+/// Open the directory that will hold `resolved` — a path already resolved by
+/// [`resolve_beneath`] and therefore symlink-free *at resolution time* — by
+/// walking every component from `jail` with `O_NOFOLLOW|O_DIRECTORY`.
+///
+/// SECURITY (TOCTOU): because the walk is descriptor-relative, a component
+/// swapped for a symlink after validation fails here (ELOOP) instead of being
+/// followed by the subsequent write. Returns the pinned directory descriptor
+/// and the destination's final component name.
+fn open_parent_beneath(jail: &Path, resolved: &Path) -> AgentResult<(OwnedFd, String)> {
+    let jail = jail.canonicalize().unwrap_or_else(|_| jail.to_path_buf());
+    let rel = resolved.strip_prefix(&jail).map_err(|_| {
+        AgentError::PermissionDenied("Access denied: path outside data directory".to_string())
+    })?;
+    let dest = rel
+        .file_name()
+        .ok_or_else(|| AgentError::InvalidRequest("Invalid target path".to_string()))?
+        .to_string_lossy()
+        .into_owned();
+
+    let mut fd = open_dir_nofollow(&jail)
+        .map_err(|e| AgentError::FileSystemError(format!("Cannot open server directory: {e}")))?;
+    for comp in rel.parent().unwrap_or(Path::new("")).components() {
+        match comp {
+            std::path::Component::Normal(seg) => {
+                let seg = seg.to_string_lossy().into_owned();
+                fd = open_dir_at(&fd, &seg).map_err(|e| {
+                    AgentError::PermissionDenied(format!(
+                        "Access denied: '{}' is not a directory ({e})",
+                        seg
+                    ))
+                })?;
+            }
+            _ => {
+                return Err(AgentError::PermissionDenied(
+                    "Access denied: path outside data directory".to_string(),
+                ))
+            }
+        }
+    }
+    Ok((fd, dest))
 }
 
 /// Reject one archive member name before extraction (SEC-C-03).
@@ -394,25 +658,42 @@ impl FileManager {
         }
     }
 
-    /// SECURITY: create an unpredictable, exclusively-created temp file next
-    /// to `target` (same directory → same-fs atomic rename). O_EXCL
-    /// (`.create_new(true)`) fails on ANY pre-existing directory entry,
-    /// including a dangling symlink planted by the container, so a root write
-    /// can never traverse a container-controlled name. Mode is 0600 until the
-    /// rename + ownership handoff completes. The suffix is 128 bits from a
-    /// CSPRNG (unpredictable to the container user) plus retries on collision.
-    pub async fn create_secure_temp_sibling(target: &Path) -> AgentResult<TempFile> {
-        let dir = target
-            .parent()
-            .ok_or_else(|| AgentError::InvalidRequest("Invalid target path".to_string()))?;
-        let stem = target
-            .file_name()
-            .map(|s| s.to_string_lossy().to_string())
-            .unwrap_or_else(|| "file".to_string());
+    /// The canonical jail root for a server, with the same server-id hardening
+    /// as [`Self::resolve_path`].
+    pub(crate) fn jail_base(&self, server_id: &str) -> AgentResult<PathBuf> {
+        Self::validate_server_id(server_id)?;
+        jail_base_sync(&self.data_dir, server_id)
+    }
+
+    /// SECURITY: create an unpredictable, exclusively-created (O_EXCL, 0600)
+    /// temp file for `target`, with `target`'s parent directory pinned by a
+    /// descriptor-relative walk from the server jail root.
+    ///
+    /// O_EXCL fails on ANY pre-existing directory entry, including a dangling
+    /// symlink planted by the container, so a root write can never traverse a
+    /// container-controlled name; the descriptor walk additionally means no
+    /// *intermediate* component can be swapped for a symlink in between (the
+    /// walk fails with ELOOP instead). The suffix is 128 bits from a CSPRNG
+    /// plus retries on collision.
+    pub(crate) async fn secure_temp_for(
+        &self,
+        server_id: &str,
+        target: &Path,
+    ) -> AgentResult<TempFile> {
+        let jail = self.jail_base(server_id)?;
+        Self::open_exclusive_temp_beneath(&jail, target).await
+    }
+
+    /// [`Self::secure_temp_for`] for callers that already hold the jail root.
+    pub(crate) async fn open_exclusive_temp_beneath(
+        jail: &Path,
+        target: &Path,
+    ) -> AgentResult<TempFile> {
+        let (dir, dest) = open_parent_beneath(jail, target)?;
         // Sanitize the stem so a malicious target name cannot inject path
         // separators into the temp name (defense in depth; target is already
         // jail-resolved, but temp names must never contain `/`).
-        let stem: String = stem
+        let stem: String = dest
             .chars()
             .map(|c| {
                 if c == '/' || c == '\\' || c == '\0' {
@@ -427,23 +708,41 @@ impl FileManager {
         for _ in 0..8 {
             let unique: u128 = rand::random();
             let name = format!(".catalyst-tmp-{}-{:032x}", stem, unique);
-            let candidate = dir.join(name);
-            match fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .mode(0o600)
-                .open(&candidate)
-                .await
-            {
-                Ok(f) => return Ok(TempFile::new(f, candidate)),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-                Err(e) => {
-                    return Err(AgentError::FileSystemError(format!(
-                        "Failed to create temp file: {}",
-                        e
-                    )))
+            let c = std::ffi::CString::new(name.as_str())
+                .map_err(|_| AgentError::InvalidRequest("Invalid target path".to_string()))?;
+            // SAFETY: `c` is a NUL-terminated single component and `dir` is a
+            // live directory descriptor.
+            let fd = unsafe {
+                libc::openat(
+                    dir.as_raw_fd(),
+                    c.as_ptr(),
+                    libc::O_WRONLY
+                        | libc::O_CREAT
+                        | libc::O_EXCL
+                        | libc::O_NOFOLLOW
+                        | libc::O_CLOEXEC,
+                    0o600u32,
+                )
+            };
+            if fd < 0 {
+                let e = std::io::Error::last_os_error();
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    continue;
                 }
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to create temp file: {}",
+                    e
+                )));
             }
+            // SAFETY: `fd` is a fresh descriptor we own.
+            let std_file = unsafe { std::fs::File::from_raw_fd(fd) };
+            return Ok(TempFile {
+                file: tokio::fs::File::from_std(std_file),
+                dir,
+                name,
+                dest,
+                path: target.to_path_buf(),
+            });
         }
         Err(AgentError::FileSystemError(
             "Failed to create unique temp file after retries".to_string(),
@@ -481,13 +780,8 @@ impl FileManager {
         target: &str,
         mut response: reqwest::Response,
     ) -> AgentResult<TempFile> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let full_path = self.resolve_path(server_id, target)?;
-        if let Some(parent) = full_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-        }
-        let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
+        let full_path = self.resolve_path_creating(server_id, target)?;
+        let mut temp = self.secure_temp_for(server_id, &full_path).await?;
         let mut total: u64 = 0;
         let mut write_err: Option<AgentError> = None;
         while write_err.is_none() {
@@ -518,15 +812,11 @@ impl FileManager {
             }
         }
         if let Some(err) = write_err {
-            let temp_path = temp.path().to_path_buf();
-            drop(temp);
-            let _ = fs::remove_file(&temp_path).await;
+            // Dropping the TempFile unlinks the temp file (relative to the
+            // pinned directory descriptor).
             return Err(err);
         }
         if let Err(e) = temp.sync_all().await {
-            let temp_path = temp.path().to_path_buf();
-            drop(temp);
-            let _ = fs::remove_file(&temp_path).await;
             return Err(AgentError::FileSystemError(format!(
                 "Failed to sync uploaded file: {}",
                 e
@@ -608,112 +898,32 @@ impl FileManager {
         Ok(())
     }
 
-    /// Validate and resolve a path within the container's data directory
+    /// Validate and resolve a path within the container's data directory.
+    ///
+    /// Symlinks are followed; any link that stays inside the server jail is
+    /// allowed (SteamCMD, Proton and pnpm trees rely on this), and only links
+    /// that leave the jail are refused. See [`resolve_beneath`].
     pub fn resolve_path(&self, server_id: &str, requested_path: &str) -> AgentResult<PathBuf> {
         // Reject ids that are empty, traversal segments, or contain path
-        // separators / NUL. `""` and "." would resolve to the entire data
-        // directory and ".." to its parent — all three must never be usable
+        // separators / NUL. `""` and `"."` would resolve to the entire data
+        // directory and `".."` to its parent — all three must never be usable
         // as a server root, even though the panel normally sends cuids.
         Self::validate_server_id(server_id)?;
-        let server_base = self.data_dir.join(server_id);
-        let requested = PathBuf::from(requested_path);
+        let jail = jail_base_sync(&self.data_dir, server_id)?;
+        resolve_beneath(&jail, requested_path, false)
+    }
 
-        // Prevent directory traversal before resolving.
-        if requested
-            .components()
-            .any(|component| matches!(component, std::path::Component::ParentDir))
-        {
-            return Err(AgentError::PermissionDenied(format!(
-                "Path traversal attempt detected: {}",
-                requested_path
-            )));
-        }
-
-        // Try to canonicalize the server base. If it doesn't exist (e.g. server was
-        // just created or migrated), fall back to a logical path check using the
-        // data_dir (which must exist) as the trust anchor.
-        let canonical_base = match server_base.canonicalize() {
-            Ok(p) => p,
-            Err(_) => {
-                let data_dir_canon = self.data_dir.canonicalize().map_err(|_| {
-                    AgentError::FileSystemError(format!(
-                        "Data directory does not exist: {:?}",
-                        self.data_dir
-                    ))
-                })?;
-                let resolved = data_dir_canon.join(server_id);
-                if !resolved.starts_with(&data_dir_canon) {
-                    return Err(AgentError::PermissionDenied(
-                        "Server ID escapes data directory".to_string(),
-                    ));
-                }
-                resolved
-            }
-        };
-
-        let normalized = if requested.is_absolute() {
-            let trimmed = requested_path.trim_start_matches('/');
-            if trimmed.is_empty() {
-                // Listing the server root ("/" or "") must resolve to the
-                // server base itself — not its parent. join("") is a no-op on
-                // PathBuf, but the parent-canonicalize fallback below would
-                // then reject data_dir as "outside" server_base.
-                canonical_base.clone()
-            } else {
-                canonical_base.join(trimmed)
-            }
-        } else if requested_path.is_empty() || requested_path == "." {
-            canonical_base.clone()
-        } else {
-            canonical_base.join(requested_path)
-        };
-
-        // Exact server root (existing or not).
-        if normalized == canonical_base {
-            return Ok(canonical_base);
-        }
-
-        if let Ok(canonical) = normalized.canonicalize() {
-            if !canonical.starts_with(&canonical_base) {
-                return Err(AgentError::PermissionDenied(
-                    "Access denied: path outside data directory".to_string(),
-                ));
-            }
-            return Ok(canonical);
-        }
-
-        let parent = normalized
-            .parent()
-            .ok_or_else(|| AgentError::InvalidRequest("Invalid path".to_string()))?;
-        if let Ok(parent_canon) = parent.canonicalize() {
-            if !parent_canon.starts_with(&canonical_base) {
-                return Err(AgentError::PermissionDenied(
-                    "Access denied: path outside data directory".to_string(),
-                ));
-            }
-            let file_name = normalized
-                .file_name()
-                .ok_or_else(|| AgentError::InvalidRequest("Invalid path".to_string()))?;
-            // SECURITY: the target does not exist (canonicalize failed), but the
-            // FINAL COMPONENT ITSELF may still be a symlink — typically a
-            // dangling one planted by the container (e.g. payload -> /etc/cron.d/x).
-            // Returning the symlink path here made every write sink follow it
-            // with root privileges. lstat (symlink_metadata) the component and
-            // reject links so writes can never traverse a container-planted
-            // symlink out of the jail.
-            let final_path = parent_canon.join(file_name);
-            if final_path.symlink_metadata().is_ok() {
-                return Err(AgentError::PermissionDenied(
-                    "Access denied: cannot write through a symbolic link".to_string(),
-                ));
-            }
-            return Ok(final_path);
-        }
-
-        let relative = normalized.strip_prefix(&canonical_base).map_err(|_| {
-            AgentError::PermissionDenied("Access denied: path outside data directory".to_string())
-        })?;
-        Ok(canonical_base.join(relative))
+    /// Like [`Self::resolve_path`], but create any missing *intermediate*
+    /// directories on the way — each validated before its `mkdir`, never a
+    /// blind `create_dir_all`. The final component is left to the caller.
+    pub fn resolve_path_creating(
+        &self,
+        server_id: &str,
+        requested_path: &str,
+    ) -> AgentResult<PathBuf> {
+        Self::validate_server_id(server_id)?;
+        let jail = jail_base_sync(&self.data_dir, server_id)?;
+        resolve_beneath(&jail, requested_path, true)
     }
 
     /// Resolve a server id for filesystem use with the same hardening as
@@ -733,35 +943,15 @@ impl FileManager {
         Ok(())
     }
 
-    /// Resolve a path and ensure its parent directory exists. Used by install-url.
+    /// Resolve a path and create its parent directories. Used by install-url
+    /// and the SFTP write path. Each intermediate directory is validated
+    /// before its `mkdir` — never a blind `create_dir_all`.
     pub async fn resolve_and_ensure_parent(
         &self,
         server_id: &str,
         path: &str,
     ) -> AgentResult<std::path::PathBuf> {
-        let full_path = self.resolve_path(server_id, path)?;
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        if let Some(parent) = full_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-            // Confirm the target still resolves inside the jail after mkdir.
-            let re = self.resolve_path(server_id, path)?;
-            if re != full_path {
-                return Err(AgentError::PermissionDenied(
-                    "Access denied: path changed during directory creation".to_string(),
-                ));
-            }
-        }
-        Ok(full_path)
-    }
-
-    /// mkdir -p then re-validate every ancestor (TOCTOU close): each must not
-    /// be a symlink and must stay under `canonical_base`.
-    async fn ensure_parent_dir_secure(canonical_base: &Path, dir: &Path) -> AgentResult<()> {
-        fs::create_dir_all(dir)
-            .await
-            .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
-        revalidate_ancestors(canonical_base, dir)
+        self.resolve_path_creating(server_id, path)
     }
 
     pub async fn read_file(&self, server_id: &str, path: &str) -> AgentResult<Vec<u8>> {
@@ -810,16 +1000,9 @@ impl FileManager {
     }
 
     pub async fn write_file(&self, server_id: &str, path: &str, data: &str) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let full_path = self.resolve_path(server_id, path)?;
+        let full_path = self.resolve_path_creating(server_id, path)?;
 
         debug!("Writing file: {:?}", full_path);
-
-        // Create parent directories if needed, then re-validate ancestors.
-        if let Some(parent) = full_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-        }
 
         // Check size limit before writing
         let max = self.max_file_size();
@@ -838,29 +1021,27 @@ impl FileManager {
         // unpredictable, exclusively-created (O_EXCL) temp file instead —
         // O_EXCL fails on any pre-existing entry, including dangling symlinks.
         let existing_mode = existing_file_mode(&full_path).await;
-        let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
-        let write_result =
-            async {
-                temp_path.write_all(data.as_bytes()).await.map_err(|e| {
-                    AgentError::FileSystemError(format!("Failed to write file: {}", e))
-                })?;
-                temp_path.sync_all().await.map_err(|e| {
-                    AgentError::FileSystemError(format!("Failed to sync file: {}", e))
-                })?;
-                Ok(())
-            }
-            .await;
-        if let Err(e) = write_result {
-            let _ = fs::remove_file(temp_path.path()).await;
-            return Err(e);
+        let mut temp = self.secure_temp_for(server_id, &full_path).await?;
+        let write_result: AgentResult<()> = async {
+            temp.write_all(data.as_bytes())
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
+            temp.sync_all()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to sync file: {}", e)))?;
+            Ok(())
         }
-        if let Err(e) = fs::rename(temp_path.path(), &full_path).await {
-            let _ = fs::remove_file(temp_path.path()).await;
+        .await;
+        write_result?;
+        // renameat(2) within the pinned directory: the destination name can
+        // never have been swapped for a symlink since it was resolved.
+        if let Err(e) = temp.persist().await {
             return Err(AgentError::FileSystemError(format!(
                 "Failed to rename temp file: {}",
                 e
             )));
         }
+        drop(temp);
 
         // The agent runs as root; hand the new file (and any created parents)
         // to the container user so the server process can modify it (#237).
@@ -895,16 +1076,10 @@ impl FileManager {
     }
 
     pub async fn rename_file(&self, server_id: &str, from: &str, to: &str) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let from_path = self.resolve_path(server_id, from)?;
-        let to_path = self.resolve_path(server_id, to)?;
+        let to_path = self.resolve_path_creating(server_id, to)?;
 
         debug!("Renaming {:?} -> {:?}", from_path, to_path);
-
-        if let Some(parent) = to_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-        }
 
         fs::rename(&from_path, &to_path)
             .await
@@ -928,12 +1103,19 @@ impl FileManager {
         // after server create / before first install (Wings also ensures the
         // data directory exists before SFTP/file ops).
         if path == "/" || path.is_empty() || path == "." {
-            if let Err(e) = fs::create_dir_all(&full_path).await {
-                // Not fatal if it already exists or is a mount point we can read.
-                debug!("create_dir_all for list root {:?}: {}", full_path, e);
-            } else {
-                // Fresh server root: hand it to the container user (#237).
-                crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+            // The root is a single component directly inside data_dir, so a
+            // plain mkdir suffices: it fails EEXIST on an existing entry
+            // (including a symlink) and never traverses one.
+            match fs::create_dir(&full_path).await {
+                Ok(()) => {
+                    // Fresh server root: hand it to the container user (#237).
+                    crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => {
+                    // Not fatal if it is a mount point we can still read.
+                    debug!("mkdir for list root {:?}: {}", full_path, e);
+                }
             }
         }
 
@@ -1019,17 +1201,24 @@ impl FileManager {
         is_directory: bool,
         content: &str,
     ) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let full_path = self.resolve_path(server_id, path)?;
+        let full_path = self.resolve_path_creating(server_id, path)?;
         debug!("Creating entry: {:?} (dir={})", full_path, is_directory);
 
         if is_directory {
-            Self::ensure_parent_dir_secure(&canonical_base, &full_path).await?;
-        } else {
-            if let Some(parent) = full_path.parent() {
-                Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
+            // Create the directory itself. `mkdir(2)` fails EEXIST on an
+            // existing entry (including a symlink), so it can never be raced
+            // into following a planted link.
+            match fs::create_dir(&full_path).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => {
+                    return Err(AgentError::FileSystemError(format!(
+                        "Failed to create dir: {}",
+                        e
+                    )))
+                }
             }
+        } else {
             // Same O_EXCL temp+rename path as write_file: never fs::write
             // through a container-plantable name.
             let max = self.max_file_size();
@@ -1041,8 +1230,8 @@ impl FileManager {
                 )));
             }
             let existing_mode = existing_file_mode(&full_path).await;
-            let mut temp = Self::create_secure_temp_sibling(&full_path).await?;
-            let write_result = async {
+            let mut temp = self.secure_temp_for(server_id, &full_path).await?;
+            let write_result: AgentResult<()> = async {
                 temp.write_all(content.as_bytes()).await.map_err(|e| {
                     AgentError::FileSystemError(format!("Failed to create file: {}", e))
                 })?;
@@ -1052,17 +1241,14 @@ impl FileManager {
                 Ok(())
             }
             .await;
-            if let Err(e) = write_result {
-                let _ = fs::remove_file(temp.path()).await;
-                return Err(e);
-            }
-            if let Err(e) = fs::rename(temp.path(), &full_path).await {
-                let _ = fs::remove_file(temp.path()).await;
+            write_result?;
+            if let Err(e) = temp.persist().await {
                 return Err(AgentError::FileSystemError(format!(
                     "Failed to rename temp file: {}",
                     e
                 )));
             }
+            drop(temp);
             apply_file_mode(&full_path, resolve_written_file_mode(existing_mode, None)).await;
         }
 
@@ -1080,9 +1266,7 @@ impl FileManager {
         path: &str,
         data: &[u8],
     ) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let full_path = self.resolve_path(server_id, path)?;
+        let full_path = self.resolve_path_creating(server_id, path)?;
         debug!(
             "Writing bytes to file: {:?} ({} bytes)",
             full_path,
@@ -1098,36 +1282,28 @@ impl FileManager {
             )));
         }
 
-        if let Some(parent) = full_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-        }
-
         // SECURITY: see write_file — O_EXCL unpredictable temp name, never a
         // container-plantable ".tmp" sibling.
         let existing_mode = existing_file_mode(&full_path).await;
-        let mut temp_path = Self::create_secure_temp_sibling(&full_path).await?;
-        let write_result =
-            async {
-                temp_path.write_all(data).await.map_err(|e| {
-                    AgentError::FileSystemError(format!("Failed to write file: {}", e))
-                })?;
-                temp_path.sync_all().await.map_err(|e| {
-                    AgentError::FileSystemError(format!("Failed to sync file: {}", e))
-                })?;
-                Ok(())
-            }
-            .await;
-        if let Err(e) = write_result {
-            let _ = fs::remove_file(temp_path.path()).await;
-            return Err(e);
+        let mut temp = self.secure_temp_for(server_id, &full_path).await?;
+        let write_result: AgentResult<()> = async {
+            temp.write_all(data)
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to write file: {}", e)))?;
+            temp.sync_all()
+                .await
+                .map_err(|e| AgentError::FileSystemError(format!("Failed to sync file: {}", e)))?;
+            Ok(())
         }
-        if let Err(e) = fs::rename(temp_path.path(), &full_path).await {
-            let _ = fs::remove_file(temp_path.path()).await;
+        .await;
+        write_result?;
+        if let Err(e) = temp.persist().await {
             return Err(AgentError::FileSystemError(format!(
                 "Failed to rename temp file: {}",
                 e
             )));
         }
+        drop(temp);
 
         // Hand the uploaded file (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &full_path).await;
@@ -1145,14 +1321,8 @@ impl FileManager {
         path: &str,
         mut response: reqwest::Response,
     ) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let full_path = self.resolve_path(server_id, path)?;
+        let full_path = self.resolve_path_creating(server_id, path)?;
         debug!("Streaming to file: {:?}", full_path);
-
-        if let Some(parent) = full_path.parent() {
-            Self::ensure_parent_dir_secure(&canonical_base, parent).await?;
-        }
 
         let mut file = match Self::create_exclusive_file(&full_path).await {
             Ok(f) => f,
@@ -1225,10 +1395,17 @@ impl FileManager {
     /// Create a directory within a server's data directory.
     /// Unlike other operations, this creates the server base dir if it doesn't exist.
     pub async fn mkdir(&self, server_id: &str, path: &str) -> AgentResult<()> {
-        Self::validate_server_id(server_id)?;
-        let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
-        let resolved = self.resolve_path(server_id, path)?;
-        Self::ensure_parent_dir_secure(&canonical_base, &resolved).await?;
+        let resolved = self.resolve_path_creating(server_id, path)?;
+        match fs::create_dir(&resolved).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => {
+                return Err(AgentError::FileSystemError(format!(
+                    "Failed to create dir: {}",
+                    e
+                )))
+            }
+        }
         // Hand the new directory (and created parents) to the container user (#237).
         crate::ownership::ensure_container_owned(&self.data_dir, &resolved).await;
         info!("Directory created: {:?}", resolved);
@@ -1242,19 +1419,13 @@ impl FileManager {
         archive_path: &str,
         source_paths: &[String],
     ) -> AgentResult<()> {
-        let archive_full = self.resolve_path(server_id, archive_path)?;
+        let archive_full = self.resolve_path_creating(server_id, archive_path)?;
         let server_base = self.data_dir.join(server_id);
         let canonical_base = server_base
             .canonicalize()
             .map_err(|_| AgentError::PermissionDenied("Server directory missing".to_string()))?;
 
         debug!("Compressing to {:?}", archive_full);
-
-        if let Some(parent) = archive_full.parent() {
-            fs::create_dir_all(parent)
-                .await
-                .map_err(|e| AgentError::FileSystemError(format!("Failed to create dir: {}", e)))?;
-        }
 
         // Resolve each source path relative to server base
         let mut relative_paths = Vec::new();
@@ -1324,7 +1495,7 @@ impl FileManager {
         Self::validate_server_id(server_id)?;
         let canonical_base = jail_base_sync(&self.data_dir, server_id)?;
         let archive_full = self.resolve_path(server_id, archive_path)?;
-        let target_full = self.resolve_path(server_id, target_path)?;
+        let target_full = self.resolve_path_creating(server_id, target_path)?;
 
         debug!("Decompressing {:?} to {:?}", archive_full, target_full);
 
@@ -1350,8 +1521,6 @@ impl FileManager {
         } else {
             prevalidate_tar_archive(&archive_full, compressed_len).await?;
         }
-
-        Self::ensure_parent_dir_secure(&canonical_base, &target_full).await?;
 
         if is_zip {
             // unzip has no type-exclusion flags: pass `--` anchored excludes
@@ -1762,21 +1931,161 @@ mod tests {
         assert!(open_no_follow(&target, false).is_ok());
     }
 
-    #[test]
-    fn ancestor_revalidation_rejects_swapped_parent() {
+    fn jail_tmp() -> (tempfile::TempDir, PathBuf) {
         let dir = tempfile::tempdir().unwrap();
-        let base = dir.path().join("base");
-        let sub = base.join("sub");
-        std::fs::create_dir_all(&sub).unwrap();
-        let canon = base.canonicalize().unwrap();
-        assert!(revalidate_ancestors(&canon, &sub).is_ok());
-        // Swap `sub` for a symlink to outside: revalidation must fail.
-        std::fs::remove_dir(&sub).unwrap();
-        #[cfg(unix)]
-        std::os::unix::fs::symlink("/etc", &sub).unwrap();
-        assert!(revalidate_ancestors(&canon, &sub).is_err());
+        let jail = dir.path().join("srv");
+        std::fs::create_dir_all(&jail).unwrap();
+        (dir, jail)
     }
 
+    #[test]
+    fn resolve_beneath_allows_internal_symlinks() {
+        let (_d, jail) = jail_tmp();
+        std::fs::create_dir_all(jail.join("real")).unwrap();
+        std::fs::write(jail.join("real/target.txt"), b"T").unwrap();
+        std::os::unix::fs::symlink("real/target.txt", jail.join("f")).unwrap();
+        std::os::unix::fs::symlink("real", jail.join("d")).unwrap();
+
+        assert_eq!(
+            resolve_beneath(&jail, "f", false).unwrap(),
+            jail.join("real/target.txt")
+        );
+        assert_eq!(
+            resolve_beneath(&jail, "d/target.txt", false).unwrap(),
+            jail.join("real/target.txt")
+        );
+        // Nested create *through* an internal dir symlink stays inside.
+        let c = resolve_beneath(&jail, "d/sub/new.txt", true).unwrap();
+        assert!(c.starts_with(jail.canonicalize().unwrap()));
+        assert!(jail.join("real/sub").is_dir());
+    }
+
+    #[test]
+    fn resolve_beneath_remaps_container_absolute_symlinks() {
+        // SteamCMD/Proton create `-> /data/...` links; on the host the
+        // container's /data is the jail, so they must be re-rooted, not refused.
+        let (_d, jail) = jail_tmp();
+        std::fs::create_dir_all(jail.join("real")).unwrap();
+        std::fs::write(jail.join("real/target.txt"), b"T").unwrap();
+        std::os::unix::fs::symlink("/data/real/target.txt", jail.join("abs")).unwrap();
+        std::os::unix::fs::symlink("/data/real", jail.join("absdir")).unwrap();
+
+        assert_eq!(
+            resolve_beneath(&jail, "abs", false).unwrap(),
+            jail.join("real/target.txt")
+        );
+        let c = resolve_beneath(&jail, "absdir/new.txt", true).unwrap();
+        assert!(c.starts_with(jail.canonicalize().unwrap()));
+    }
+
+    #[test]
+    fn resolve_beneath_blocks_escapes() {
+        let (_d, jail) = jail_tmp();
+        std::os::unix::fs::symlink("/etc/hostname", jail.join("abs")).unwrap();
+        std::os::unix::fs::symlink("../../../etc/hostname", jail.join("rel")).unwrap();
+        std::os::unix::fs::symlink("loop_b", jail.join("loop_a")).unwrap();
+        std::os::unix::fs::symlink("loop_a", jail.join("loop_b")).unwrap();
+
+        assert!(resolve_beneath(&jail, "abs", false).is_err());
+        assert!(resolve_beneath(&jail, "rel", false).is_err());
+        assert!(resolve_beneath(&jail, "loop_a", false).is_err());
+        assert!(resolve_beneath(&jail, "../../../etc/passwd", false).is_err());
+        assert!(resolve_beneath(&jail, "a/../../escape", false).is_err());
+    }
+
+    #[test]
+    fn resolve_beneath_never_creates_outside_the_jail() {
+        // Regression for the residual mkdir escape: a nested create through an
+        // escaping symlink must fail AND leave no directory outside the jail.
+        let dir = tempfile::tempdir().unwrap();
+        let jail = dir.path().join("srv");
+        std::fs::create_dir_all(&jail).unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, jail.join("out")).unwrap();
+
+        let r = resolve_beneath(&jail, "out/newdir/x.txt", true);
+        assert!(r.is_err(), "escape must be refused");
+        assert!(
+            !outside.join("newdir").exists(),
+            "must not create directories outside the jail"
+        );
+    }
+
+    #[tokio::test]
+    async fn exclusive_temp_rejects_a_swapped_intermediate_component() {
+        // Closes the TOCTOU window: the path resolved cleanly, then the
+        // container replaces an intermediate directory with a symlink before
+        // the write. The descriptor walk must fail (ELOOP) instead of
+        // redirecting the write outside the jail.
+        let dir = tempfile::tempdir().unwrap();
+        let jail = dir.path().join("srv");
+        std::fs::create_dir_all(jail.join("a")).unwrap();
+        let resolved = resolve_beneath(&jail, "a/x.bin", true).unwrap();
+
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::remove_dir(jail.join("a")).unwrap();
+        std::os::unix::fs::symlink(&outside, jail.join("a")).unwrap();
+
+        let r = FileManager::open_exclusive_temp_beneath(&jail, &resolved).await;
+        assert!(
+            r.is_err(),
+            "swapped component must be refused, not followed"
+        );
+        assert_eq!(
+            std::fs::read_dir(&outside).unwrap().count(),
+            0,
+            "nothing may be created outside the jail"
+        );
+    }
+
+    #[tokio::test]
+    async fn exclusive_temp_refuses_escaping_parent_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let jail = dir.path().join("srv");
+        std::fs::create_dir_all(&jail).unwrap();
+        let outside = dir.path().join("outside");
+        std::fs::create_dir_all(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, jail.join("out")).unwrap();
+
+        let target = jail.join("out").join("x.bin");
+        let r = FileManager::open_exclusive_temp_beneath(&jail, &target).await;
+        assert!(r.is_err(), "escaping parent symlink must be refused");
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn persist_replaces_the_destination_entry_without_following_it() {
+        // renameat(2) relative to the pinned directory replaces whatever entry
+        // sits at the destination, so even a planted symlink is not followed.
+        let dir = tempfile::tempdir().unwrap();
+        let jail = dir.path().join("srv");
+        std::fs::create_dir_all(&jail).unwrap();
+        let loot = dir.path().join("loot.txt");
+        std::fs::write(&loot, b"ORIGINAL").unwrap();
+        std::os::unix::fs::symlink(&loot, jail.join("target.bin")).unwrap();
+
+        let target = jail.join("target.bin");
+        let mut temp = FileManager::open_exclusive_temp_beneath(&jail, &target)
+            .await
+            .expect("temp creation must succeed");
+        temp.write_all(b"new").await.unwrap();
+        temp.sync_all().await.unwrap();
+        temp.persist().await.unwrap();
+        drop(temp);
+
+        assert_eq!(
+            std::fs::read(&loot).unwrap(),
+            b"ORIGINAL",
+            "the symlink target must not be written through"
+        );
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+        assert!(!std::fs::symlink_metadata(&target)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+    }
     #[tokio::test]
     async fn tar_slip_members_rejected_before_extract() {
         // GNU tar strips `../` at creation (with a warning), so craft the
@@ -1948,16 +2257,29 @@ mod tests {
         // The helper uses unpredictable names, so a pre-planted collision is
         // improbable; the property we can assert directly is that creation
         // succeeds and yields a 0600 file whose path did not exist before.
-        let mut tmp = FileManager::create_secure_temp_sibling(&target)
+        let mut tmp = FileManager::open_exclusive_temp_beneath(&srv, &target)
             .await
             .expect("temp creation must succeed");
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(tmp.path()).unwrap().permissions().mode() & 0o777;
+        // The temp name is unpredictable; check the mode of the only entry the
+        // helper created inside the directory.
+        let temp_entry = std::fs::read_dir(&srv)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .find(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with(".catalyst-tmp-")
+            })
+            .expect("temp file must exist before persist");
+        let mode = temp_entry.metadata().unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o600, "temp file must be 0600");
-        // Writing through the TempFile works and is durable at path.
+        // Writing through the TempFile works and is durable at its path.
         tmp.write_all(b"abc").await.unwrap();
         tmp.sync_all().await.unwrap();
-        assert_eq!(std::fs::read(tmp.path()).unwrap(), b"abc");
+        tmp.persist().await.unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), b"abc");
+        drop(tmp);
     }
 
     #[test]
@@ -2253,20 +2575,25 @@ mod tests {
 
         let (url, server) = serve_one_body(b"uploaded-bytes").await;
         let resp = reqwest::get(&url).await.expect("mock upload fetch");
-        let temp = fm
+        let mut temp = fm
             .write_stream_to_exclusive_temp("srv1", "maps/file.bsp", resp)
             .await
             .expect("stream write should succeed");
         server.await.unwrap();
 
         // The temp file must still exist while the caller holds the handle.
+        let dest = fm.resolve_path("srv1", "maps/file.bsp").unwrap();
+        assert_eq!(temp.path(), dest.as_path());
         assert!(
-            temp.path().exists(),
-            "temp file deleted before caller rename"
+            srv.join("maps").read_dir().unwrap().any(|e| e
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".catalyst-tmp-")),
+            "temp file deleted before caller persist"
         );
 
-        let dest = fm.resolve_path("srv1", "maps/file.bsp").unwrap();
-        tokio::fs::rename(temp.path(), &dest).await.unwrap();
+        temp.persist().await.unwrap();
         drop(temp);
         assert_eq!(std::fs::read(&dest).unwrap(), b"uploaded-bytes");
     }

@@ -437,7 +437,7 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
             // replaces (rather than follows) any symlink at the destination.
             // The TempFile must stay alive until after the rename: its Drop
             // guard deletes the file if the write is abandoned early.
-            let temp = match fm
+            let mut temp = match fm
                 .write_stream_to_exclusive_temp(&req.server_uuid, &req.path, resp)
                 .await
             {
@@ -447,9 +447,9 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
                     return;
                 }
             };
-            let temp_path = temp.path().to_path_buf();
-            // Resolve the destination now (it passed resolve_path via the
-            // write_stream call) and rename the temp onto it.
+            // The destination was resolved (and its parents created) by the
+            // write above; re-resolve so a concurrent plant is re-checked, then
+            // renameat(2) the temp onto it inside the pinned directory.
             match fm.resolve_path(&req.server_uuid, &req.path) {
                 Ok(dest) => {
                     // The upload temp is 0600 and rename(2) carries that mode
@@ -459,7 +459,7 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
                         crate::file_manager::existing_file_mode(&dest).await,
                         req_mode,
                     );
-                    match tokio::fs::rename(&temp_path, &dest).await {
+                    match temp.persist().await {
                         Ok(()) => {
                             drop(temp);
                             crate::file_manager::apply_file_mode(&dest, dest_mode).await;
@@ -468,14 +468,12 @@ async fn handle_upload(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelReques
                         }
                         Err(e) => {
                             drop(temp);
-                            let _ = tokio::fs::remove_file(&temp_path).await;
                             send_json_response(ctx, false, None, Some(e.to_string())).await;
                         }
                     }
                 }
                 Err(e) => {
                     drop(temp);
-                    let _ = tokio::fs::remove_file(&temp_path).await;
                     send_json_response(ctx, false, None, Some(e.to_string())).await;
                 }
             }
@@ -817,27 +815,21 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
         }
 
         // Stream into an unpredictable O_EXCL temp (never File::create on a
-        // container-plantable name), then rename onto the target: rename
-        // replaces a destination symlink instead of following it.
-        let mut temp = match FileManager::create_secure_temp_sibling(&target_path).await {
+        // container-plantable name), then renameat(2) it onto the target within
+        // the same pinned directory: rename replaces a destination symlink
+        // instead of following it, and no component can be swapped in between.
+        //
+        // The TempFile must be *held* until persist(): its Drop guard unlinks
+        // the temp file, so dropping it first made the rename fail with ENOENT
+        // and broke every install-from-URL download.
+        let mut temp = match fm.secure_temp_for(&req.server_uuid, &target_path).await {
             Ok(t) => t,
             Err(e) => {
                 send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
                 return;
             }
         };
-        let temp_path = temp.path().to_path_buf();
-        // Re-resolve the destination AFTER temp creation so a concurrent
-        // plant at the target is caught by resolve + rename semantics.
-        let dest = match fm.resolve_path(&req.server_uuid, &req.path) {
-            Ok(d) => d,
-            Err(e) => {
-                drop(temp);
-                let _ = tokio::fs::remove_file(&temp_path).await;
-                send_json_response(ctx, false, None, Some(e.to_string())).await;
-                return;
-            }
-        };
+        let dest = target_path.clone();
 
         let mut written: u64 = 0;
         // Temp is 0600 and rename(2) carries that mode onto `dest`; capture
@@ -851,8 +843,6 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             let chunk = match chunk {
                 Ok(c) => c,
                 Err(e) => {
-                    drop(temp);
-                    let _ = tokio::fs::remove_file(&temp_path).await;
                     send_json_response(
                         ctx,
                         false,
@@ -866,8 +856,6 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
 
             written = written.saturating_add(chunk.len() as u64);
             if written > max_bytes {
-                drop(temp);
-                let _ = tokio::fs::remove_file(&temp_path).await;
                 send_json_response(
                     ctx,
                     false,
@@ -882,25 +870,20 @@ async fn handle_install_url(ctx: &TunnelCtx<'_>, fm: &FileManager, req: &TunnelR
             }
 
             if let Err(e) = temp.write_all(&chunk).await {
-                drop(temp);
-                let _ = tokio::fs::remove_file(&temp_path).await;
                 send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
                 return;
             }
         }
 
         if let Err(e) = temp.sync_all().await {
-            drop(temp);
-            let _ = tokio::fs::remove_file(&temp_path).await;
+            send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
+            return;
+        }
+        if let Err(e) = temp.persist().await {
             send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
             return;
         }
         drop(temp);
-        if let Err(e) = tokio::fs::rename(&temp_path, &dest).await {
-            let _ = tokio::fs::remove_file(&temp_path).await;
-            send_json_response(ctx, false, None, Some(format!("Write failed: {}", e))).await;
-            return;
-        }
 
         crate::file_manager::apply_file_mode(&dest, dest_mode).await;
 

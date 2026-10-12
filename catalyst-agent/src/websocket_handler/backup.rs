@@ -1332,9 +1332,17 @@ impl WebSocketHandler {
         shell_utils::validate_safe_path_segment(server_uuid, "serverUuid")?;
         let base_dir = self.backup_base_dir(server_uuid);
         if allow_create {
-            tokio::fs::create_dir_all(&base_dir).await.map_err(|e| {
-                AgentError::FileSystemError(format!("Failed to create backup directory: {}", e))
-            })?;
+            // The `backups` root is a fixed, non-client-controlled path; the
+            // per-server dir beneath it is created through the validated
+            // resolver so a planted symlink at that name cannot make this
+            // mkdir escape the backups tree (create_dir_all would follow it).
+            let backups_root = self.config.server.data_dir.join("backups");
+            tokio::fs::create_dir_all(&backups_root)
+                .await
+                .map_err(|e| {
+                    AgentError::FileSystemError(format!("Failed to create backup directory: {}", e))
+                })?;
+            crate::file_manager::ensure_dir_beneath(&base_dir, "")?;
         }
 
         let requested = PathBuf::from(requested_path);
@@ -1362,9 +1370,15 @@ impl WebSocketHandler {
             .parent()
             .ok_or_else(|| AgentError::InvalidRequest("Invalid backup path".to_string()))?;
         if allow_create {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                AgentError::FileSystemError(format!("Failed to create backup directory: {}", e))
-            })?;
+            // Validate every component of the requested sub-path *before*
+            // creating it: `create_dir_all` resolves (and follows) each one
+            // first, so a planted symlink could make this mkdir escape.
+            let rel_parent = normalized
+                .parent()
+                .and_then(|p| p.strip_prefix(&base_dir).ok())
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            crate::file_manager::ensure_dir_beneath(&base_dir, &rel_parent)?;
         }
 
         let base_canon = tokio::fs::canonicalize(&base_dir)

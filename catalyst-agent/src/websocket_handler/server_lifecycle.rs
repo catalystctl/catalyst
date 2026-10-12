@@ -655,8 +655,9 @@ impl WebSocketHandler {
         // Check for EULA files that require acceptance before marking install as done.
         // If a known EULA file exists but is not accepted, pause here and wait for
         // the user to accept/decline via the frontend modal.
-        let eula_file = std::path::PathBuf::from(&host_server_dir).join("eula.txt");
-        if eula_file.exists() {
+        // Jail-aware resolve (same rationale as the console-exit EULA check).
+        let eula_file = self.file_manager.resolve_path(server_uuid, "eula.txt").ok();
+        if let Some(eula_file) = eula_file.filter(|p| p.exists()) {
             let eula_content = tokio::fs::read_to_string(&eula_file)
                 .await
                 .unwrap_or_default();
@@ -1022,18 +1023,26 @@ impl WebSocketHandler {
                 );
                 // Pre-create the compatdata directory on the host so Proton can
                 // write its lock file and prefix without crashing on first start.
-                let host_compat = server_dir_path.join(compat_path.strip_prefix("/data/").unwrap_or(".proton"));
-                if let Err(e) = tokio::fs::create_dir_all(&host_compat).await {
-                    warn!("Failed to create compatdata dir {}: {}", host_compat.display(), e);
-                } else if let Err(e) = chown_to_container_user(&host_compat).await {
-                    warn!("Failed to chown compatdata dir {}: {}", host_compat.display(), e);
+                // SECURITY: create through the jail-aware resolver so a
+                // container-planted symlink at any of these names cannot make
+                // the agent create directories outside the server dir as root.
+                let rel_compat = compat_path.strip_prefix("/data/").unwrap_or(".proton");
+                match crate::file_manager::ensure_dir_beneath(&server_dir_path, rel_compat) {
+                    Ok(p) => {
+                        if let Err(e) = chown_to_container_user(&p).await {
+                            warn!("Failed to chown compatdata dir {}: {}", p.display(), e);
+                        }
+                    }
+                    Err(e) => warn!("Failed to create compatdata dir: {}", e),
                 }
                 // Also pre-create the Steam client install directory.
-                let host_steam = server_dir_path.join("Steam");
-                if let Err(e) = tokio::fs::create_dir_all(&host_steam).await {
-                    warn!("Failed to create Steam dir {}: {}", host_steam.display(), e);
-                } else if let Err(e) = chown_to_container_user(&host_steam).await {
-                    warn!("Failed to chown Steam dir {}: {}", host_steam.display(), e);
+                match crate::file_manager::ensure_dir_beneath(&server_dir_path, "Steam") {
+                    Ok(p) => {
+                        if let Err(e) = chown_to_container_user(&p).await {
+                            warn!("Failed to chown Steam dir {}: {}", p.display(), e);
+                        }
+                    }
+                    Err(e) => warn!("Failed to create Steam dir: {}", e),
                 }
             }
 
@@ -1223,9 +1232,10 @@ impl WebSocketHandler {
                     specs.extend(crate::config_parser::paper_disk_space_specs());
                     // Paper's getUsableSpace() on a missing world/ can return 0
                     // even when /data has tens of GB. Create it on the loop FS.
-                    let world_dir = server_dir_path.join("world");
-                    if let Err(e) = tokio::fs::create_dir_all(&world_dir).await {
-                        warn!("Failed to create world dir {}: {}", world_dir.display(), e);
+                    if let Err(e) =
+                        crate::file_manager::ensure_dir_beneath(&server_dir_path, "world")
+                    {
+                        warn!("Failed to create world dir: {}", e);
                     }
                     let _ = self
                         .emit_console_output(

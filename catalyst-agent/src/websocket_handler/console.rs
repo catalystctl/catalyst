@@ -508,8 +508,10 @@ impl WebSocketHandler {
         };
 
         if let Some(ref uuid) = server_uuid {
-            let eula_path = self.config.server.data_dir.join(uuid).join("eula.txt");
-            if eula_path.exists() {
+            // Jail-aware resolve: a container-planted `eula.txt` symlink must
+            // not make the agent read an arbitrary host file as root.
+            let eula_path = self.file_manager.resolve_path(uuid, "eula.txt").ok();
+            if let Some(eula_path) = eula_path.filter(|p| p.exists()) {
                 if let Ok(content) = tokio::fs::read_to_string(&eula_path).await {
                     if !content.to_lowercase().contains("eula=true") {
                         info!(

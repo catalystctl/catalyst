@@ -3734,14 +3734,19 @@ impl WebSocketHandler {
         }
 
         if !target_data_dir.is_empty() {
-            let candidate = std::path::PathBuf::from(target_data_dir);
-            let probe = if candidate.exists() {
-                candidate
-            } else {
-                candidate
-                    .parent()
-                    .map(|parent| parent.to_path_buf())
-                    .unwrap_or(candidate)
+            // SECURITY: `targetServerDataDir` is client-supplied. Probe only the
+            // node's own data dir (canonicalised); anything else would turn the
+            // agent into a root-privileged free-space oracle for arbitrary host
+            // paths. A non-existent/foreign path falls back to the data dir.
+            let data_dir = self
+                .config
+                .server
+                .data_dir
+                .canonicalize()
+                .unwrap_or_else(|_| self.config.server.data_dir.clone());
+            let probe = match std::path::PathBuf::from(target_data_dir).canonicalize() {
+                Ok(p) if p == data_dir || p.starts_with(&data_dir) => p,
+                _ => data_dir,
             };
             if let Ok(vfs) = nix::sys::statvfs::statvfs(probe.as_path()) {
                 response["targetFreeBytes"] =
@@ -3798,6 +3803,26 @@ impl WebSocketHandler {
             });
             self.send_or_buffer_event(&event.to_string()).await?;
             return Ok(());
+        }
+
+        // A symlink planted at either server root would make the `cp -a` below
+        // (and the target cleanup) operate on its referent as root. Both dirs
+        // are `<data_dir>/<uuid>` and must be real directories.
+        for dir in [&source_dir, &target_dir] {
+            if std::fs::symlink_metadata(dir).is_ok_and(|m| m.file_type().is_symlink()) {
+                let event = json!({
+                    "type": "clone_files_complete",
+                    "requestId": request_id,
+                    "serverId": server_id,
+                    "success": false,
+                    "error": format!(
+                        "Refusing to clone: {} is a symbolic link",
+                        dir.display()
+                    ),
+                });
+                self.send_or_buffer_event(&event.to_string()).await?;
+                return Ok(());
+            }
         }
 
         // A retry must not merge into a partial copy: start from a clean target.
@@ -4467,17 +4492,17 @@ impl WebSocketHandler {
         let server_id = msg["serverId"].as_str().unwrap_or(server_uuid);
 
         shell_utils::validate_safe_path_segment(server_uuid, "serverUuid")?;
-        let server_dir = self.config.server.data_dir.join(server_uuid);
-        let eula_file = server_dir.join("eula.txt");
 
         if accepted {
-            tokio::fs::write(
-                &eula_file,
-                "eula=true
-",
-            )
-            .await
-            .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
+            // Jail-aware write (O_EXCL temp + rename): a container-planted
+            // `eula.txt` symlink is REPLACED, never followed. Previously a raw
+            // `fs::write` followed it as root, allowing an arbitrary host-file
+            // overwrite from a single panel call.
+            self.file_manager
+                .write_file(server_uuid, "eula.txt", "eula=true\n")
+                .await
+                .map_err(|e| AgentError::IoError(format!("Failed to write eula.txt: {}", e)))?;
+            let eula_file = self.file_manager.resolve_path(server_uuid, "eula.txt")?;
             // The container process owns eula.txt at runtime — hand it over (#237).
             crate::ownership::ensure_container_owned(&self.config.server.data_dir, &eula_file)
                 .await;

@@ -496,11 +496,12 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             if is_write {
                 // Create parent dirs and the file itself only when CREATE/TRUNCATE require it.
                 // CREATE without TRUNCATE must not wipe an existing file (append/open-for-write).
-                if let Err(e) = fm.resolve_and_ensure_parent(&server_id, &filename).await {
-                    return Err(SftpError(format!("Failed to resolve path: {}", e)));
-                }
+                // Create parent dirs (each validated before its mkdir) and
+                // resolve the target. A planted symlink at the target itself is
+                // then rejected by the O_NOFOLLOW probe below.
                 let full_path = fm
-                    .resolve_path(&server_id, &filename)
+                    .resolve_and_ensure_parent(&server_id, &filename)
+                    .await
                     .map_err(|e| SftpError(format!("Failed to resolve path: {}", e)))?;
                 // O_NOFOLLOW probe: a planted symlink at the target is rejected
                 // (ELOOP) instead of followed by root.
@@ -650,15 +651,14 @@ impl russh_sftp::server::Handler for CatalystSftpHandler {
             // Stream: seek directly to the offset and write the chunk.
             // Cap is remaining space on the server's disk (loop quota / host FS),
             // not the panel web-upload limit.
+            // SECURITY: create parents through the jail-aware resolver, which
+            // validates every component *before* its mkdir. A raw
+            // `create_dir_all(parent)` here resolved (and created) directories
+            // outside the jail as root when an ancestor was a planted symlink.
             let full_path = fm
-                .resolve_path(&server_id, &path)
+                .resolve_and_ensure_parent(&server_id, &path)
+                .await
                 .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
-
-            if let Some(parent) = full_path.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| SftpError(format!("Write failed: {}", e)))?;
-            }
 
             if let Err(e) = fm
                 .ensure_write_fits(&full_path, offset, data.len() as u64)

@@ -20,7 +20,7 @@ use crate::{AgentError, AgentResult};
 use regex::Regex;
 use serde_json::{Map, Value};
 use std::collections::HashMap;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tracing::{debug, info, warn};
 
@@ -223,30 +223,18 @@ fn value_to_string(v: &Value) -> String {
     }
 }
 
-/// Resolve a config-relative path under the server data directory without escaping it.
+/// Resolve a config-relative path under the server data directory, creating
+/// missing intermediate directories (each validated before its `mkdir`).
+///
+/// Previously this only joined components lexically, so a container-planted
+/// symlink on any ancestor made the following `create_dir_all`/write traverse
+/// it as root (escape outside the server dir). `resolve_beneath` validates
+/// every component against the canonical jail first.
 fn resolve_under_server(server_dir: &Path, relative: &str) -> AgentResult<PathBuf> {
+    // Treat backslashes as separators too: a spec written for Windows must not
+    // smuggle a traversal past the `/`-only split.
     let cleaned = relative.replace('\\', "/");
-    let mut out = server_dir.to_path_buf();
-    for comp in Path::new(&cleaned).components() {
-        match comp {
-            Component::Normal(seg) => out.push(seg),
-            Component::CurDir => {}
-            Component::ParentDir => {
-                return Err(AgentError::PermissionDenied(format!(
-                    "Config file path escapes server dir: {}",
-                    relative
-                )));
-            }
-            Component::RootDir | Component::Prefix(_) => {}
-        }
-    }
-    if !out.starts_with(server_dir) {
-        return Err(AgentError::PermissionDenied(format!(
-            "Config file path outside server dir: {}",
-            relative
-        )));
-    }
-    Ok(out)
+    crate::file_manager::resolve_beneath(server_dir, &cleaned, true)
 }
 
 /// Apply all configuration file specs for a server. Best-effort: individual
@@ -308,15 +296,6 @@ async fn apply_one(
         return Ok(());
     }
 
-    if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-            AgentError::FileSystemError(format!(
-                "Failed to create config parent for {}: {}",
-                spec.file_name, e
-            ))
-        })?;
-    }
-
     if exists {
         let meta = tokio::fs::metadata(&path)
             .await
@@ -341,15 +320,15 @@ async fn apply_one(
         .collect();
 
     match spec.parser.as_str() {
-        "properties" => apply_properties(&path, &resolved).await,
-        "file" => apply_text_file(&path, &resolved).await,
-        "json" => apply_json(&path, &resolved).await,
-        "yaml" | "yml" => apply_yaml(&path, &resolved).await,
-        "ini" => apply_ini(&path, &resolved).await,
-        "xml" => apply_xml(&path, &resolved).await,
+        "properties" => apply_properties(server_dir, &path, &resolved).await,
+        "file" => apply_text_file(server_dir, &path, &resolved).await,
+        "json" => apply_json(server_dir, &path, &resolved).await,
+        "yaml" | "yml" => apply_yaml(server_dir, &path, &resolved).await,
+        "ini" => apply_ini(server_dir, &path, &resolved).await,
+        "xml" => apply_xml(server_dir, &path, &resolved).await,
         other => {
             warn!("Unknown config parser '{}'; treating as file", other);
-            apply_text_file(&path, &resolved).await
+            apply_text_file(server_dir, &path, &resolved).await
         }
     }
 }
@@ -366,7 +345,7 @@ async fn read_or_empty(path: &Path) -> AgentResult<String> {
     }
 }
 
-async fn atomic_write(path: &Path, content: &str) -> AgentResult<()> {
+async fn atomic_write(jail: &Path, path: &Path, content: &str) -> AgentResult<()> {
     // SEC-H-13: cap rewritten output bytes (replacement expansion guard).
     if content.len() as u64 > MAX_CONFIG_OUTPUT_BYTES {
         return Err(AgentError::FileSystemError(format!(
@@ -379,24 +358,23 @@ async fn atomic_write(path: &Path, content: &str) -> AgentResult<()> {
     // ("*.catalyst-cfg-tmp"), and this module does not go through
     // FileManager::resolve_path — so a container-planted symlink at that name
     // would make the root write traverse it (arbitrary host write). Use the
-    // shared exclusive-create unpredictable temp helper + rename(2), which
-    // replaces rather than follows symlinks at the destination.
-    let mut tmp = crate::file_manager::FileManager::create_secure_temp_sibling(path)
+    // shared O_EXCL temp helper, pinned to the directory that holds `path` by a
+    // descriptor-relative walk from the jail root, and move it into place with
+    // renameat(2) (replaces, never follows, and cannot be raced).
+    let mut tmp = crate::file_manager::FileManager::open_exclusive_temp_beneath(jail, path)
         .await
         .map_err(|e| AgentError::FileSystemError(format!("create temp: {}", e)))?;
     if let Err(e) = tmp.write_all(content.as_bytes()).await {
-        let _ = tokio::fs::remove_file(tmp.path()).await;
         return Err(AgentError::FileSystemError(format!("write temp: {}", e)));
     }
-    if let Err(e) = tokio::fs::rename(tmp.path(), path).await {
-        let _ = tokio::fs::remove_file(tmp.path()).await;
+    if let Err(e) = tmp.persist().await {
         return Err(AgentError::FileSystemError(format!("rename temp: {}", e)));
     }
     Ok(())
 }
 
 /// properties parser — preserves leading comment block, sets/creates keys.
-async fn apply_properties(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_properties(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     let raw = read_or_empty(path).await?;
     let mut header = String::new();
     let mut body_started = false;
@@ -448,7 +426,7 @@ async fn apply_properties(path: &Path, reps: &[ConfigReplacement]) -> AgentResul
             out.push('\n');
         }
     }
-    atomic_write(path, &out).await
+    atomic_write(jail, path, &out).await
 }
 
 fn split_properties_kv(line: &str) -> Option<(String, String)> {
@@ -490,7 +468,7 @@ fn escape_properties_value(value: &str) -> String {
 }
 
 /// Plain-text parser: lines whose prefix matches `match` are replaced wholesale.
-async fn apply_text_file(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_text_file(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     let raw = read_or_empty(path).await?;
     let mut out = String::with_capacity(raw.len());
     for line in raw.lines() {
@@ -517,10 +495,10 @@ async fn apply_text_file(path: &Path, reps: &[ConfigReplacement]) -> AgentResult
             }
         }
     }
-    atomic_write(path, &out).await
+    atomic_write(jail, path, &out).await
 }
 
-async fn apply_json(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_json(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     let raw = read_or_empty(path).await?;
     let mut root: Value = if raw.trim().is_empty() {
         Value::Object(Map::new())
@@ -541,7 +519,7 @@ async fn apply_json(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> 
 
     let pretty = serde_json::to_string_pretty(&root)
         .map_err(|e| AgentError::FileSystemError(format!("Failed to serialize JSON: {}", e)))?;
-    atomic_write(path, &format!("{}\n", pretty)).await
+    atomic_write(jail, path, &format!("{}\n", pretty)).await
 }
 
 fn coerce_json_value(raw: &str) -> Value {
@@ -693,7 +671,7 @@ fn parse_array_part(part: &str) -> (&str, Option<usize>) {
     (part, None)
 }
 
-async fn apply_yaml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_yaml(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     // Convert YAML → JSON via serde_yaml, reuse JSON path setter, write YAML back.
     let raw = read_or_empty(path).await?;
     // SEC-H-13: reject anchors/aliases outright (billion-laughs + alias bombs);
@@ -723,7 +701,7 @@ async fn apply_yaml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> 
         .map_err(|e| AgentError::FileSystemError(format!("JSON→YAML convert failed: {}", e)))?;
     let out = serde_yaml::to_string(&yaml_val)
         .map_err(|e| AgentError::FileSystemError(format!("Failed to serialize YAML: {}", e)))?;
-    atomic_write(path, &out).await
+    atomic_write(jail, path, &out).await
 }
 
 /// SEC-H-13: reject YAML anchors (`&`) / aliases (`*`) and over-deep nesting
@@ -758,7 +736,7 @@ fn reject_yaml_anchors(raw: &str, path: &Path) -> AgentResult<()> {
 }
 
 /// Minimal INI parser supporting `key`, `section.key`, and `[Section.With.Dots].key`.
-async fn apply_ini(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_ini(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     let raw = read_or_empty(path).await?;
     // section -> ordered keys
     let mut sections: Vec<(String, Vec<(String, String)>)> = Vec::new();
@@ -836,7 +814,7 @@ async fn apply_ini(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
             out.push('\n');
         }
     }
-    atomic_write(path, &out).await
+    atomic_write(jail, path, &out).await
 }
 
 fn split_ini_match(match_key: &str) -> (String, String) {
@@ -861,7 +839,7 @@ fn split_ini_match(match_key: &str) -> (String, String) {
 
 /// Minimal XML support: set text content of elements addressed by dotted paths
 /// (e.g. `dedicated.server_options.name`). Creates intermediate elements as needed.
-async fn apply_xml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
+async fn apply_xml(jail: &Path, path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     let raw = read_or_empty(path).await?;
     let mut content = if raw.trim().is_empty() {
         String::from("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<root/>\n")
@@ -872,7 +850,7 @@ async fn apply_xml(path: &Path, reps: &[ConfigReplacement]) -> AgentResult<()> {
     for rep in reps {
         content = set_xml_path_text(&content, &rep.match_key, &rep.replace_with);
     }
-    atomic_write(path, &content).await
+    atomic_write(jail, path, &content).await
 }
 
 fn set_xml_path_text(xml: &str, path: &str, value: &str) -> String {
@@ -1058,7 +1036,7 @@ mod tests {
                 replace_with: "false".into(),
             },
         ];
-        apply_properties(&path, &reps).await.unwrap();
+        apply_properties(dir.path(), &path, &reps).await.unwrap();
         let out = std::fs::read_to_string(&path).unwrap();
         assert!(out.contains("# Minecraft server properties"));
         assert!(out.contains("server-port=25566"));
@@ -1083,7 +1061,7 @@ mod tests {
                 replace_with: "443".into(),
             },
         ];
-        apply_json(&path, &reps).await.unwrap();
+        apply_json(dir.path(), &path, &reps).await.unwrap();
         let v: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(v["ip"], "0.0.0.0");
         assert_eq!(v["port"], 443);
@@ -1106,7 +1084,7 @@ mod tests {
                 replace_with: "sv_name TestWorld".into(),
             },
         ];
-        apply_text_file(&path, &reps).await.unwrap();
+        apply_text_file(dir.path(), &path, &reps).await.unwrap();
         let out = std::fs::read_to_string(&path).unwrap();
         assert!(out.contains("sv_port 25565"));
         assert!(out.contains("sv_name TestWorld"));
@@ -1192,7 +1170,7 @@ mod tests {
             if_value: None,
             replace_with: "2".into(),
         }];
-        assert!(apply_yaml(&path, &reps).await.is_err());
+        assert!(apply_yaml(dir.path(), &path, &reps).await.is_err());
     }
 
     #[test]
