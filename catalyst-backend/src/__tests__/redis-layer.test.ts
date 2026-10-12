@@ -3,7 +3,7 @@
  * REDIS_URL is reachable; assertions that require a live server are
  * skipped (not failed) without one, mirroring the local-Postgres pattern.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import net from 'net';
 
 const REDIS_HOST = process.env.REDIS_TEST_HOST || '127.0.0.1';
@@ -81,7 +81,10 @@ describe('Redis client hardening (live Redis)', () => {
   it('does not record fresh circuit failures for circuit-open fast-fails', async () => {
     // No Redis at REDIS_URL (closed port) — force failures, open the
     // circuit, then confirm the open-circuit rejections do not re-open it.
-    process.env.REDIS_URL = `redis://${REDIS_HOST}:1`;
+    // The URL is read from the config snapshot, so it has to be stubbed
+    // before the module graph is reloaded.
+    vi.stubEnv('REDIS_URL', `redis://${REDIS_HOST}:1`);
+    vi.resetModules();
     const { getRedis, closeRedis } = await import('../lib/redis');
     try {
       const redis = getRedis()!;
@@ -99,7 +102,8 @@ describe('Redis client hardening (live Redis)', () => {
       expect(redis.stats().circuitOpensTotal).toBe(opens);
     } finally {
       await closeRedis();
-      delete process.env.REDIS_URL;
+      vi.unstubAllEnvs();
+      vi.resetModules();
     }
   });
 });

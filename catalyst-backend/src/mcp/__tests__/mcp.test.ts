@@ -4,7 +4,7 @@ import Fastify from 'fastify';
 import { nanoid } from 'nanoid';
 
 import { prisma } from '../../db.js';
-import { clearConfigCacheMemory } from '../../lib/config-cache.js';
+import { invalidateConfig } from '../../lib/config-cache.js';
 import { createApiKey, deleteApiKey } from '../../services/api-key-service.js';
 import {
   DEFAULT_MCP_SETTINGS,
@@ -68,7 +68,7 @@ beforeAll(async () => {
   testKeyId = record.id;
   testApiKey = record.key;
   clearMcpToolRateLimits();
-  clearConfigCacheMemory();
+  await invalidateConfig('mcp');
 });
 
 afterAll(async () => {
@@ -91,13 +91,16 @@ afterAll(async () => {
     }).catch(() => {});
   }
   clearMcpToolRateLimits();
-  clearConfigCacheMemory();
+  await invalidateConfig('mcp');
 });
 
 describe('mcp settings service', () => {
   it('defaults to disabled with the built-in tool budget', async () => {
     await prisma.systemSetting.deleteMany({ where: { id: MCP_SETTING_ID } });
-    clearConfigCacheMemory();
+    // Invalidate both cache layers: clearConfigCacheMemory() only drops L1, so
+    // a `config:mcp` entry left in Redis by an earlier file (which enables MCP)
+    // would still be served here.
+    await invalidateConfig('mcp');
     expect(await getMcpSettings()).toEqual({ ...DEFAULT_MCP_SETTINGS });
     expect(DEFAULT_MCP_SETTINGS.enabled).toBe(false);
   });

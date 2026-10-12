@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
 import { nanoid } from 'nanoid';
@@ -176,16 +178,33 @@ describe('GET /api/mcp - SSE stream', () => {
     const app = buildHttpApp();
     await upsertMcpSettings({ enabled: true });
     
-    // SSE streams are long-lived; we verify the endpoint exists and accepts auth
-    // The actual stream behavior is tested in the existing mcp.test.ts
-    const res = await app.inject({
-      method: 'GET',
-      url: '/api/mcp',
-      headers: { authorization: `Bearer ${testApiKey}` },
+    // The route hijacks the socket and streams heartbeats forever, so
+    // `app.inject()` would never resolve (the old version of this test just
+    // hit the 30s timeout). Open a real connection, read the response head,
+    // then drop the socket.
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const { port } = app.server.address() as AddressInfo;
+
+    const status = await new Promise<number>((resolve, reject) => {
+      const request = http.get(
+        {
+          host: '127.0.0.1',
+          port,
+          path: '/api/mcp',
+          headers: { authorization: `Bearer ${testApiKey}` },
+        },
+        (response) => {
+          resolve(response.statusCode ?? 0);
+          response.destroy();
+        },
+      );
+      request.setTimeout(10_000, () =>
+        request.destroy(new Error('SSE response headers never arrived')),
+      );
+      request.on('error', reject);
     });
-    
-    // May return 200 with stream headers or connection may close immediately in test
-    expect([200, 503]).toContain(res.statusCode);
+
+    expect(status).toBe(200);
     await app.close();
   });
 

@@ -385,17 +385,25 @@ describe("Gateway security & reliability regressions", () => {
       JSON.stringify({ type: "node_handshake", token: "tok", protocolVersion: "1.0", nonce }),
       false,
     );
-    await new Promise((r) => setTimeout(r, 25));
+    // finalizeAgentConnection() awaits a real security-settings read before it
+    // replies, so a fixed sleep is a race — it flaked on a cold CI runner.
+    // Poll for the frame instead.
+    const findResponse = () =>
+      socket.sent
+        .map((raw: any) => {
+          try {
+            return JSON.parse(raw);
+          } catch {
+            return null;
+          }
+        })
+        .find((msg: any) => msg && msg.type === "node_handshake_response");
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline && !findResponse()) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
 
-    const response = socket.sent
-      .map((raw: any) => {
-        try {
-          return JSON.parse(raw);
-        } catch {
-          return null;
-        }
-      })
-      .find((msg: any) => msg && msg.type === "node_handshake_response");
+    const response = findResponse();
     expect(response).toBeTruthy();
     expect(response.nonce).toBe(nonce);
     // Must match the agent's compute_handshake_tag (Rust test:

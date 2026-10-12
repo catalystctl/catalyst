@@ -82,7 +82,9 @@ describe("SEC-M-10 API-key salt", () => {
   it("mints unique salts and verifies with the stored salt", async () => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("API_KEY_SECRET", "test-secret-for-salts");
-    delete process.env.BETTER_AUTH_SECRET;
+    // config.ts falls back to a mock with no secret at all when
+    // BETTER_AUTH_SECRET is missing, so keep a fallback present here.
+    vi.stubEnv("BETTER_AUTH_SECRET", "test-fallback-secret");
     const { hashApiKey, newApiKeySalt } = await import("../services/api-key-service.js");
     const s1 = newApiKeySalt();
     const s2 = newApiKeySalt();
@@ -103,10 +105,15 @@ describe("SEC-M-10 API-key salt", () => {
   });
 
   it("gates legacy hashes behind ALLOW_LEGACY_API_KEY_HASH", async () => {
+    // The flag is read from the config snapshot, so it has to be stubbed
+    // before the module graph is (re)loaded for each expectation.
+    vi.stubEnv("ALLOW_LEGACY_API_KEY_HASH", "0");
+    vi.resetModules();
     const { isLegacyHashAllowed } = await import("../services/api-key-service.js");
-    vi.stubEnv("ALLOW_LEGACY_API_KEY_HASH", "");
     expect(isLegacyHashAllowed()).toBe(false);
+
     vi.stubEnv("ALLOW_LEGACY_API_KEY_HASH", "1");
+    vi.resetModules();
     const { isLegacyHashAllowed: allowed } = await import("../services/api-key-service.js");
     expect(allowed()).toBe(true);
   });
