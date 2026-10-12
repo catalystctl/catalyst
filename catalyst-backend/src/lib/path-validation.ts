@@ -202,6 +202,32 @@ export function validateAndNormalizePaths(
 }
 
 /**
+ * Validate a single path segment (one file or directory name) that will be
+ * embedded in a path sent to an agent node.
+ *
+ * Use this for names that come from *outside* this panel — a remote API, a
+ * plugin, an uploaded manifest — because such a name must never be able to
+ * introduce a separator or a `..` into an agent path.
+ *
+ * @throws Error if the segment is not safe
+ */
+export function validatePathSegment(value: string, label = 'path segment'): string {
+  const normalized = normalizeUnicode(value);
+  if (!normalized || normalized === '.' || normalized === '..') {
+    throw new Error(`Invalid ${label}`);
+  }
+  if (normalized.includes('\0') || normalized.includes('/') || normalized.includes('\\')) {
+    throw new Error(`Invalid ${label}`);
+  }
+  // Control characters (including newlines) have no business in a name.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(normalized)) {
+    throw new Error(`Invalid ${label}`);
+  }
+  return normalized;
+}
+
+/**
  * Check if a path is safe (basic check without server context)
  * This is a lighter check for initial validation
  */

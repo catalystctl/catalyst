@@ -11,6 +11,7 @@ import type { MigrationPhase } from "./types";
 import { MIGRATION_PHASES } from "./types";
 import crypto from "node:crypto";
 import { captureSystemError } from "../../services/error-logger";
+import { validatePathSegment } from "../../lib/path-validation";
 
 /** Never expose sourceKey / clientApiKey in admin API responses. */
 export function redactMigrationJobSecrets<
@@ -1761,7 +1762,14 @@ export class MigrationService extends EventEmitter<MigrationEvents> {
           const dateB = new Date(b.attributes.completed_at || b.attributes.created_at || 0).getTime();
           return dateB - dateA;
         })[0].attributes;
-        const archiveName = `migration_backup_${backup.uuid}.tar.gz`;
+        // `backup.uuid` comes from the *source* panel's API, so it must be
+        // treated as untrusted: it is embedded in an agent path
+        // (`/${archiveName}`) and a crafted value (e.g. `../../opt/x`) would be
+        // a path traversal on the target node.
+        const archiveName = `migration_backup_${validatePathSegment(
+          String(backup.uuid ?? ""),
+          "backup uuid"
+        )}.tar.gz`;
 
         this.logger.info(
           { serverId: server.pteroServerId, backupUuid: backup.uuid },

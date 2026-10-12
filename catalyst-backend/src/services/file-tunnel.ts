@@ -6,6 +6,7 @@ import path from "path";
 import { Readable } from "stream";
 import type { Logger } from "pino";
 import { getSecuritySettings } from "./mailer";
+import { normalizeRequestPath } from "../lib/path-validation";
 import { prisma } from "../db.js";
 import { captureSystemError } from "../services/error-logger";
 
@@ -219,7 +220,10 @@ export class FileTunnelService {
       nodeId,
       operation,
       serverUuid,
-      path: filePath,
+      // Defense in depth: every path handed to an agent is normalised here, so
+      // no call site — including ones fed by a remote panel (the migration
+      // service) — can smuggle a `..` component or an absolute escape.
+      path: normalizeRequestPath(filePath),
       data,
     };
 
