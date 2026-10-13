@@ -28,6 +28,11 @@ export interface CreateBackupParams {
   /** Optional display name; sanitized the same way as HTTP create. */
   name?: string;
   /**
+   * Whether the agent should gzip the archive. Defaults to true (the
+   * historical behaviour); false stores a plain `.tar`.
+   */
+  compressed?: boolean;
+  /**
    * sendToAgent implementation (usually wsGateway.sendToAgent).
    * Returns false when the agent is unreachable.
    */
@@ -76,6 +81,8 @@ export async function createServerBackup(
 ): Promise<CreateBackupResult> {
   const { prisma, logger, server, name, sendToAgent, onStarted } = params;
   const serverId = server.id;
+  // Compression is opt-out: an absent flag keeps the gzip default.
+  const useCompression = params.compressed !== false;
 
   // Best-effort per-server state push for backup lock transitions (P1-29).
   const emitStateUpdate = (state: string) => {
@@ -180,6 +187,7 @@ export async function createServerBackup(
       backupName,
       mode,
       server,
+      useCompression,
     );
     const serverDir = buildServerDir(server.uuid);
 
@@ -201,6 +209,7 @@ export async function createServerBackup(
         path: storagePath,
         storageMode: mode,
         sizeMb: 0,
+        compressed: useCompression,
         metadata: {
           agentPath,
           storageKey,
@@ -217,6 +226,7 @@ export async function createServerBackup(
       backupName,
       backupPath: agentPath,
       backupId: backupRecord.id,
+      compressed: useCompression,
       ...(encryptionKey ? { encryptionKey } : {}),
     });
 

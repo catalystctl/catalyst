@@ -8,7 +8,7 @@ export const backupsApi = {
     });
     return data;
   },
-  create: async (serverId: string, payload: { name?: string }) => {
+  create: async (serverId: string, payload: { name?: string; compressed?: boolean }) => {
     const data = await apiClient.post<{ success: boolean; message?: string; backupName?: string }>(
       `/api/servers/${serverId}/backups`,
       payload,

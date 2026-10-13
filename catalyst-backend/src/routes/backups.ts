@@ -115,10 +115,10 @@ export async function backupRoutes(app: FastifyInstance) {
   // Create a backup
   app.post(
     "/:serverId/backups",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, compressed: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { name } = request.body as { name?: string };
+      const { name, compressed } = request.body as { name?: string; compressed?: boolean };
       const userId = request.user.userId;
       const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create", request.user);
       if (!accessServer) return;
@@ -143,6 +143,7 @@ export async function backupRoutes(app: FastifyInstance) {
         logger: request.log,
         server,
         name,
+        compressed,
         sendToAgent: (nodeId, message) => gateway.sendToAgent(nodeId, message),
         onStarted: async ({ serverId: sid, backupId, backupName }) => {
           if (gateway.routeToClients) {
@@ -412,7 +413,8 @@ export async function backupRoutes(app: FastifyInstance) {
          }
          try {
            const { stream } = await openStorageStream(backup, server);
-           const targetPath = agentPath || `backups/${server.uuid}/${backup.name}.tar.gz`;
+           const fallbackExt = backup.compressed === false ? "tar" : "tar.gz";
+           const targetPath = agentPath || `backups/${server.uuid}/${backup.name}.${fallbackExt}`;
            await uploadStreamToAgent(gateway, server.nodeId, server.id, server.uuid, targetPath, stream);
            restorePath = targetPath;
          } catch (dlError: any) {
@@ -544,7 +546,7 @@ export async function backupRoutes(app: FastifyInstance) {
   // Download a backup
   app.get(
     "/:serverId/backups/:backupId/download",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Download a server backup", tags: ["Backups"], produces: ["application/gzip"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/gzip" }, 401: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true }, 423: { type: "object", additionalProperties: true }, 500: { type: "object", additionalProperties: true } } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Download a server backup", tags: ["Backups"], produces: ["application/gzip", "application/x-tar"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, response: { 200: { type: "string", contentMediaType: "application/gzip" }, 401: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true }, 423: { type: "object", additionalProperties: true }, 500: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId, backupId } = request.params as {
         serverId: string;
@@ -566,6 +568,11 @@ export async function backupRoutes(app: FastifyInstance) {
       if (!backup) {
         return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
       }
+
+      // Backups created with compression off are stored as plain `.tar`.
+      const isCompressed = backup.compressed !== false;
+      const archiveFilename = `${backup.name}.${isCompressed ? "tar.gz" : "tar"}`;
+      const archiveContentType = isCompressed ? "application/gzip" : "application/x-tar";
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
@@ -591,10 +598,10 @@ export async function backupRoutes(app: FastifyInstance) {
           if (contentLength) {
             reply.header("Content-Length", contentLength.toString());
           }
-          reply.header("Content-Type", "application/gzip");
+          reply.header("Content-Type", archiveContentType);
           reply.header(
             "Content-Disposition",
-            `attachment; filename="${backup.name}.tar.gz"`,
+            `attachment; filename="${archiveFilename}"`,
           );
           return reply.send(stream);
         } catch (error: any) {
@@ -614,11 +621,11 @@ export async function backupRoutes(app: FastifyInstance) {
           const stats = await fs.stat(backup.path);
           const stream = createReadStream(backup.path);
 
-          reply.header("Content-Type", "application/gzip");
+          reply.header("Content-Type", archiveContentType);
           reply.header("Content-Length", stats.size.toString());
           reply.header(
             "Content-Disposition",
-            `attachment; filename="${backup.name}.tar.gz"`
+            `attachment; filename="${archiveFilename}"`
           );
 
           return reply.send(stream);
@@ -658,10 +665,10 @@ export async function backupRoutes(app: FastifyInstance) {
          if (!reply.raw.writableEnded) finalize(new Error("Backup download client disconnected"));
        });
 
-      reply.header("Content-Type", "application/gzip");
+      reply.header("Content-Type", archiveContentType);
       reply.header(
         "Content-Disposition",
-        `attachment; filename="${backup.name}.tar.gz"`
+        `attachment; filename="${archiveFilename}"`
       );
       reply.send(stream);
 

@@ -3,6 +3,8 @@
     "allocationWarning": "L’allocation de sauvegarde du fournisseur n’est pas disponible pour ce serveur. Les modes de stockage local et Stream nécessitent une allocation. Configurez votre propre stockage S3 ou SFTP pour activer les sauvegardes.",
     "create": {
       "action": "Créer une sauvegarde",
+      "compressHint": "Décochez pour enregistrer une archive .tar non compressée.",
+      "compressLabel": "Compresser la sauvegarde (gzip)",
       "description": "Laissez vide pour générer automatiquement un nom avec l’horodatage actuel.",
       "nameLabel": "Nom de la sauvegarde (facultatif)",
       "success": "Création de la sauvegarde démarrée",

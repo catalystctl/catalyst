@@ -3,6 +3,8 @@
     "allocationWarning": "Provider backup allocation is not available for this server. Local and Stream storage modes require an allocation. Configure your own S3 or SFTP storage to enable backups.",
     "create": {
       "action": "Create backup",
+      "compressHint": "Uncheck to store a plain, uncompressed .tar archive.",
+      "compressLabel": "Compress backup (gzip)",
       "description": "Leave blank to auto-generate a name with the current timestamp.",
       "nameLabel": "Backup name (optional)",
       "success": "Backup creation started",

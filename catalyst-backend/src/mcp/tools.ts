@@ -647,11 +647,11 @@ const fileTools: McpToolDef[] = [
   def({
     name: "create_backup",
     description: "Start a backup of a server (POST /api/servers/:id/backups).",
-    inputSchema: schema({ serverId: serverId(), name: str("Friendly backup name") }, ["serverId"]),
+    inputSchema: schema({ serverId: serverId(), name: str("Friendly backup name"), compressed: bool("Gzip the archive; false stores a plain .tar. Defaults to true.") }, ["serverId"]),
     method: "POST",
     path: (a) => `/api/servers/${a.serverId}/backups`,
     pathKeys: ["serverId"],
-    body: ["name"],
+    body: ["name", "compressed"],
   }),
   def({
     name: "restore_backup",

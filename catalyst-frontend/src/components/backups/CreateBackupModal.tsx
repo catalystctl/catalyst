@@ -8,6 +8,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -22,13 +23,17 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
   const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  // Compression is opt-out: checked by default, uncheck for a plain `.tar`.
+  const [compress, setCompress] = useState(true);
 
   const mutation = useMutation({
-    mutationFn: () => backupsApi.create(serverId, { name: name.trim() || undefined }),
+    mutationFn: () =>
+      backupsApi.create(serverId, { name: name.trim() || undefined, compressed: compress }),
     onSuccess: () => {
       notifySuccess(t('backups.create.success'));
       setOpen(false);
       setName('');
+      setCompress(true);
     },
     onError: (error: any) => {
       notifyError(error);
@@ -68,6 +73,22 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
                 onChange={(event) => setName(event.target.value)}
                 placeholder="nightly-backup"
               />
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="create-backup-compress"
+                checked={compress}
+                onCheckedChange={(value) => setCompress(value === true)}
+                className="mt-0.5"
+              />
+              <label htmlFor="create-backup-compress" className="min-w-0 cursor-pointer">
+                <span className="block text-mini text-foreground">
+                  {t('backups.create.compressLabel')}
+                </span>
+                <span className="block text-micro text-muted-foreground">
+                  {t('backups.create.compressHint')}
+                </span>
+              </label>
             </div>
           </DialogBody>
           <DialogFooter>

@@ -77,9 +77,13 @@ async fn create_decrypt_temp(target: &Path) -> AgentResult<(tokio::fs::File, Pat
 
 /// Pre-list a backup tarball (buffered restore path): reject absolute paths,
 /// `..`, symlink/hardlink/device entries, and enforce count/size/ratio caps.
+///
+/// Uses `-tvf`, not `-tzvf`: backups may be stored uncompressed (`.tar`) and
+/// GNU tar auto-detects gzip on read, whereas `-z` forces gzip and fails with
+/// "Cannot list backup archive" on a plain tar.
 async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> AgentResult<()> {
     let out = tokio::process::Command::new("tar")
-        .args(["-tzvf", &archive.to_string_lossy()])
+        .args(["-tvf", &archive.to_string_lossy()])
         .output()
         .await
         .map_err(|e| AgentError::IoError(format!("Failed to list backup: {}", e)))?;
@@ -157,6 +161,8 @@ async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> Agen
             total
         )));
     }
+    // Only meaningful for compressed archives: an uncompressed tar cannot
+    // expand, so this can never trip on the plain `.tar` variant.
     if compressed_len > 0 && total > compressed_len.saturating_mul(100) {
         return Err(AgentError::SecurityViolation(format!(
             "Backup compression ratio too high ({} -> {} bytes)",
@@ -248,6 +254,25 @@ async fn validate_restore_tree(dir: &Path, canonical_base: &Path) -> AgentResult
     Ok(())
 }
 
+/// File extension for a backup archive: gzip when compressing, plain tar when
+/// the panel asks for an uncompressed archive.
+fn backup_archive_extension(compressed: bool) -> &'static str {
+    if compressed {
+        "tar.gz"
+    } else {
+        "tar"
+    }
+}
+
+/// `tar` create flags matching [`backup_archive_extension`].
+fn backup_tar_create_flag(compressed: bool) -> &'static str {
+    if compressed {
+        "-czf"
+    } else {
+        "-cf"
+    }
+}
+
 impl WebSocketHandler {
     pub(crate) async fn cleanup_all_uploads(&self) {
         let sessions: Vec<BackupUploadSession> = {
@@ -313,6 +338,12 @@ impl WebSocketHandler {
             .map_err(|e| AgentError::InternalError(format!("Backup semaphore closed: {}", e)))?;
         let backup_path_override = msg["backupPath"].as_str();
         let backup_id = msg["backupId"].as_str();
+        // The panel sends compressed=false to store a plain `.tar`. Absent or
+        // true keeps the historical gzip behaviour.
+        let compressed = msg
+            .get("compressed")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
         shell_utils::validate_safe_path_segment(server_uuid, "serverUuid")?;
         let server_dir = self.config.server.data_dir.join(server_uuid);
@@ -328,7 +359,7 @@ impl WebSocketHandler {
         let backup_path = match backup_path_override {
             Some(path) => self.resolve_backup_path(server_uuid, path, true).await?,
             None => {
-                let filename = format!("{}.tar.gz", backup_name);
+                let filename = format!("{}.{}", backup_name, backup_archive_extension(compressed));
                 self.resolve_backup_path(server_uuid, &filename, true)
                     .await?
             }
@@ -378,7 +409,7 @@ impl WebSocketHandler {
         }
 
         let archive_result = tokio::process::Command::new("tar")
-            .arg("-czf")
+            .arg(backup_tar_create_flag(compressed))
             .arg(&backup_path)
             .arg("-C")
             .arg(&server_dir)
@@ -663,8 +694,11 @@ impl WebSocketHandler {
             tmp_dir.display()
         );
 
+        // `-xf`, not `-xzf`: backups may be uncompressed (`.tar`) and GNU tar
+        // auto-detects gzip on read, while `-z` forces gzip and fails on a
+        // plain tar.
         let restore_result = tokio::process::Command::new("tar")
-            .arg("-xzf")
+            .arg("-xf")
             .arg(&actual_backup_file)
             .arg("-C")
             .arg(&tmp_dir)
@@ -2283,4 +2317,45 @@ pub(crate) async fn ensure_restore_fits(
         )));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod backup_compression_tests {
+    use super::{backup_archive_extension, backup_tar_create_flag, prevalidate_backup_tarball};
+
+    #[test]
+    fn extension_follows_compression_flag() {
+        assert_eq!(backup_archive_extension(true), "tar.gz");
+        assert_eq!(backup_archive_extension(false), "tar");
+    }
+
+    #[test]
+    fn create_flag_follows_compression_flag() {
+        assert_eq!(backup_tar_create_flag(true), "-czf");
+        assert_eq!(backup_tar_create_flag(false), "-cf");
+    }
+
+    /// An uncompressed archive must still pass the restore pre-scan: `tar`
+    /// detects the format itself, and the ratio guard only trips when the
+    /// archive is actually compressed.
+    #[tokio::test]
+    async fn prevalidate_accepts_uncompressed_archive() {
+        let work = tempfile::tempdir().unwrap();
+        // 120 == b'x': compressible content, but the archive stays uncompressed.
+        std::fs::write(work.path().join("a.txt"), vec![120u8; 64 * 1024]).unwrap();
+        let archive = work.path().join("plain.tar");
+        let status = std::process::Command::new("tar")
+            .arg("-cf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(work.path())
+            .arg("a.txt")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let len = std::fs::metadata(&archive).unwrap().len();
+        prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect("uncompressed archive must pass prevalidation");
+    }
 }

@@ -3,6 +3,8 @@
     "allocationWarning": "此服务器无法使用提供方备份分配。本地和 Stream 存储模式需要分配。请配置自己的 S3 或 SFTP 存储以启用备份。",
     "create": {
       "action": "创建备份",
+      "compressHint": "取消勾选将保存未压缩的 .tar 归档文件。",
+      "compressLabel": "压缩备份（gzip）",
       "description": "留空将使用当前时间戳自动生成名称。",
       "nameLabel": "备份名称（可选）",
       "success": "已开始创建备份",

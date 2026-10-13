@@ -132,7 +132,7 @@ function BackupSection({
  // Settings / create use create; list actions split restore vs delete
  const canWrite = canCreate;
 
-  const handleDownload = async (backupId: string, name: string) => {
+  const handleDownload = async (backupId: string, name: string, compressed?: boolean) => {
     try {
       setProgress(`${progressKeyPrefix}${backupId}`, { loaded: 0 });
       const blob = await backupsApi.download(serverId, backupId, (progress) => {
@@ -141,7 +141,7 @@ function BackupSection({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${name}.tar.gz`;
+      link.download = `${name}.${compressed === false ? 'tar' : 'tar.gz'}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -549,7 +549,7 @@ function BackupSection({
  serverId={serverId}
  backups={backups.map((backup) => ({
  ...backup,
- download: isSuspended || !canRead ? undefined : () => handleDownload(backup.id, backup.name),
+ download: isSuspended || !canRead ? undefined : () => handleDownload(backup.id, backup.name, backup.compressed),
  downloadProgress: formatProgress(progressByBackup[`${progressKeyPrefix}${backup.id}`], t),
  }))}
  serverStatus={serverStatus}

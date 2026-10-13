@@ -224,9 +224,10 @@ export const buildBackupPaths = (
   serverUuid: string,
   backupName: string,
   mode: BackupStorageMode,
-  server?: { backupS3Config?: any; backupSftpConfig?: any }
+  server?: { backupS3Config?: any; backupSftpConfig?: any },
+  compressed: boolean = true
 ) => {
-  const fileName = `${backupName}.tar.gz`;
+  const fileName = `${backupName}.${compressed ? "tar.gz" : "tar"}`;
   const agentPath =
     mode === "stream"
       ? path.join(STREAM_DIR, serverUuid, fileName)
@@ -324,7 +325,8 @@ export const streamAgentBackupToS3 = async (
         Key: storageKey,
         Body: createReadStream(tmpPath),
         ContentLength: stats.size,
-        ContentType: "application/gzip",
+        // Uncompressed backups are stored as plain `.tar`.
+        ContentType: storageKey.endsWith(".tar") ? "application/x-tar" : "application/gzip",
       }),
     );
   } finally {
