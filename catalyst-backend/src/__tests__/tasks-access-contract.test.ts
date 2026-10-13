@@ -27,6 +27,8 @@ let nodeManagerUserId: string;
 let scheduleOnlyUserId: string;
 let schedulePowerUserId: string;
 let scheduleCommandUserId: string;
+let scheduleBackupUserId: string;
+let scheduleBackupPowerUserId: string;
 let ownerRoleId: string;
 let adminReadRoleId: string;
 let plainRoleId: string;
@@ -94,6 +96,8 @@ function users() {
     scheduleOnly: scheduleOnlyUserId,
     schedulePower: schedulePowerUserId,
     scheduleCommand: scheduleCommandUserId,
+    scheduleBackup: scheduleBackupUserId,
+    scheduleBackupPower: scheduleBackupPowerUserId,
   };
 }
 const userByKey = (key: string) => users()[key as keyof ReturnType<typeof users>];
@@ -119,7 +123,7 @@ beforeAll(async () => {
   plainRoleId = plainRole.id;
   nodeManagerRoleId = nodeManagerRole.id;
 
-  [ownerUserId, adminReadUserId, plainUserId, nodeManagerUserId, scheduleOnlyUserId, schedulePowerUserId, scheduleCommandUserId] =
+  [ownerUserId, adminReadUserId, plainUserId, nodeManagerUserId, scheduleOnlyUserId, schedulePowerUserId, scheduleCommandUserId, scheduleBackupUserId, scheduleBackupPowerUserId] =
     await Promise.all([
       createUser(ownerRoleId, 'tasks-owner'),
       createUser(adminReadRoleId, 'tasks-adminread'),
@@ -128,6 +132,8 @@ beforeAll(async () => {
       createUser(null, 'tasks-scheduleonly'),
       createUser(null, 'tasks-schedulepower'),
       createUser(null, 'tasks-schedulecommand'),
+      createUser(null, 'tasks-schedulebackup'),
+      createUser(null, 'tasks-schedulebackuppower'),
     ]);
 
   const location = await prisma.location.create({ data: { name: `test-tasks-loc-${nanoid(8)}` } });
@@ -186,6 +192,8 @@ beforeAll(async () => {
       { serverId, userId: scheduleOnlyUserId, permissions: ['server.read', 'server.schedule'] },
       { serverId, userId: schedulePowerUserId, permissions: ['server.read', 'server.schedule', 'server.start', 'server.stop'] },
       { serverId, userId: scheduleCommandUserId, permissions: ['server.read', 'server.schedule', 'console.write'] },
+      { serverId, userId: scheduleBackupUserId, permissions: ['server.read', 'server.schedule', 'backup.create'] },
+      { serverId, userId: scheduleBackupPowerUserId, permissions: ['server.read', 'server.schedule', 'backup.create', 'server.start', 'server.stop'] },
     ],
   });
 });
@@ -201,7 +209,7 @@ afterAll(async () => {
     await prisma.nodeAssignment.deleteMany({ where: { nodeId } }).catch(() => {});
     await prisma.node.delete({ where: { id: nodeId } }).catch(() => {});
   }
-  for (const id of [ownerUserId, adminReadUserId, plainUserId, nodeManagerUserId, scheduleOnlyUserId, schedulePowerUserId, scheduleCommandUserId]) {
+  for (const id of [ownerUserId, adminReadUserId, plainUserId, nodeManagerUserId, scheduleOnlyUserId, schedulePowerUserId, scheduleCommandUserId, scheduleBackupUserId, scheduleBackupPowerUserId]) {
     if (id) await prisma.user.delete({ where: { id } }).catch(() => {});
   }
   for (const id of [ownerRoleId, adminReadRoleId, plainRoleId, nodeManagerRoleId]) {
@@ -258,6 +266,49 @@ describe('task create action-capability gate', () => {
   });
 });
 
+describe('backup task option capability gate', () => {
+  it('schedule+backup subuser can create a plain backup task', async () => {
+    const res = await callAs(userByKey('scheduleBackup'), 'POST', `/api/servers/${serverId}/tasks`, validTask('backup'));
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('schedule+backup subuser cannot request stopBeforeBackup without server.stop', async () => {
+    const res = await callAs(userByKey('scheduleBackup'), 'POST', `/api/servers/${serverId}/tasks`, {
+      ...validTask('backup'),
+      payload: { stopBeforeBackup: true },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('schedule+backup subuser cannot request startAfterBackup without server.start', async () => {
+    const res = await callAs(userByKey('scheduleBackup'), 'POST', `/api/servers/${serverId}/tasks`, {
+      ...validTask('backup'),
+      payload: { startAfterBackup: true },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('backup + power subuser can create a backup-and-start task', async () => {
+    const res = await callAs(userByKey('scheduleBackupPower'), 'POST', `/api/servers/${serverId}/tasks`, {
+      ...validTask('backup'),
+      payload: { stopBeforeBackup: true, startAfterBackup: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).task.payload).toMatchObject({
+      stopBeforeBackup: true,
+      startAfterBackup: true,
+    });
+  });
+
+  it('adding a backup option the caller cannot run is rejected on update', async () => {
+    const created = await callAs(userByKey('owner'), 'POST', `/api/servers/${serverId}/tasks`, validTask('backup'));
+    const taskId = JSON.parse(created.body).task.id;
+    const res = await callAs(userByKey('scheduleBackup'), 'PUT', `/api/servers/${serverId}/tasks/${taskId}`, {
+      payload: { stopBeforeBackup: true },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
 describe('task execute action gate', () => {
   let commandTaskId = '';
   beforeAll(async () => {

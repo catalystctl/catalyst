@@ -268,4 +268,75 @@ describe("agent message trust boundaries", () => {
     expect(backupUpdated).toBe(0);
     gw.destroy();
   });
+
+  it("backup_complete with startAfterBackup starts the server again", async () => {
+    let serverReads = 0;
+    const serverUpdates: any[] = [];
+    const gw: any = new WebSocketGateway(
+      {
+        ...prismaStub,
+        server: {
+          findUnique: async () => {
+            serverReads += 1;
+            // First read: the handler sees CREATING_BACKUP; the start-after
+            // re-read sees the STOPPED the handler just wrote.
+            return {
+              id: "s1",
+              uuid: "uuid-1",
+              nodeId: "n1",
+              status: serverReads === 1 ? "creating_backup" : "stopped",
+              environment: {},
+              primaryIp: null,
+              networkMode: "bridge",
+              allocatedMemoryMb: 512,
+              allocatedCpuCores: 1,
+              allocatedDiskMb: 1024,
+              primaryPort: 25570,
+              portBindings: {},
+              suspendedAt: null,
+              template: { startup: "echo hi" },
+              node: { publicAddress: "10.0.0.1", isOnline: true },
+            };
+          },
+          findMany: async () => [],
+          update: async (args: any) => {
+            serverUpdates.push(args);
+            return {};
+          },
+        },
+        backup: {
+          findFirst: async () => ({
+            id: "b1",
+            serverId: "s1",
+            name: "nightly",
+            path: "/var/lib/catalyst/backups/b1.tar.gz",
+            storageMode: "local",
+            sizeMb: 0,
+            metadata: { agentPath: "/backups/b1.tar.gz", startAfterBackup: true },
+          }),
+          update: async () => ({ id: "b1", sizeMb: 12 }),
+        },
+      },
+      loggerStub,
+    );
+    (gw as any).routeToClients = async () => {};
+    const socket = makeFakeSocket();
+    seedAgent(gw, "n1", socket);
+
+    await gw.handleAgentMessage(
+      "n1",
+      socket,
+      JSON.stringify({ type: "backup_complete", serverId: "s1", backupId: "b1", sizeMb: 12 }),
+      false,
+    );
+
+    const startMessages = socket.sent
+      .map((raw: string) => JSON.parse(raw))
+      .filter((m: any) => m.type === "start_server");
+    expect(startMessages.length).toBe(1);
+    expect(startMessages[0].serverId).toBe("s1");
+    // The handler parks the server at STOPPED before the start is dispatched.
+    expect(serverUpdates.some((u) => u?.data?.status === "stopped")).toBe(true);
+    gw.destroy();
+  });
 });

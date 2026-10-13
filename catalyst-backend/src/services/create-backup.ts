@@ -33,6 +33,12 @@ export interface CreateBackupParams {
    */
   compressed?: boolean;
   /**
+   * Scheduled "backup & start": once the agent confirms the backup finished,
+   * the panel starts the server again. Recorded on the Backup row's metadata so
+   * the intent survives a panel restart between dispatch and completion.
+   */
+  startAfterBackup?: boolean;
+  /**
    * sendToAgent implementation (usually wsGateway.sendToAgent).
    * Returns false when the agent is unreachable.
    */
@@ -214,6 +220,9 @@ export async function createServerBackup(
           agentPath,
           storageKey,
           encrypted: !!encryptionKey,
+          // Durable intent for a scheduled "backup & start": the gateway reads
+          // this when the agent's backup_complete arrives and starts the server.
+          ...(params.startAfterBackup ? { startAfterBackup: true } : {}),
         },
       },
     });

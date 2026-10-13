@@ -83,6 +83,17 @@ export default function ServerTasksTab({
  <span className="type-overline rounded-sm bg-surface-2/60 px-2 py-0.5">
  {task.action}
  </span>
+ {task.action === 'backup' &&
+ (task.payload?.stopBeforeBackup === true || task.payload?.startAfterBackup === true) ? (
+ <span className="type-overline rounded-sm bg-surface-2/60 px-2 py-0.5 text-muted-foreground">
+ {[
+ task.payload?.stopBeforeBackup === true ? t('tasks.backup.badgeStop') : null,
+ task.payload?.startAfterBackup === true ? t('tasks.backup.badgeStart') : null,
+ ]
+ .filter(Boolean)
+ .join(' + ')}
+ </span>
+ ) : null}
  </div>
  {task.description && (
  <div className="type-meta mt-1">

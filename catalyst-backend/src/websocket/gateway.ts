@@ -3133,6 +3133,19 @@ export class WebSocketGateway {
           checksum: updated.checksum,
         });
 
+        // Scheduled "backup & start": the task recorded the intent on the
+        // backup row, so bring the server back up now that the archive is
+        // confirmed. The intent is durable, so a panel restart between
+        // dispatch and completion still resumes it.
+        if ((backupRecord.metadata as any)?.startAfterBackup === true) {
+          await this.startServerAfterBackup(server.id).catch((error) => {
+            this.logger.error(
+              { err: error, serverId: server.id, backupId: backupRecord.id },
+              "Failed to start server after scheduled backup",
+            );
+          });
+        }
+
         if (mode === "s3") {
           try {
             const { streamAgentBackupToS3 } = await import("../services/backup-storage");
@@ -4880,6 +4893,72 @@ export class WebSocketGateway {
     });
   }
 
+  /**
+   * Start a server again after a scheduled "backup & start" task. Re-reads the
+   * row so it acts on the post-backup status, and reuses the scheduled `start`
+   * action's payload shape.
+   */
+  private async startServerAfterBackup(serverId: string): Promise<void> {
+    const server = await this.prisma.server.findUnique({
+      where: { id: serverId },
+      include: { node: true, template: true },
+    });
+    if (!server) return;
+    if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) {
+      this.logger.warn({ serverId }, "Skipping start-after-backup: server is suspended");
+      return;
+    }
+    if (server.status !== ServerState.STOPPED) {
+      // Someone already acted on it (manual start, deletion, transfer…).
+      this.logger.info(
+        { serverId, status: server.status },
+        "Skipping start-after-backup: server is not stopped",
+      );
+      return;
+    }
+
+    const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
+    const environment: Record<string, string> = {
+      ...(server.environment as Record<string, string>),
+      SERVER_DIR: `${serverDir}/${server.uuid}`,
+    };
+    if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
+      environment.CATALYST_NETWORK_IP = server.primaryIp;
+    }
+    if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
+      try {
+        const normalized = normalizeHostIp(server.node.publicAddress);
+        if (normalized) environment.CATALYST_NETWORK_IP = normalized;
+      } catch (error: any) {
+        this.logger.warn(
+          { nodeId: server.nodeId, hostIp: server.node.publicAddress, error: error.message },
+          "Invalid host network IP",
+        );
+      }
+    }
+
+    const sent = await this.sendToAgent(server.nodeId, {
+      type: "start_server",
+      serverId: server.id,
+      serverUuid: server.uuid,
+      template: server.template,
+      environment,
+      allocatedMemoryMb: server.allocatedMemoryMb,
+      allocatedCpuCores: server.allocatedCpuCores,
+      allocatedDiskMb: server.allocatedDiskMb,
+      primaryPort: server.primaryPort,
+      portBindings: server.portBindings ?? {},
+      networkMode: server.networkMode,
+    });
+    if (sent) {
+      this.logger.info({ serverId }, "Started server after scheduled backup");
+    } else {
+      this.logger.warn(
+        { serverId },
+        "Start-after-backup command could not be delivered to the agent",
+      );
+    }
+  }
   /**
    * Panel-initiated WS ping loop. Heartbeats prove the agent→panel direction;
    * this proves panel→agent and updates liveness on pong so a silently

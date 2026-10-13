@@ -838,6 +838,15 @@
     "advancedLocked": "请改用预设，而不是自定义表达式。",
     "advancedOff": "使用预设",
     "advancedOn": "使用原始 cron 表达式",
+    "backup": {
+      "badgeStart": "备份后启动",
+      "badgeStop": "先停止",
+      "label": "备份选项",
+      "startAfter": "备份完成后启动服务器",
+      "startAfterHint": "备份确认完成后，服务器将重新启动。",
+      "stopBefore": "备份前停止服务器",
+      "stopBeforeHint": "在归档前先优雅地停止正在运行的服务器，并等待其下线。"
+    },
     "command": "命令",
     "create": {
       "action": "创建任务",

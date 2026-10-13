@@ -163,6 +163,44 @@ describe('ScheduleTaskModal', () => {
     );
   });
 
+  it('sends backup options when creating a backup & start task', () => {
+    create.mockResolvedValue({});
+    openCreate();
+
+    fireEvent.change(screen.getByLabelText('tasks.name'), { target: { value: 'Nightly backup' } });
+    fireEvent.change(screen.getByLabelText('tasks.action'), { target: { value: 'backup' } });
+    fireEvent.click(screen.getByLabelText('tasks.backup.stopBefore'));
+    fireEvent.click(screen.getByLabelText('tasks.backup.startAfter'));
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.create' }));
+
+    expect(create).toHaveBeenCalledWith(
+      'server-1',
+      expect.objectContaining({
+        action: 'backup',
+        payload: { stopBeforeBackup: true, startAfterBackup: true },
+      }),
+    );
+  });
+
+  it('reopens a backup task with its options checked and re-saves them', () => {
+    update.mockResolvedValue({});
+    openEdit({
+      ...existingTask,
+      action: 'backup',
+      payload: { stopBeforeBackup: true, startAfterBackup: true },
+    });
+
+    expect(screen.getByLabelText('tasks.backup.stopBefore')).toBeChecked();
+    expect(screen.getByLabelText('tasks.backup.startAfter')).toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.save' }));
+
+    expect(update).toHaveBeenCalledWith(
+      'server-1',
+      'task-1',
+      expect.objectContaining({ payload: { stopBeforeBackup: true, startAfterBackup: true } }),
+    );
+  });
   it('blocks saving while the schedule is empty', () => {
     openCreate();
     fireEvent.click(screen.getByLabelText('tasks.advanced'));

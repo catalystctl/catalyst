@@ -83,6 +83,10 @@ export default function ScheduleTaskModal({
   const [description, setDescription] = useState('');
   const [action, setAction] = useState<Task['action']>('restart');
   const [command, setCommand] = useState('');
+  // Backup-only options: gracefully stop a running server before the archive,
+  // and/or start it again once the backup is confirmed finished.
+  const [stopBeforeBackup, setStopBeforeBackup] = useState(false);
+  const [startAfterBackup, setStartAfterBackup] = useState(false);
   const [spec, setSpec] = useState<ScheduleSpec>(DEFAULT_SPEC);
   const [advanced, setAdvanced] = useState(false);
 
@@ -108,6 +112,8 @@ export default function ScheduleTaskModal({
       setDescription(task.description ?? '');
       setAction(task.action);
       setCommand(typeof task.payload?.command === 'string' ? task.payload.command : '');
+      setStopBeforeBackup(task.payload?.stopBeforeBackup === true);
+      setStartAfterBackup(task.payload?.startAfterBackup === true);
       setSpec(seeded.spec);
       setAdvanced(seeded.advanced);
       return;
@@ -116,6 +122,8 @@ export default function ScheduleTaskModal({
     setDescription('');
     setAction('restart');
     setCommand('');
+    setStopBeforeBackup(false);
+    setStartAfterBackup(false);
     setSpec({ ...DEFAULT_SPEC });
     setAdvanced(false);
   };
@@ -138,7 +146,12 @@ export default function ScheduleTaskModal({
 
   const mutation = useMutation({
     mutationFn: () => {
-      const payload = action === 'command' && command.trim() ? { command: command.trim() } : {};
+      const payload: Record<string, unknown> = {};
+      if (action === 'command' && command.trim()) payload.command = command.trim();
+      if (action === 'backup') {
+        if (stopBeforeBackup) payload.stopBeforeBackup = true;
+        if (startAfterBackup) payload.startAfterBackup = true;
+      }
       const trimmedDescription = description.trim();
       if (task) {
         return tasksApi.update(serverId, task.id, {
@@ -343,6 +356,49 @@ export default function ScheduleTaskModal({
               </div>
             ) : null}
 
+            {action === 'backup' ? (
+              <div className="space-y-3 rounded-sm border border-border/50 bg-surface-1/30 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label
+                      htmlFor={`${prefix}-task-backup-stop`}
+                      className="text-mini font-semibold"
+                    >
+                      {t('tasks.backup.stopBefore')}
+                    </Label>
+                    <p className="mt-0.5 text-micro text-muted-foreground">
+                      {t('tasks.backup.stopBeforeHint')}
+                    </p>
+                  </div>
+                  <Switch
+                    id={`${prefix}-task-backup-stop`}
+                    checked={stopBeforeBackup}
+                    onCheckedChange={setStopBeforeBackup}
+                    aria-label={t('tasks.backup.stopBefore')}
+                  />
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label
+                      htmlFor={`${prefix}-task-backup-start`}
+                      className="text-mini font-semibold"
+                    >
+                      {t('tasks.backup.startAfter')}
+                    </Label>
+                    <p className="mt-0.5 text-micro text-muted-foreground">
+                      {t('tasks.backup.startAfterHint')}
+                    </p>
+                  </div>
+                  <Switch
+                    id={`${prefix}-task-backup-start`}
+                    checked={startAfterBackup}
+                    onCheckedChange={setStartAfterBackup}
+                    aria-label={t('tasks.backup.startAfter')}
+                  />
+                </div>
+              </div>
+            ) : null}
+
               </FormSection>
 
               <FormSection index={3} title={t('tasks.repeat')}>
@@ -533,6 +589,17 @@ export default function ScheduleTaskModal({
                       label={t('tasks.action')}
                       value={actionOptions(t).find((option) => option.value === action)?.label}
                     />
+                    {action === 'backup' && (stopBeforeBackup || startAfterBackup) ? (
+                      <SummaryRow
+                        label={t('tasks.backup.label')}
+                        value={[
+                          stopBeforeBackup && t('tasks.backup.badgeStop'),
+                          startAfterBackup && t('tasks.backup.badgeStart'),
+                        ]
+                          .filter(Boolean)
+                          .join(' + ')}
+                      />
+                    ) : null}
                     <SummaryRow label={t('tasks.repeat')} value={summaryText()} />
                   </div>
 

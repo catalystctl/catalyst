@@ -875,6 +875,15 @@
     "advancedLocked": "Use a preset instead of a custom expression.",
     "advancedOff": "Using presets",
     "advancedOn": "Using a raw cron expression",
+    "backup": {
+      "badgeStart": "starts after",
+      "badgeStop": "stops first",
+      "label": "Backup options",
+      "startAfter": "Start server after backup",
+      "startAfterHint": "Starts the server again once the backup is confirmed finished.",
+      "stopBefore": "Stop server before backup",
+      "stopBeforeHint": "Gracefully stops a running server and waits for it to go offline before archiving."
+    },
     "command": "Command",
     "create": {
       "action": "Create task",

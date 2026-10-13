@@ -32,6 +32,27 @@ const TASK_ACTION_PERMISSIONS: Record<TaskAction, readonly string[]> = {
   backup: ['backup.create'],
   command: ['console.write'],
 };
+
+/**
+ * Effective permission requirements for an action, including the extra
+ * capabilities a backup payload can opt into:
+ *  - stopBeforeBackup gracefully stops a running server first → server.stop;
+ *  - startAfterBackup starts it again when the backup completes → server.start.
+ * The creator must hold every capability the stored task will exercise, since
+ * the scheduler runs it without re-checking the creator at fire time.
+ */
+function requiredPermissionsForTask(
+  action: TaskAction,
+  payload: unknown,
+): readonly string[] {
+  const base = TASK_ACTION_PERMISSIONS[action];
+  if (action !== 'backup' || !payload || typeof payload !== 'object') return base;
+  const flags = payload as { stopBeforeBackup?: unknown; startAfterBackup?: unknown };
+  const extra: string[] = [];
+  if (flags.stopBeforeBackup === true) extra.push('server.stop');
+  if (flags.startAfterBackup === true) extra.push('server.start');
+  return extra.length > 0 ? [...base, ...extra] : base;
+}
 export async function taskRoutes(app: FastifyInstance) {
   // Using shared prisma instance from db.ts
   const authenticate = (app as any).authenticate;
@@ -125,8 +146,11 @@ export async function taskRoutes(app: FastifyInstance) {
     // Mandatory actor: the key-scope ceiling below must never be silently
     // skipped. System/cron callers pass SYSTEM_ACTOR.
     actor: Actor,
+    // The payload the task will run with (new payload on create/update, stored
+    // payload on execute) — backup options add server.stop/server.start.
+    payload?: unknown,
   ) => {
-    const required = TASK_ACTION_PERMISSIONS[action];
+    const required = requiredPermissionsForTask(action, payload);
     // Key-scope ceiling: an API key must itself hold every required
     // permission (all-of, so restart needs both start and stop).
     if (!required.every((p) => enforceKeyScope(actor, p))) {
@@ -198,7 +222,7 @@ export async function taskRoutes(app: FastifyInstance) {
 
       {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, action, reply, request.user))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, action, reply, request.user, payload))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
@@ -346,19 +370,23 @@ export async function taskRoutes(app: FastifyInstance) {
       // Re-check the effective action's capability: the new action when the
       // body changes it, otherwise the stored one (guards payload injection
       // into an existing command/power/backup task, not just action flips).
-      let effectiveAction: TaskAction | undefined;
-      if (action !== undefined) {
-        effectiveAction = isValidTaskAction(action) ? action : undefined;
-      } else {
-        const existingTask = await prisma.scheduledTask.findFirst({
-          where: { id: taskId, serverId },
-          select: { action: true },
-        });
-        effectiveAction = existingTask?.action as TaskAction | undefined;
-      }
+      // Effective task = body values overlaid on the stored row. The capability
+      // check must see the flags that will actually run, so a body that omits
+      // payload still gates on the stored backup options.
+      const storedTask = await prisma.scheduledTask.findFirst({
+        where: { id: taskId, serverId },
+        select: { action: true, payload: true },
+      });
+      const effectiveAction: TaskAction | undefined =
+        action !== undefined
+          ? isValidTaskAction(action)
+            ? action
+            : undefined
+          : (storedTask?.action as TaskAction | undefined);
+      const effectivePayload = payload !== undefined ? payload : storedTask?.payload;
       if (effectiveAction) {
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, effectiveAction, reply, request.user))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, effectiveAction, reply, request.user, effectivePayload))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }
@@ -540,7 +568,7 @@ export async function taskRoutes(app: FastifyInstance) {
         // The stored action's capability must be backed at execute time too
         // (execute runs the action immediately, same as the direct routes).
         const serverRow = await prisma.server.findUnique({ where: { id: serverId }, select: { nodeId: true } });
-        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, task.action as TaskAction, reply, request.user))) {
+        if (!serverRow || !(await ensureActionPermission(user.userId, serverId, serverRow.nodeId, task.action as TaskAction, reply, request.user, task.payload))) {
           if (serverRow) return;
           return apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, 'Server not found');
         }

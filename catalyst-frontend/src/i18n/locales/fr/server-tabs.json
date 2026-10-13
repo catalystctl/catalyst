@@ -912,6 +912,15 @@
     "advancedLocked": "Utilisez un préréglage au lieu d'une expression personnalisée.",
     "advancedOff": "Utilisation des préréglages",
     "advancedOn": "Utilisation d'une expression cron brute",
+    "backup": {
+      "badgeStart": "démarre après",
+      "badgeStop": "arrêt d'abord",
+      "label": "Options de sauvegarde",
+      "startAfter": "Démarrer le serveur après la sauvegarde",
+      "startAfterHint": "Redémarre le serveur une fois la sauvegarde confirmée comme terminée.",
+      "stopBefore": "Arrêter le serveur avant la sauvegarde",
+      "stopBeforeHint": "Arrête proprement un serveur en cours d'exécution et attend qu'il soit hors ligne avant l'archivage."
+    },
     "command": "Commande",
     "create": {
       "action": "Créer une tâche",

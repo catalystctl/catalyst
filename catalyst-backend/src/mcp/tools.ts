@@ -682,14 +682,14 @@ const fileTools: McpToolDef[] = [
   }),
   def({
     name: "create_scheduled_task",
-    description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks). Tasks always start enabled.",
+    description: "Create a cron task: restart/stop/start/backup/command (POST /api/servers/:id/tasks). Backup tasks accept payload {stopBeforeBackup, startAfterBackup} to gracefully stop first and start again once the backup finishes. Tasks always start enabled.",
     inputSchema: schema(
       {
         serverId: serverId(),
         name: str(),
         action: enumOf(["restart", "stop", "start", "backup", "command"]),
         schedule: str("Cron expression, e.g. 0 3 * * *"),
-        payload: obj("Extra data, e.g. {command: 'say hi'}"),
+        payload: obj("Extra data, e.g. {command: 'say hi'} or, for backup, {stopBeforeBackup: true, startAfterBackup: true}"),
         description: str(),
       },
       ["serverId", "name", "action", "schedule"],

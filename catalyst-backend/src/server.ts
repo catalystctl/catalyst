@@ -23,7 +23,8 @@ import "./types"; // Load type augmentations
 import { WebSocketGateway, setWsGateway } from "./websocket/gateway";
 import { setErrorLoggerGateway, captureSystemError } from "./services/error-logger";
 import { mapHttpError, apiError } from "./lib/http-error";
-import { ErrorCodes } from "./shared-types";
+import { ErrorCodes, ServerState } from "./shared-types";
+import { ServerStateMachine } from "./services/state-machine";
 import { applyRemoteCacheInvalidate, onCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
 import { cachedConfig } from "./lib/config-cache";
@@ -114,6 +115,33 @@ const logger = pino(
 				},
 			},
 );
+
+/** How long a scheduled "stop before backup" waits for the graceful stop. */
+const SCHEDULED_BACKUP_STOP_TIMEOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Poll a server's status until it reaches `target`, the server errors out, or
+ * the deadline passes. Scheduled "stop before backup" uses it so the backup
+ * only starts once the agent has confirmed the container is down.
+ */
+async function waitForServerState(
+	serverId: string,
+	target: ServerState,
+	timeoutMs: number,
+): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const row = await prisma.server.findUnique({
+			where: { id: serverId },
+			select: { status: true },
+		});
+		if (row?.status === target) return true;
+		// A hard error means the stop failed; don't wait out the whole clock.
+		if (row?.status === ServerState.ERROR) return false;
+		await new Promise((resolve) => setTimeout(resolve, 2000));
+	}
+	return false;
+}
 
 // TRUST_PROXY defaults FALSE: client IPs must not be taken from X-Forwarded-*
 // unless the process is behind a known proxy. Set TRUST_PROXY=true (or 1/yes/on)
@@ -321,12 +349,53 @@ taskScheduler.setTaskExecutor({
 			}
 		}
 		if (action === "backup") {
+			const stopBeforeBackup = task.payload?.stopBeforeBackup === true;
+			const startAfterBackup = task.payload?.startAfterBackup === true;
+
+			if (stopBeforeBackup) {
+				// A backup can only be taken from STOPPED: gracefully stop a running
+				// server first and wait for the agent to report it down before
+				// creating the archive.
+				const current = await prisma.server.findUnique({
+					where: { id: server.id },
+					select: { status: true },
+				});
+				const status = current?.status as ServerState | undefined;
+				if (status && status !== ServerState.STOPPED) {
+					if (!ServerStateMachine.canStop(status)) {
+						throw new Error(
+							`Scheduled backup cannot stop the server (state: ${status})`,
+						);
+					}
+					await wsGateway.sendToAgent(server.nodeId, {
+						type: "stop_server",
+						serverId: server.id,
+						serverUuid: server.uuid,
+					});
+					logger.info(
+						{ taskId: task.id, serverId: server.id, status },
+						"Scheduled backup: gracefully stopping server first",
+					);
+					const stopped = await waitForServerState(
+						server.id,
+						ServerState.STOPPED,
+						SCHEDULED_BACKUP_STOP_TIMEOUT_MS,
+					);
+					if (!stopped) {
+						throw new Error(
+							"Server did not stop in time for the scheduled backup",
+						);
+					}
+				}
+			}
+
 			// Use the same locking / quota / DB-row path as HTTP create-backup.
 			const result = await createServerBackup({
 				prisma,
 				logger,
 				server,
 				name: typeof task.payload?.name === "string" ? task.payload.name : undefined,
+				startAfterBackup,
 				sendToAgent: (nodeId, message) => wsGateway.sendToAgent(nodeId, message),
 				onStarted: async ({ serverId, backupId, backupName }) => {
 					if (wsGateway.routeToClients) {
