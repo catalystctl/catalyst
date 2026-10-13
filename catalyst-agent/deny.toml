@@ -7,7 +7,13 @@ version = 2
 # RUSTSEC-2023-0071 (rsa Marvin Attack): no patched release exists; rsa is a
 # transitive dep of russh (SFTP host-key exchange) and not used for panel
 # traffic. Tracked for removal when russh drops the rsa default feature.
-ignore = ["RUSTSEC-2023-0071"]
+#
+# RUSTSEC-2024-0449 (unsafe-libyaml unmaintained): the repository was archived
+# upstream, so there is no fixed release to move to. It reaches us only through
+# serde_yaml (config_parser.rs YAML read/write), not panel traffic. Unmaintained
+# is informational, not a vulnerability. Removing it means replacing serde_yaml
+# with a maintained fork.
+ignore = ["RUSTSEC-2023-0071", "RUSTSEC-2024-0449"]
 yanked = "warn"
 
 [licenses]
