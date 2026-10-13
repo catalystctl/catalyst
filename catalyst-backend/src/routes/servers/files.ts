@@ -180,13 +180,11 @@ export async function serverFilesRoutes(app: FastifyInstance) {
         }
 
         if (result.body) {
-          reply.type(result.contentType || "application/octet-stream");
-          reply.send(result.body);
+          return reply.type(result.contentType || "application/octet-stream").send(result.body);
         } else if (result.stream) {
-          reply.type(result.contentType || "application/octet-stream");
-          reply.send(result.stream);
+          return reply.type(result.contentType || "application/octet-stream").send(result.stream);
         } else {
-          apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, "No file data received from agent");
+          return apiError(reply, 500, ErrorCodes.FILE_OPERATION_FAILED, "No file data received from agent");
         }
       } catch (error: any) {
         return replyTunnelError(reply, error);
