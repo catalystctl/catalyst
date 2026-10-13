@@ -167,7 +167,7 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
         if (deleted.count > 0) {
           totalDeleted++;
           // Per-server push so open backup lists refresh (F16).
-          const ws = gateway ?? getWsGateway();
+          const ws = gateway;
           if (typeof ws?.routeToClients === "function") {
             void ws
               .routeToClients(server.id, {

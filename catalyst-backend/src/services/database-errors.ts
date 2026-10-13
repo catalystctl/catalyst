@@ -2,7 +2,6 @@
  * Database error classification and timeout enforcement.
  */
 
-import { ErrorCodes } from "../shared-types.js";
 import { config } from "../config.js";
 
 export class DatabaseProvisioningError extends Error {

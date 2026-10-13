@@ -54,15 +54,19 @@ export function hashSessionToken(token: string): string {
 /** Extract the raw session token from a cookie header value, if present. */
 export function extractSessionToken(cookieHeader: unknown): string | null {
 	if (typeof cookieHeader !== 'string') return null;
-	const match = cookieHeader.match(
-		new RegExp(`(?:^|;\\s*)${SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`),
-	);
-	if (!match) return null;
-	try {
-		return decodeURIComponent(match[1]);
-	} catch {
-		return match[1];
+	const prefix = `${SESSION_COOKIE_NAME}=`;
+	for (const part of cookieHeader.split(';')) {
+		const trimmed = part.trim();
+		if (!trimmed.startsWith(prefix)) continue;
+		const value = trimmed.slice(prefix.length);
+		if (!value) return null;
+		try {
+			return decodeURIComponent(value);
+		} catch {
+			return value;
+		}
 	}
+	return null;
 }
 
 export function getCachedSessionUser(token: string): CachedRequestUser | undefined {

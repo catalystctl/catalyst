@@ -80,23 +80,29 @@ export class FileTunnelService {
 
   constructor(logger: Logger) {
     this.logger = logger.child({ service: "file-tunnel" });
-    this.tempDir = path.join(os.tmpdir(), "catalyst-uploads");
-    try {
-      void fsp.mkdir(this.tempDir, { recursive: true }).catch((err) => {
-        captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to create upload temp directory', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
-        this.logger.error({ err }, "Failed to create upload temp directory");
-      });
-    } catch (err) {
-      captureSystemError({ level: 'error', component: 'FileTunnel', message: 'Failed to create upload temp directory', stack: err instanceof Error ? err.stack : undefined }).catch(() => {});
-      this.logger.error({ err }, "Failed to create upload temp directory");
-    }
+    // Private per-process staging root. mkdtemp creates it 0700, so staged
+    // uploads and responses are never exposed in the shared system temp dir.
+    this.tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "catalyst-uploads-"));
     this.cleanupTimer = setInterval(() => this.cleanup(), 60_000);
   }
   createStagingPath(): string {
     return path.join(this.tempDir, `${randomUUID()}.bin`);
   }
 
-  /** Spool an agent response without retaining its bytes in memory. */
+  /** Root of this instance's private staging directory (mode 0700). */
+  getTempDir(): string {
+    return this.tempDir;
+  }
+
+  /**
+   * Spool an agent response.
+   *
+   * Legacy RPC/plugin consumers receive a Buffer, so that branch accumulates in
+   * memory and never touches the temp directory. Callers that opt into a stream
+   * get a file-backed stream instead, so a large body is never held in memory.
+   * The staged file name is generated locally, so a hostile requestId can never
+   * steer the write.
+   */
   async stageResponseStream(
     requestId: string,
     nodeId: string,
@@ -109,11 +115,25 @@ export class FileTunnelService {
       source.destroy();
       return false;
     }
-    const filePath = path.join(this.tempDir, `response-${requestId}.bin`);
+
     let size = 0;
+    let stagedPath: string | null = null;
     try {
-      await fsp.mkdir(this.tempDir, { recursive: true });
-      const handle = await fsp.open(filePath, "wx");
+      if (!pending.streamResponse) {
+        // Existing RPC consumers (including installed plugins) expect a Buffer.
+        const chunks: Buffer[] = [];
+        for await (const value of source) {
+          const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+          size += chunk.length;
+          if (size > maxBytes) throw new Error("File tunnel response exceeds maximum size");
+          chunks.push(chunk);
+        }
+        return this.resolveRequest(requestId, nodeId, { requestId, ...metadata, body: Buffer.concat(chunks, size), bodySize: size });
+      }
+
+      // Only callers that explicitly opt in own a response stream.
+      stagedPath = path.join(this.tempDir, `response-${randomUUID()}.bin`);
+      const handle = await fsp.open(stagedPath, "wx", 0o600);
       try {
         for await (const value of source) {
           const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
@@ -124,13 +144,7 @@ export class FileTunnelService {
       } finally {
         await handle.close();
       }
-      // Existing RPC consumers (including installed plugins) expect a Buffer.
-      // Only callers that explicitly opt in own a response stream.
-      if (!pending.streamResponse) {
-        const body = await fsp.readFile(filePath);
-        await fsp.unlink(filePath);
-        return this.resolveRequest(requestId, nodeId, { requestId, ...metadata, body, bodySize: size });
-      }
+      const filePath = stagedPath;
       const stream = fs.createReadStream(filePath);
       const remove = () => {
         stream.removeListener("close", remove);
@@ -144,7 +158,7 @@ export class FileTunnelService {
       return resolved;
     } catch (error) {
       source.destroy(error instanceof Error ? error : undefined);
-      await fsp.unlink(filePath).catch(() => {});
+      if (stagedPath) await fsp.unlink(stagedPath).catch(() => {});
       this.rejectRequest(requestId, nodeId, error instanceof Error ? error : new Error("Failed to stage response"));
       return false;
     }
@@ -242,7 +256,7 @@ export class FileTunnelService {
     } else if (uploadData) {
       const stagedPath = path.join(this.tempDir, `${requestId}.bin`);
       try {
-        await fsp.writeFile(stagedPath, uploadData);
+        await fsp.writeFile(stagedPath, uploadData, { mode: 0o600 });
         this.uploads.set(requestId, {
           filePath: stagedPath,
           size: uploadData.length,

@@ -279,8 +279,6 @@ export async function roleRoutes(app: FastifyInstance) {
     '/',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user.userId;
-
       if (!checkPermission(request, 'role.read', reply)) return;
 
       const roles = await prisma.role.findMany({
@@ -314,8 +312,6 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user.userId;
-
       if (!checkPermission(request, 'role.read', reply)) return;
 
       const { roleId } = request.params as { roleId: string };
@@ -1133,8 +1129,6 @@ export async function roleRoutes(app: FastifyInstance) {
     '/users/:userId/roles',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = request.user.userId;
-
       if (!checkPermission(request, 'user.read', reply)) return;
 
       const { userId } = request.params as { userId: string };
@@ -1205,8 +1199,6 @@ export async function roleRoutes(app: FastifyInstance) {
     '/presets',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user.userId;
-
       if (!checkPermission(request, 'role.read', reply)) return;
 
       reply.send({
@@ -1224,8 +1216,6 @@ export async function roleRoutes(app: FastifyInstance) {
     '/:roleId/nodes',
     { onRequest: [authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
-      const currentUserId = request.user.userId;
-
       if (!checkPermission(request, 'node.read', reply)) return;
 
       const { roleId } = request.params as { roleId: string };

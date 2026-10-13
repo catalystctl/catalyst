@@ -95,7 +95,7 @@ import {
 	resolveLocalAgentBinary,
 	resolveLocalAgentChecksum,
 } from "./lib/agent-binary";
-import { initializeMetrics, registerMetricsEndpoint, getMetrics } from "./services/metrics-exporter";
+import { initializeMetrics, registerMetricsEndpoint } from "./services/metrics-exporter";
 import { requestIdMiddleware } from "./middleware/request-id";
 
 // Resolve API_KEY_SECRET early (falls back to BETTER_AUTH_SECRET). Fail fast if

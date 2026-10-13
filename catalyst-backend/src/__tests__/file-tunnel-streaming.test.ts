@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { Readable } from "node:stream";
 import { promises as fs } from "node:fs";
-import path from "node:path";
 import { FileTunnelService } from "../services/file-tunnel";
 
 vi.mock("../services/mailer", () => ({
@@ -27,8 +26,12 @@ async function queue(service: FileTunnelService, nodeId = "node-1", streamRespon
   return { response, requestId: requests[0].requestId };
 }
 
-async function exists(filePath: string) {
-  return fs.access(filePath).then(() => true).catch(() => false);
+async function waitForEmpty(dir: string) {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if ((await fs.readdir(dir)).length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  expect(await fs.readdir(dir)).toEqual([]);
 }
 
 describe("FileTunnelService staged response streams", () => {
@@ -49,7 +52,7 @@ describe("FileTunnelService staged response streams", () => {
     const result = await response;
     expect(result.body).toEqual(bytes);
     expect(result.stream).toBeUndefined();
-    expect(await exists(path.join("/tmp", "catalyst-uploads", `response-${request.requestId}.bin`))).toBe(false);
+    await waitForEmpty(service.getTempDir());
   });
 
   it("stages a response without retaining bytes, returns a readable stream, and removes it on close", async () => {
@@ -74,13 +77,11 @@ describe("FileTunnelService staged response streams", () => {
     })).toBe("hello stream");
 
     await new Promise<void>((resolve) => result.stream!.once("close", resolve));
-    const stagedPath = path.join("/tmp", "catalyst-uploads", `response-${requestId}.bin`);
-    expect(await exists(stagedPath)).toBe(false);
+    await waitForEmpty(service.getTempDir());
   });
 
   it("destroys the source, cleans the partial file, and rejects when the size limit is exceeded", async () => {
     service = new FileTunnelService(logger);
-    await fs.mkdir(path.join("/tmp", "catalyst-uploads"), { recursive: true });
     const { response, requestId } = await queue(service);
     const source = Readable.from([Buffer.alloc(4), Buffer.alloc(4)]);
     const destroy = vi.spyOn(source, "destroy");
@@ -88,7 +89,7 @@ describe("FileTunnelService staged response streams", () => {
     expect(await service.stageResponseStream(requestId, "node-1", source, 4, { success: true })).toBe(false);
     await expect(response).rejects.toThrow("exceeds maximum size");
     expect(destroy).toHaveBeenCalled();
-    expect(await exists(path.join("/tmp", "catalyst-uploads", `response-${requestId}.bin`))).toBe(false);
+    await waitForEmpty(service.getTempDir());
     expect(service.getPendingCount("node-1")).toBe(0);
   });
 

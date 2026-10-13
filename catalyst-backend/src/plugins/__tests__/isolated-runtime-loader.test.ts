@@ -49,6 +49,7 @@ function loader(pluginsDir: string, prisma = dependencies()) {
 }
 
 afterEach(async () => {
+  delete process.env.CATALYST_TEST_MARKER;
   await Promise.all(dirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -59,11 +60,12 @@ describe('PluginLoader runtime isolation', () => {
     const pluginDir = path.join(root, 'test-plugin');
     await mkdir(pluginDir);
     const marker = path.join(root, 'imported');
+    process.env.CATALYST_TEST_MARKER = marker;
     await writeFile(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest({
       runtime: 'isolated',
       backend: { entry: 'backend.mjs' },
     })));
-    await writeFile(path.join(pluginDir, 'backend.mjs'), `await import('node:fs/promises').then(({ writeFile }) => writeFile(${JSON.stringify(marker)}, 'imported'))`);
+    await writeFile(path.join(pluginDir, 'backend.mjs'), "await import('node:fs/promises').then(({ writeFile }) => writeFile(process.env.CATALYST_TEST_MARKER, 'imported'))");
 
     const instance = loader(root);
     await instance.loadPlugin(pluginDir);
@@ -79,11 +81,12 @@ describe('PluginLoader runtime isolation', () => {
     const pluginDir = path.join(root, 'test-plugin');
     await mkdir(pluginDir);
     const marker = path.join(root, 'loaded');
+    process.env.CATALYST_TEST_MARKER = marker;
     await writeFile(path.join(pluginDir, 'plugin.json'), JSON.stringify(manifest({
       runtime: 'legacy',
       backend: { entry: 'backend.mjs' },
     })));
-    await writeFile(path.join(pluginDir, 'backend.mjs'), `export default { onLoad: async () => { await import('node:fs/promises').then(({ writeFile }) => writeFile(${JSON.stringify(marker)}, 'loaded')); } }`);
+    await writeFile(path.join(pluginDir, 'backend.mjs'), "export default { onLoad: async () => { await import('node:fs/promises').then(({ writeFile }) => writeFile(process.env.CATALYST_TEST_MARKER, 'loaded')); } }");
 
     const instance = loader(root);
     await instance.loadPlugin(pluginDir);
