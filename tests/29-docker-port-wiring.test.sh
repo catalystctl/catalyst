@@ -187,6 +187,10 @@ else
 fi
 expect "$FE_DOCKERFILE" 'COPY catalyst-frontend/docker-entrypoint.d/16-backend-host.envsh /docker-entrypoint.d/16-backend-host.envsh' \
     "frontend image ships the backend-host entrypoint script"
+# The image must not pick a resolver address of its own: 127.0.0.11 only answers
+# on a Docker user-defined network (issue #294).
+expect_absent "$FE_ENVSH" '127\.0\.0\.11' \
+    "backend-host entrypoint ships no hardcoded Docker DNS resolver"
 if command -v shellcheck >/dev/null 2>&1; then
     if shellcheck -S warning "$FE_ENVSH" >/dev/null 2>&1; then
         pass "shellcheck clean (backend-host entrypoint)"
@@ -230,10 +234,10 @@ STUB
     fi
 
     got="$(run_envsh "$tmp/resolv.docker" "" NGINX_LOCAL_RESOLVERS)"
-    if [ "$got" = "127.0.0.11" ]; then
-        pass "entrypoint falls back to Docker DNS when resolv.conf has no nameserver"
+    if [ -z "$got" ]; then
+        pass "entrypoint invents no resolver when resolv.conf has no nameserver"
     else
-        fail "entrypoint resolver fallback (got '${got:-<empty>}')"
+        fail "entrypoint invented a resolver (got '${got:-<empty>}')"
     fi
     rm -rf "$tmp"
 fi

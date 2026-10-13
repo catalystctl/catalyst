@@ -14,13 +14,11 @@
 # 15-local-resolvers.envsh, enabled by NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1 in the
 # Dockerfile. RESOLV_CONF only exists so the test suite can point the search
 # lookup at a fixture.
-
-# Keep the `resolver` directive valid even when /etc/resolv.conf lists no
-# nameserver at all; nginx refuses to start with an empty resolver.
-if [ -z "${NGINX_LOCAL_RESOLVERS:-}" ]; then
-    NGINX_LOCAL_RESOLVERS="127.0.0.11"
-fi
-export NGINX_LOCAL_RESOLVERS
+#
+# No resolver is invented when resolv.conf has none: a hardcoded address only
+# answers on the network that owns it (Docker's embedded DNS, for instance, only
+# answers on a user-defined network), which is what broke proxying elsewhere
+# (issue #294). Set NGINX_LOCAL_RESOLVERS explicitly if the environment needs one.
 
 host="${BACKEND_HOST:-backend}"
 resolv_conf="${RESOLV_CONF:-/etc/resolv.conf}"
