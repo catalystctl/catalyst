@@ -26,6 +26,7 @@ mod sftp_server;
 mod shell_utils;
 mod storage_manager;
 mod system_setup;
+mod systemd_compat;
 mod updater;
 mod websocket_handler;
 
@@ -506,6 +507,12 @@ async fn main() -> AgentResult<()> {
 
     info!("Catalyst Agent v{} starting", env!("CARGO_PKG_VERSION"));
     info!("Configuration loaded: {:?}", config);
+
+    // Fedora 44 + systemd: RestrictSUIDSGID denies openat2(2) with ENOSYS,
+    // which makes GNU tar archive restores fail. Repair a unit that was
+    // upgraded in place before doing anything else; this may restart the
+    // service once (see systemd_compat).
+    let _ = systemd_compat::migrate_and_maybe_restart().await;
 
     // Run system initialization
     info!("Running system setup and dependency check...");

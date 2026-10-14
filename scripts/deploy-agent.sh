@@ -894,7 +894,24 @@ ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictSUIDSGID=true
+# RestrictSUIDSGID=yes is deliberately NOT used. systemd implements it with a
+# seccomp rule that denies openat2(2) outright (classic seccomp cannot inspect
+# the mode field inside struct open_how) and that denial returns ENOSYS.
+# Fedora 44's GNU tar backports gnulib's openat2 support, so every archive
+# operation the agent shells out to (backup restore, decompress) aborts with
+# "Function not implemented" and restores never complete
+# (https://github.com/systemd/systemd/issues/43314, closed upstream as "fix in
+# GNU tar" — there is no systemd-side release to wait for).
+# Compensating controls keep the same protection in the archive path: the agent
+# refuses archive-supplied ownership and permission bits
+# (--no-same-owner --no-same-permissions), rejects symlink/device/absolute
+# members before extraction, and runs game servers as unprivileged container
+# users — so it cannot plant a setuid-root binary from an archive. The residual
+# tradeoff is that a fully compromised agent process could create SUID/SGID
+# files itself. Every other sandbox directive below stays enabled. Spelled out
+# as an explicit "no" so the decision is visible and a node whose earlier unit
+# said "yes" is corrected on re-deploy.
+RestrictSUIDSGID=no
 CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_FOWNER CAP_FSETID CAP_KILL CAP_SETGID CAP_SETUID CAP_SETPCAP CAP_NET_BIND_SERVICE CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN CAP_SYS_CHROOT CAP_SYS_PTRACE CAP_MKNOD
 SystemCallFilter=@system-service @mount
 SystemCallArchitectures=native
@@ -920,17 +937,34 @@ ReadWritePaths=${rw_paths}
 [Install]
 WantedBy=multi-user.target
 EOF
-    # Self-heal a stale node-tuning override. Curl-pipe installs skip
-    # node-tuning.sh (dirname $0 is "bash"), so limits.conf can still carry
-    # the pre-@mount filter after a reinstall. Patch it in place so the
-    # effective unit allows loop mounts via nsenter (fsopen/fsmount).
-    override_file="/etc/systemd/system/catalyst-agent.service.d/limits.conf"
-    if [ -f "${override_file}" ]; then
-        if grep -q "SystemCallFilter=.*@system-service" "${override_file}" \
-            && ! grep -q "SystemCallFilter=.*@mount" "${override_file}"; then
-            log "Patching stale ${override_file} to allow @mount ..."
-            sed -i 's/^SystemCallFilter=.*/SystemCallFilter=@system-service @mount/' "${override_file}"
-        fi
+    # --- Self-heal stale systemd drop-ins ------------------------------------
+    # Drop-ins override the main unit, so a stale override silently wins over
+    # everything written above. Two known cases:
+    #
+    #  1. limits.conf written by an older node-tuning.sh lacks @mount, so loop
+    #     mounts via nsenter die with SIGSYS. Curl-pipe installs skip
+    #     node-tuning.sh (dirname $0 is "bash"), so the file survives the
+    #     reinstall that rewrote the main unit.
+    #  2. Any drop-in that sets RestrictSUIDSGID=yes re-breaks archive handling
+    #     on Fedora 44 (openat2 -> ENOSYS, systemd/systemd#43314) even though
+    #     the main unit above now says "no".
+    #
+    # Patch both in place. start_services_systemd() runs daemon-reload after.
+    local override_dir="/etc/systemd/system/catalyst-agent.service.d"
+    local override_file
+    if [ -d "${override_dir}" ]; then
+        for override_file in "${override_dir}"/*.conf; do
+            [ -e "${override_file}" ] || continue
+            if grep -qE '^[[:space:]]*SystemCallFilter=.*@system-service' "${override_file}" \
+                && ! grep -qE '^[[:space:]]*SystemCallFilter=.*@mount' "${override_file}"; then
+                log "Patching stale ${override_file} to allow @mount ..."
+                sed -i 's|^[[:space:]]*SystemCallFilter=.*|SystemCallFilter=@system-service @mount|' "${override_file}"
+            fi
+            if grep -qiE '^[[:space:]]*RestrictSUIDSGID=[[:space:]]*(yes|true|1|on)' "${override_file}"; then
+                log "Disabling RestrictSUIDSGID in ${override_file} (Fedora 44 openat2 compatibility)"
+                sed -i 's|^[[:space:]]*RestrictSUIDSGID=.*|RestrictSUIDSGID=no|' "${override_file}"
+            fi
+        done
     fi
 }
 

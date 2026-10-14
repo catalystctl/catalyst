@@ -268,3 +268,92 @@ describe("SEC-M contracts (static)", () => {
     expect(keySrc).toContain("closeAgentConnections");
   });
 });
+
+/**
+ * Fedora 44 / systemd RestrictSUIDSGID regression (systemd/systemd#43314).
+ *
+ * systemd implements `RestrictSUIDSGID=yes` with a seccomp rule that denies
+ * openat2(2) and returns ENOSYS. Fedora 44's GNU tar backports gnulib's
+ * openat2 support, so every archive restore the agent ran died with "Function
+ * not implemented". The shipped unit must disable only that directive, keep
+ * every other sandbox rule, repair stale drop-ins, and the extractor must
+ * auto-detect compression so uncompressed backups restore.
+ */
+describe("Fedora 44 openat2 / RestrictSUIDSGID compatibility", () => {
+  async function readRepo(path: string) {
+    const fs = await import("fs");
+    return fs.promises.readFile(
+      new URL(`../../../${path}`, import.meta.url),
+      "utf8",
+    );
+  }
+
+  it("agent unit disables RestrictSUIDSGID and cites the issue", async () => {
+    const unit = await readRepo("scripts/deploy-agent.sh");
+    expect(unit).not.toMatch(/^\s*RestrictSUIDSGID=(yes|true|1|on)\s*$/m);
+    expect(unit).toMatch(/^\s*RestrictSUIDSGID=no\s*$/m);
+    expect(unit).toContain("systemd/systemd/issues/43314");
+    expect(unit).toContain("openat2");
+  });
+
+  it("keeps the rest of the systemd sandbox intact", async () => {
+    const unit = await readRepo("scripts/deploy-agent.sh");
+    const directives = [
+      "NoNewPrivileges=true",
+      "ProtectSystem=full",
+      "ProtectHome=true",
+      "ProtectKernelTunables=true",
+      "ProtectKernelModules=true",
+      "ProtectControlGroups=true",
+      "SystemCallFilter=@system-service @mount",
+      "SystemCallArchitectures=native",
+      "RestrictNamespaces=mnt net uts ipc",
+      "CapabilityBoundingSet=CAP_CHOWN",
+    ];
+    for (const directive of directives) {
+      expect(unit, `unit is missing ${directive}`).toContain(directive);
+    }
+  });
+
+  it("neutralizes drop-ins that re-enable RestrictSUIDSGID", async () => {
+    const unit = await readRepo("scripts/deploy-agent.sh");
+    // Drop-ins override the main unit, so the self-heal has to scan them.
+    expect(unit).toContain("/etc/systemd/system/catalyst-agent.service.d");
+    expect(unit).toContain("(yes|true|1|on)");
+    expect(unit).toContain("Disabling RestrictSUIDSGID");
+  });
+
+  it("node-tuning drop-in and the shipped copy disable it too", async () => {
+    for (const path of [
+      "scripts/node-tuning.sh",
+      "systemd/catalyst-agent.service.d/limits.conf",
+    ]) {
+      const src = await readRepo(path);
+      expect(src, `${path} must disable RestrictSUIDSGID`).toMatch(
+        /^\s*RestrictSUIDSGID=no\s*$/m,
+      );
+      expect(src, `${path} must not enable RestrictSUIDSGID`).not.toMatch(
+        /^\s*RestrictSUIDSGID=(yes|true|1|on)\s*$/m,
+      );
+    }
+  });
+
+  it("agent repairs an upgraded-in-place unit at startup", async () => {
+    const compat = await readRepo("catalyst-agent/src/systemd_compat.rs");
+    expect(compat).toContain("zz-catalyst-openat2-compat.conf");
+    expect(compat).toContain("SYS_openat2");
+    // /etc is read-only under ProtectSystem=full, so the drop-in is installed
+    // through PID 1's mount namespace.
+    expect(compat).toContain("run_in_host_mount_ns");
+    const main = await readRepo("catalyst-agent/src/main.rs");
+    expect(main).toContain("systemd_compat::migrate_and_maybe_restart");
+  });
+
+  it("archive extraction auto-detects compression (plain .tar restores)", async () => {
+    const fm = await readRepo("catalyst-agent/src/file_manager.rs");
+    expect(fm).toContain('"-xf"');
+    expect(fm).toContain('.args(["-tvf"');
+    // Forcing gzip rejected a prevalidated plain-tar backup at extraction.
+    expect(fm).not.toContain('"-xzf"');
+  });
+});

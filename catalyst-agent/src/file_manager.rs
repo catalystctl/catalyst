@@ -573,12 +573,18 @@ async fn prevalidate_zip_archive(archive: &Path, compressed_len: u64) -> AgentRe
     enforce_archive_caps(count, total, compressed_len)
 }
 
-/// Pre-list a tar.gz archive and reject dangerous members before extraction.
+/// Pre-list a tar archive and reject dangerous members before extraction.
 /// Rejects absolute paths, `..`, symlinks/hardlinks, char/block/fifo/device
 /// entries; enforces count / size / ratio caps.
+///
+/// Uses `-tvf`, not `-tzvf`: archives may be stored uncompressed (`.tar`) or
+/// with a non-gzip filter (`.tar.xz`), and GNU tar auto-detects the filter on a
+/// seekable archive, whereas `-z` forces gzip and fails with "not in gzip
+/// format" on anything else. The extractor must use the same auto-detecting
+/// flag so a prevalidated archive is never rejected at extraction time.
 async fn prevalidate_tar_archive(archive: &Path, compressed_len: u64) -> AgentResult<()> {
     let out = tokio::process::Command::new("tar")
-        .args(["-tzvf", &archive.to_string_lossy()])
+        .args(["-tvf", &archive.to_string_lossy()])
         .output()
         .await
         .map_err(|e| AgentError::FileSystemError(format!("tar -t failed: {}", e)))?;
@@ -1550,8 +1556,14 @@ impl FileManager {
                 )));
             }
         } else {
+            // `-xf`, not `-xzf`: GNU tar auto-detects the compression filter
+            // on a seekable archive, so uncompressed (`.tar`) and non-gzip
+            // (`.tar.xz`, `.tar.bz2`) archives extract too. This must match the
+            // `-tvf` prevalidation above and the backup restore path in
+            // websocket_handler/backup.rs — forcing `-z` here made a
+            // prevalidated uncompressed archive fail with "not in gzip format".
             let output = tokio::process::Command::new("tar")
-                .arg("-xzf")
+                .arg("-xf")
                 .arg(&archive_full)
                 .arg("-C")
                 .arg(&target_full)
@@ -1875,6 +1887,36 @@ mod tests {
         FileManager::new(dir)
     }
 
+    /// Build `srv/<name>` holding `hello.txt` and `sub/world.txt` with the
+    /// given tar creation flag (`-cf`, `-czf`, `-cJf`, ...). Returns false when
+    /// the host tar cannot produce that format.
+    fn build_tar(srv: &std::path::Path, name: &str, flag: &str) -> bool {
+        let work = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(work.path().join("sub")).unwrap();
+        std::fs::write(work.path().join("hello.txt"), b"hello").unwrap();
+        std::fs::write(work.path().join("sub/world.txt"), b"world").unwrap();
+        let archive = srv.join(name).to_string_lossy().to_string();
+        let dir = work.path().to_string_lossy().to_string();
+        std::process::Command::new("tar")
+            .args([flag, &archive, "-C", &dir, "."])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    fn assert_restored(srv: &std::path::Path, archive: &str) {
+        assert_eq!(
+            std::fs::read(srv.join("out/hello.txt")).unwrap(),
+            b"hello",
+            "{archive}: hello.txt must be restored"
+        );
+        assert_eq!(
+            std::fs::read(srv.join("out/sub/world.txt")).unwrap(),
+            b"world",
+            "{archive}: sub/world.txt must be restored"
+        );
+    }
+
     #[test]
     fn rejects_parent_dir_traversal() {
         let fm = make_fm();
@@ -2172,6 +2214,51 @@ mod tests {
                 || err.to_string().to_lowercase().contains("violation"),
             "{err}"
         );
+    }
+
+    #[tokio::test]
+    async fn gzip_tar_archive_restores() {
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        assert!(build_tar(&srv, "backup.tar.gz", "-czf"), "tar -czf failed");
+        // decompress_to extracts into an existing target (the panel creates it).
+        std::fs::create_dir_all(srv.join("out")).unwrap();
+        fm.decompress_to("srv1", "backup.tar.gz", "out")
+            .await
+            .unwrap();
+        assert_restored(&srv, "backup.tar.gz");
+    }
+
+    #[tokio::test]
+    async fn uncompressed_tar_archive_restores() {
+        // Regression: prevalidation used `-tzvf` and extraction `-xzf`, so a
+        // prevalidated plain `.tar` backup was rejected at extraction with
+        // "not in gzip format" even though `tar -tvf` had accepted it.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        assert!(build_tar(&srv, "backup.tar", "-cf"), "tar -cf failed");
+        std::fs::create_dir_all(srv.join("out")).unwrap();
+        fm.decompress_to("srv1", "backup.tar", "out").await.unwrap();
+        assert_restored(&srv, "backup.tar");
+    }
+
+    #[tokio::test]
+    async fn xz_tar_archive_restores() {
+        // A non-gzip filter must work too: the prevalidator auto-detects, so
+        // the extractor has to as well.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        if !build_tar(&srv, "backup.tar.xz", "-cJf") {
+            return; // host tar has no xz filter — skip
+        }
+        std::fs::create_dir_all(srv.join("out")).unwrap();
+        fm.decompress_to("srv1", "backup.tar.xz", "out")
+            .await
+            .unwrap();
+        assert_restored(&srv, "backup.tar.xz");
     }
 
     #[tokio::test]

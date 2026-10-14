@@ -134,6 +134,12 @@ IOWeight=100
 ProtectHome=true
 RestrictNamespaces=mnt net uts ipc
 SystemCallFilter=@system-service @mount
+# RestrictSUIDSGID must stay disabled: enabling it makes systemd deny
+# openat2(2) with ENOSYS, and Fedora 44's GNU tar needs openat2, so backup
+# restores abort with "Function not implemented" (systemd/systemd#43314).
+# The main unit sets this too; the drop-in repeats it so a stale drop-in from
+# an earlier tuning run cannot re-enable it.
+RestrictSUIDSGID=no
 EOF
 
 systemctl daemon-reload
