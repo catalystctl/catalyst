@@ -84,11 +84,14 @@ export default function ServerTasksTab({
  {task.action}
  </span>
  {task.action === 'backup' &&
- (task.payload?.stopBeforeBackup === true || task.payload?.startAfterBackup === true) ? (
+ (task.payload?.stopBeforeBackup === true ||
+ task.payload?.startAfterBackup === true ||
+ task.payload?.compressed === false) ? (
  <span className="type-overline rounded-sm bg-surface-2/60 px-2 py-0.5 text-muted-foreground">
  {[
  task.payload?.stopBeforeBackup === true ? t('tasks.backup.badgeStop') : null,
  task.payload?.startAfterBackup === true ? t('tasks.backup.badgeStart') : null,
+ task.payload?.compressed === false ? t('tasks.backup.badgeUncompressed') : null,
  ]
  .filter(Boolean)
  .join(' + ')}

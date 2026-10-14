@@ -915,6 +915,9 @@
     "backup": {
       "badgeStart": "démarre après",
       "badgeStop": "arrêt d'abord",
+      "badgeUncompressed": "non compressé",
+      "compress": "Compresser la sauvegarde (gzip)",
+      "compressHint": "Désactivé stocke une archive .tar brute, non compressée.",
       "label": "Options de sauvegarde",
       "startAfter": "Démarrer le serveur après la sauvegarde",
       "startAfterHint": "Redémarre le serveur une fois la sauvegarde confirmée comme terminée.",

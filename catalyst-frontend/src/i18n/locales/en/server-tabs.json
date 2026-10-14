@@ -878,6 +878,9 @@
     "backup": {
       "badgeStart": "starts after",
       "badgeStop": "stops first",
+      "badgeUncompressed": "uncompressed",
+      "compress": "Compress backup (gzip)",
+      "compressHint": "Off stores a plain, uncompressed .tar archive.",
       "label": "Backup options",
       "startAfter": "Start server after backup",
       "startAfterHint": "Starts the server again once the backup is confirmed finished.",

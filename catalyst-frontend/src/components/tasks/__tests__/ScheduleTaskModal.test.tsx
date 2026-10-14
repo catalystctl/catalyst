@@ -201,6 +201,50 @@ describe('ScheduleTaskModal', () => {
       expect.objectContaining({ payload: { stopBeforeBackup: true, startAfterBackup: true } }),
     );
   });
+  it('defaults to a compressed backup and sends no flag for it', () => {
+    create.mockResolvedValue({});
+    openCreate();
+
+    fireEvent.change(screen.getByLabelText('tasks.name'), { target: { value: 'Nightly backup' } });
+    fireEvent.change(screen.getByLabelText('tasks.action'), { target: { value: 'backup' } });
+    expect(screen.getByLabelText('tasks.backup.compress')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.create' }));
+
+    expect(create).toHaveBeenCalledWith(
+      'server-1',
+      expect.objectContaining({ action: 'backup', payload: {} }),
+    );
+  });
+
+  it('stores compressed: false when the backup is switched to uncompressed', () => {
+    create.mockResolvedValue({});
+    openCreate();
+
+    fireEvent.change(screen.getByLabelText('tasks.name'), { target: { value: 'Nightly backup' } });
+    fireEvent.change(screen.getByLabelText('tasks.action'), { target: { value: 'backup' } });
+    fireEvent.click(screen.getByLabelText('tasks.backup.compress'));
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.create' }));
+
+    expect(create).toHaveBeenCalledWith(
+      'server-1',
+      expect.objectContaining({ action: 'backup', payload: { compressed: false } }),
+    );
+  });
+
+  it('reopens an uncompressed backup task with compression off', () => {
+    update.mockResolvedValue({});
+    openEdit({ ...existingTask, action: 'backup', payload: { compressed: false } });
+
+    expect(screen.getByLabelText('tasks.backup.compress')).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole('button', { name: 'common:actions.save' }));
+
+    expect(update).toHaveBeenCalledWith(
+      'server-1',
+      'task-1',
+      expect.objectContaining({ payload: { compressed: false } }),
+    );
+  });
   it('blocks saving while the schedule is empty', () => {
     openCreate();
     fireEvent.click(screen.getByLabelText('tasks.advanced'));

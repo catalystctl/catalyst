@@ -841,6 +841,9 @@
     "backup": {
       "badgeStart": "备份后启动",
       "badgeStop": "先停止",
+      "badgeUncompressed": "未压缩",
+      "compress": "压缩备份（gzip）",
+      "compressHint": "关闭后存储未压缩的 .tar 归档文件。",
       "label": "备份选项",
       "startAfter": "备份完成后启动服务器",
       "startAfterHint": "备份确认完成后，服务器将重新启动。",

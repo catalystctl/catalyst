@@ -351,6 +351,9 @@ taskScheduler.setTaskExecutor({
 		if (action === "backup") {
 			const stopBeforeBackup = task.payload?.stopBeforeBackup === true;
 			const startAfterBackup = task.payload?.startAfterBackup === true;
+			// Compression is opt-out (matches the manual create-backup default):
+			// only an explicit false stores a plain, uncompressed .tar.
+			const compressed = task.payload?.compressed !== false;
 
 			if (stopBeforeBackup) {
 				// A backup can only be taken from STOPPED: gracefully stop a running
@@ -395,6 +398,7 @@ taskScheduler.setTaskExecutor({
 				logger,
 				server,
 				name: typeof task.payload?.name === "string" ? task.payload.name : undefined,
+				compressed,
 				startAfterBackup,
 				sendToAgent: (nodeId, message) => wsGateway.sendToAgent(nodeId, message),
 				onStarted: async ({ serverId, backupId, backupName }) => {
@@ -421,7 +425,13 @@ taskScheduler.setTaskExecutor({
 				throw new Error(result.error);
 			}
 			logger.info(
-				{ taskId: task.id, serverId: server.id, backupId: result.backupId },
+				{
+					taskId: task.id,
+					serverId: server.id,
+					backupId: result.backupId,
+					compressed,
+					startAfterBackup,
+				},
 				"Scheduled backup started",
 			);
 			return;

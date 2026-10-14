@@ -84,9 +84,11 @@ export default function ScheduleTaskModal({
   const [action, setAction] = useState<Task['action']>('restart');
   const [command, setCommand] = useState('');
   // Backup-only options: gracefully stop a running server before the archive,
-  // and/or start it again once the backup is confirmed finished.
+  // start it again once the backup is confirmed finished, and whether the
+  // archive is gzipped (the default) or a plain .tar.
   const [stopBeforeBackup, setStopBeforeBackup] = useState(false);
   const [startAfterBackup, setStartAfterBackup] = useState(false);
+  const [compressBackup, setCompressBackup] = useState(true);
   const [spec, setSpec] = useState<ScheduleSpec>(DEFAULT_SPEC);
   const [advanced, setAdvanced] = useState(false);
 
@@ -114,6 +116,8 @@ export default function ScheduleTaskModal({
       setCommand(typeof task.payload?.command === 'string' ? task.payload.command : '');
       setStopBeforeBackup(task.payload?.stopBeforeBackup === true);
       setStartAfterBackup(task.payload?.startAfterBackup === true);
+      // Compression is opt-out: an absent flag keeps the gzip default.
+      setCompressBackup(task.payload?.compressed !== false);
       setSpec(seeded.spec);
       setAdvanced(seeded.advanced);
       return;
@@ -124,6 +128,7 @@ export default function ScheduleTaskModal({
     setCommand('');
     setStopBeforeBackup(false);
     setStartAfterBackup(false);
+    setCompressBackup(true);
     setSpec({ ...DEFAULT_SPEC });
     setAdvanced(false);
   };
@@ -151,6 +156,8 @@ export default function ScheduleTaskModal({
       if (action === 'backup') {
         if (stopBeforeBackup) payload.stopBeforeBackup = true;
         if (startAfterBackup) payload.startAfterBackup = true;
+        // Compression is the default; store only the opt-out.
+        if (!compressBackup) payload.compressed = false;
       }
       const trimmedDescription = description.trim();
       if (task) {
@@ -396,6 +403,25 @@ export default function ScheduleTaskModal({
                     aria-label={t('tasks.backup.startAfter')}
                   />
                 </div>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <Label
+                      htmlFor={`${prefix}-task-backup-compress`}
+                      className="text-mini font-semibold"
+                    >
+                      {t('tasks.backup.compress')}
+                    </Label>
+                    <p className="mt-0.5 text-micro text-muted-foreground">
+                      {t('tasks.backup.compressHint')}
+                    </p>
+                  </div>
+                  <Switch
+                    id={`${prefix}-task-backup-compress`}
+                    checked={compressBackup}
+                    onCheckedChange={setCompressBackup}
+                    aria-label={t('tasks.backup.compress')}
+                  />
+                </div>
               </div>
             ) : null}
 
@@ -589,12 +615,14 @@ export default function ScheduleTaskModal({
                       label={t('tasks.action')}
                       value={actionOptions(t).find((option) => option.value === action)?.label}
                     />
-                    {action === 'backup' && (stopBeforeBackup || startAfterBackup) ? (
+                    {action === 'backup' &&
+                    (stopBeforeBackup || startAfterBackup || !compressBackup) ? (
                       <SummaryRow
                         label={t('tasks.backup.label')}
                         value={[
                           stopBeforeBackup && t('tasks.backup.badgeStop'),
                           startAfterBackup && t('tasks.backup.badgeStart'),
+                          !compressBackup && t('tasks.backup.badgeUncompressed'),
                         ]
                           .filter(Boolean)
                           .join(' + ')}
