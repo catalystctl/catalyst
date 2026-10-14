@@ -47,6 +47,7 @@
       "action": "恢复",
       "confirmPrefix": "将 ",
       "confirmSuffix": " 恢复到此服务器？恢复前必须先停止服务器，当前文件将被覆盖。",
+      "failed": "备份恢复失败",
       "success": "已开始恢复备份",
       "title": "恢复备份"
     },

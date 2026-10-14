@@ -187,6 +187,82 @@ describe("agent message trust boundaries", () => {
     gw.destroy();
   });
 
+  it("cross-node backup_restore_failed cannot revert another node's server", async () => {
+    const routed: any[] = [];
+    let serverUpdated = 0;
+    const gw: any = new WebSocketGateway(
+      {
+        ...prismaStub,
+        server: {
+          findUnique: async () => ({ id: "s1", nodeId: "owner-node" }),
+          findMany: async () => [],
+          updateMany: async () => {
+            serverUpdated += 1;
+            return { count: 1 };
+          },
+        },
+      },
+      loggerStub,
+    );
+    (gw as any).routeToClients = async (serverId: string, msg: any) => {
+      routed.push({ serverId, msg });
+    };
+    const socket = makeFakeSocket();
+    seedAgent(gw, "attacker-node", socket);
+
+    await gw.handleAgentMessage(
+      "attacker-node",
+      socket,
+      JSON.stringify({ type: "backup_restore_failed", serverId: "s1", error: "boom" }),
+      false,
+    );
+
+    expect(serverUpdated).toBe(0);
+    expect(routed.length).toBe(0);
+    gw.destroy();
+  });
+
+  it("backup_restore_failed from the owning node reverts RESTORING to STOPPED", async () => {
+    const routed: any[] = [];
+    const gw: any = new WebSocketGateway(
+      {
+        ...prismaStub,
+        server: {
+          findUnique: async () => ({ id: "s1", nodeId: "owner-node" }),
+          findMany: async () => [],
+          updateMany: async () => ({ count: 1 }),
+        },
+      },
+      loggerStub,
+    );
+    (gw as any).routeToClients = async (serverId: string, msg: any) => {
+      routed.push({ serverId, msg });
+    };
+    const socket = makeFakeSocket();
+    seedAgent(gw, "owner-node", socket);
+
+    await gw.handleAgentMessage(
+      "owner-node",
+      socket,
+      JSON.stringify({
+        type: "backup_restore_failed",
+        serverId: "s1",
+        backupId: "b1",
+        error: "Backup contains link escaping the server directory",
+      }),
+      false,
+    );
+
+    expect(routed.map((r) => r.msg.type)).toEqual([
+      "server_state_update",
+      "backup_restore_failed",
+    ]);
+    expect(routed[0].msg.state).toBe("stopped");
+    expect(routed[1].msg.backupId).toBe("b1");
+    expect(routed[1].msg.error).toContain("escaping");
+    gw.destroy();
+  });
+
   it("agent_error_report cannot flip another node's server to ERROR", async () => {
     let serverUpdated = 0;
     const gw: any = new WebSocketGateway(

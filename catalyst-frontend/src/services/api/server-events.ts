@@ -26,6 +26,9 @@ export type ServerEventType =
   | 'server_state_update'
   | 'backup_complete'
   | 'backup_restore_complete'
+  // A restore the agent refused (escaping link, no space, ...) — without it
+  // an SSE-only client shows the server as still restoring.
+  | 'backup_restore_failed'
   | 'backup_delete_complete'
   | 'backup_started'
   | 'backup_restore_started'
@@ -84,6 +87,7 @@ export const SERVER_EVENT_TYPES: ServerEventType[] = [
   'server_state_update',
   'backup_complete',
   'backup_restore_complete',
+  'backup_restore_failed',
   'backup_delete_complete',
   'backup_started',
   'backup_restore_started',

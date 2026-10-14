@@ -75,8 +75,112 @@ async fn create_decrypt_temp(target: &Path) -> AgentResult<(tokio::fs::File, Pat
     ))
 }
 
+/// Depth of a member's parent directory below the archive root, used to
+/// resolve a link target relative to the link's own directory.
+fn archive_dir_depth(member: &str) -> usize {
+    Path::new(member)
+        .parent()
+        .map(|parent| {
+            parent
+                .components()
+                .filter(|c| matches!(c, std::path::Component::Normal(_)))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// True when a link target keeps pointing inside the archive once resolved
+/// from the link's own directory (`dir_depth` levels below the root).
+///
+/// Server directories contain symlinks and hard links constantly — SteamCMD,
+/// Proton and plugin managers create them — so they have to restore. Only a
+/// target that can redirect a later extraction member outside the tree is
+/// unsafe:
+///
+///   * a relative target that never climbs above the archive root is internal;
+///   * the container mounts the server directory at `/data`, so an absolute
+///     target under it is internal too (`resolve_beneath` re-roots those, and
+///     the container resolves them to the server directory itself);
+///   * any other absolute target, or a relative one that escapes, is refused.
+fn link_target_stays_inside(dir_depth: usize, target: &str) -> bool {
+    if target.is_empty() {
+        return false;
+    }
+    if target.starts_with('/') {
+        if target == crate::file_manager::CONTAINER_DATA_ROOT {
+            return true;
+        }
+        // `/data/...` is the container's own mount root; anything else
+        // absolute, or a `/data` path that climbs back out, is not internal.
+        return match target.strip_prefix(&format!("{}/", crate::file_manager::CONTAINER_DATA_ROOT))
+        {
+            Some(rest) => normalize_relative_target(0, rest).is_some(),
+            None => false,
+        };
+    }
+    normalize_relative_target(dir_depth, target).is_some()
+}
+
+/// Walk a relative link target from `start_depth` (the link's own directory
+/// depth below the archive root), returning the resulting depth. `None` when
+/// it climbs above the archive root, i.e. escapes it.
+fn normalize_relative_target(start_depth: usize, target: &str) -> Option<usize> {
+    let mut depth = start_depth as isize;
+    for component in target.split('/') {
+        match component {
+            "" | "." => {}
+            ".." => {
+                depth -= 1;
+                if depth < 0 {
+                    return None;
+                }
+            }
+            _ => depth += 1,
+        }
+    }
+    Some(depth as usize)
+}
+
+/// The path a container-absolute link target points at, relative to the server
+/// directory. `None` for an absolute target outside the container root (or a
+/// relative one, which the caller resolves against the link's parent).
+fn container_relative_target(target: &Path) -> Option<PathBuf> {
+    let text = target.to_string_lossy();
+    if text == crate::file_manager::CONTAINER_DATA_ROOT {
+        return Some(PathBuf::new());
+    }
+    let rest = text.strip_prefix(&format!("{}/", crate::file_manager::CONTAINER_DATA_ROOT))?;
+    // `/data/../..` must not be re-rooted into an escaping path.
+    normalize_relative_target(0, rest)?;
+    Some(PathBuf::from(rest))
+}
+
+/// `tar -tv` always prints a link's target, so a listing without one is
+/// malformed: refuse it rather than assume it is safe.
+fn malformed_link_entry(line: &str) -> AgentError {
+    AgentError::SecurityViolation(format!("Backup contains malformed link entry: {}", line))
+}
+
+/// Event the panel uses to take a server out of RESTORING as soon as a restore
+/// fails. Without it the server waits out the stuck-state watchdog (15 minutes)
+/// and the operator never learns the restore was refused. `None` when the
+/// request carries no serverId to report against.
+fn restore_failure_event(msg: &Value, error: &str) -> Option<Value> {
+    let server_id = msg.get("serverId").and_then(|value| value.as_str())?;
+    let mut event = json!({
+        "type": "backup_restore_failed",
+        "serverId": server_id,
+        "error": error,
+    });
+    if let Some(backup_id) = msg.get("backupId").and_then(|value| value.as_str()) {
+        event["backupId"] = json!(backup_id);
+    }
+    Some(event)
+}
+
 /// Pre-list a backup tarball (buffered restore path): reject absolute paths,
-/// `..`, symlink/hardlink/device entries, and enforce count/size/ratio caps.
+/// `..`, link targets that escape the archive, and device/fifo/socket entries,
+/// then enforce count/size/ratio caps.
 ///
 /// Uses `-tvf`, not `-tzvf`: backups may be stored uncompressed (`.tar`) and
 /// GNU tar auto-detects gzip on read, whereas `-z` forces gzip and fails with
@@ -101,7 +205,9 @@ async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> Agen
         }
         let flag = line.chars().next().unwrap_or('-');
         match flag {
-            'l' | 'h' | 'c' | 'b' | 'p' | 's' => {
+            // Links are ordinary members here; their target is graded below.
+            'l' | 'h' => {}
+            'c' | 'b' | 'p' | 's' => {
                 return Err(AgentError::SecurityViolation(format!(
                     "Backup contains unsafe entry type '{}': {}",
                     flag, line
@@ -115,20 +221,32 @@ async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> Agen
                 )));
             }
         }
-        if line.contains(" -> ") {
-            return Err(AgentError::SecurityViolation(format!(
-                "Backup contains link entry: {}",
-                line
-            )));
-        }
         let parts: Vec<&str> = line.split_whitespace().collect();
         if parts.len() < 6 {
             continue;
         }
-        let name = parts[5..].join(" ");
+        // Symlinks print `name -> target`, hard links `name link to member`.
+        let raw_name = parts[5..].join(" ");
+        let (name, link_target) = match flag {
+            'l' => raw_name
+                .split_once(" -> ")
+                .ok_or_else(|| malformed_link_entry(line))?,
+            'h' => raw_name
+                .split_once(" link to ")
+                .ok_or_else(|| malformed_link_entry(line))?,
+            _ => (raw_name.as_str(), ""),
+        };
         let name = name.trim_end_matches('/');
         if name.is_empty() || name == "." {
             continue;
+        }
+        if !link_target.is_empty()
+            && !link_target_stays_inside(archive_dir_depth(name), link_target)
+        {
+            return Err(AgentError::SecurityViolation(format!(
+                "Backup contains link escaping the server directory: {}",
+                line
+            )));
         }
         let p = Path::new(name);
         if p.is_absolute()
@@ -173,7 +291,9 @@ async fn prevalidate_backup_tarball(archive: &Path, compressed_len: u64) -> Agen
 }
 
 /// Validate the extracted restore tree: every entry canonicalizes inside the
-/// base and no symlink (dangling or not) escapes it.
+/// base and no symlink (dangling or not) escapes it. Links into the
+/// container's own mount root (`/data/...`) count as inside — see
+/// [`container_relative_target`].
 async fn validate_restore_tree(dir: &Path, canonical_base: &Path) -> AgentResult<()> {
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
@@ -195,7 +315,15 @@ async fn validate_restore_tree(dir: &Path, canonical_base: &Path) -> AgentResult
                     .await
                     .map_err(|e| AgentError::FileSystemError(format!("Cannot read link: {}", e)))?;
                 let parent = path.parent().unwrap_or(&current);
-                let resolved = parent.join(&target);
+                // A link into the container's own mount root (`/data/...`) is
+                // internal: the container resolves it inside the server
+                // directory, and `resolve_beneath` re-roots it the same way on
+                // the host. Any other absolute target is graded as written, so
+                // it escapes the base and aborts the restore.
+                let resolved = match container_relative_target(&target) {
+                    Some(relative) => canonical_base.join(relative),
+                    None => parent.join(&target),
+                };
                 let dangerous = match tokio::fs::canonicalize(&resolved).await {
                     Ok(c) => !c.starts_with(canonical_base),
                     Err(_) => {
@@ -646,8 +774,8 @@ impl WebSocketHandler {
         }
         // TempGuard drops the decrypt temp on any early return below.
         // SEC-C-03: pre-list the tarball and reject absolute / `..` /
-        // symlink-hardlink-device entries + count/size/ratio caps BEFORE
-        // anything is written.
+        // escaping-link / device-fifo-socket entries + count/size/ratio caps
+        // BEFORE anything is written.
         prevalidate_backup_tarball(&actual_backup_file, backup_metadata.len()).await?;
 
         // SEC-H-13: refuse extraction when the archive cannot fit in free space.
@@ -771,6 +899,18 @@ impl WebSocketHandler {
         self.send_or_buffer_event(&event.to_string()).await?;
 
         Ok(())
+    }
+
+    /// Best-effort: tell the panel a restore failed so it can revert the server
+    /// out of RESTORING immediately (see [`restore_failure_event`]).
+    pub(crate) async fn report_restore_failure(&self, msg: &Value, error: &str) {
+        let event = match restore_failure_event(msg, error) {
+            Some(event) => event,
+            None => return,
+        };
+        if let Err(e) = self.send_or_buffer_event(&event.to_string()).await {
+            warn!("Failed to report restore failure to the panel: {}", e);
+        }
     }
 
     pub(crate) async fn check_restore_symlinks(
@@ -2357,5 +2497,408 @@ mod backup_compression_tests {
         prevalidate_backup_tarball(&archive, len)
             .await
             .expect("uncompressed archive must pass prevalidation");
+    }
+}
+
+/// End-to-end coverage for the buffered restore path
+/// (`handle_restore_backup`): pre-list -> free-space check -> extract ->
+/// validate -> swap. Uses a real `tar` archive so a format regression (the
+/// `-z`/auto-detect change) is caught here rather than on a customer node.
+#[cfg(test)]
+mod restore_flow_tests {
+    use super::*;
+    use crate::storage_manager::StorageManager;
+    use std::path::Path;
+
+    fn write_file(path: &Path, data: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, data).unwrap();
+    }
+
+    /// Build `backups/<uuid>/<name>` from `src` with the given tar flags.
+    fn make_backup(data_dir: &Path, uuid: &str, name: &str, src: &Path, flag: &str) -> PathBuf {
+        let backup_dir = data_dir.join("backups").join(uuid);
+        std::fs::create_dir_all(&backup_dir).unwrap();
+        let archive = backup_dir.join(name);
+        let status = std::process::Command::new("tar")
+            .arg(flag)
+            .arg(&archive)
+            .arg("-C")
+            .arg(src)
+            .arg(".")
+            .status()
+            .unwrap();
+        assert!(status.success(), "tar {flag} failed");
+        archive
+    }
+
+    /// The extraction + validation + swap half of `handle_restore_backup`,
+    /// with the same flags and ordering as production.
+    async fn restore_into(data_dir: &Path, server_dir: &Path, archive: &Path) {
+        let len = std::fs::metadata(archive).unwrap().len();
+        prevalidate_backup_tarball(archive, len).await.unwrap();
+        ensure_restore_fits(archive, server_dir).await.unwrap();
+
+        let tmp_dir = data_dir.join(format!(".restore-{:032x}.tmp", rand::random::<u128>()));
+        std::fs::create_dir(&tmp_dir).unwrap();
+        let out = std::process::Command::new("tar")
+            .arg("-xf")
+            .arg(archive)
+            .arg("-C")
+            .arg(&tmp_dir)
+            .arg("--no-same-owner")
+            .arg("--no-same-permissions")
+            .arg("--anchored")
+            .arg("--exclude=../*")
+            .arg("--exclude=/*")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "tar -xf failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let canonical_tmp = tmp_dir.canonicalize().unwrap();
+        validate_restore_tree(&tmp_dir, &canonical_tmp)
+            .await
+            .unwrap();
+
+        let storage = StorageManager::new(data_dir.to_path_buf());
+        storage
+            .replace_directory_contents(server_dir, &tmp_dir)
+            .await
+            .unwrap();
+    }
+
+    /// A compressed backup of a plain directory must restore over the live
+    /// server directory.
+    #[tokio::test]
+    async fn compressed_backup_restores_over_live_dir() {
+        let root = tempfile::tempdir().unwrap();
+        let data_dir = root.path().to_path_buf();
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        let server_dir = data_dir.join(uuid);
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        write_file(&server_dir.join("world/level.dat"), b"old");
+
+        let staging = data_dir.join("staging");
+        write_file(&staging.join("world/level.dat"), b"restored");
+        write_file(&staging.join("server.properties"), b"motd=hi");
+        let archive = make_backup(&data_dir, uuid, "nightly.tar.gz", &staging, "-czf");
+
+        restore_into(&data_dir, &server_dir, &archive).await;
+
+        assert!(
+            !server_dir.join("stale.txt").exists(),
+            "stale file survived"
+        );
+        assert_eq!(
+            std::fs::read_to_string(server_dir.join("world/level.dat")).unwrap(),
+            "restored"
+        );
+        assert_eq!(
+            std::fs::read_to_string(server_dir.join("server.properties")).unwrap(),
+            "motd=hi"
+        );
+    }
+
+    /// An uncompressed backup (the new `compressed=false` variant) must restore
+    /// through the same path: `tar` auto-detects the format on read.
+    #[tokio::test]
+    async fn uncompressed_backup_restores_over_live_dir() {
+        let root = tempfile::tempdir().unwrap();
+        let data_dir = root.path().to_path_buf();
+        let uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        let server_dir = data_dir.join(uuid);
+        write_file(&server_dir.join("stale.txt"), b"stale");
+
+        let staging = data_dir.join("staging");
+        write_file(&staging.join("world/level.dat"), b"restored");
+        let archive = make_backup(&data_dir, uuid, "nightly.tar", &staging, "-cf");
+
+        restore_into(&data_dir, &server_dir, &archive).await;
+
+        assert!(
+            !server_dir.join("stale.txt").exists(),
+            "stale file survived"
+        );
+        assert_eq!(
+            std::fs::read_to_string(server_dir.join("world/level.dat")).unwrap(),
+            "restored"
+        );
+    }
+
+    /// Game server directories routinely contain symlinks (SteamCMD, Proton,
+    /// plugin folders). A backup of one must restore.
+    #[tokio::test]
+    async fn backup_with_relative_symlink_restores() {
+        let root = tempfile::tempdir().unwrap();
+        let data_dir = root.path().to_path_buf();
+        let uuid = "99999999-8888-7777-6666-555555555555";
+        let server_dir = data_dir.join(uuid);
+        write_file(&server_dir.join("stale.txt"), b"stale");
+
+        let staging = data_dir.join("staging");
+        write_file(&staging.join("versions/1.20/server.jar"), b"jar");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink("versions/1.20/server.jar", staging.join("server.jar")).unwrap();
+        let archive = make_backup(&data_dir, uuid, "nightly.tar.gz", &staging, "-czf");
+
+        restore_into(&data_dir, &server_dir, &archive).await;
+
+        assert!(server_dir.join("versions/1.20/server.jar").exists());
+        assert!(server_dir.join("server.jar").is_symlink());
+    }
+}
+
+/// Link policy for the restore pre-list: legitimate server-directory links
+/// must pass, anything that could redirect an extraction outside the tree
+/// must not.
+#[cfg(test)]
+mod backup_link_policy_tests {
+    use super::*;
+
+    #[test]
+    fn relative_link_targets_are_graded_against_the_archive_root() {
+        // Depth 0 (archive root) and depth 1 (one directory down).
+        assert!(link_target_stays_inside(0, "world/a.txt"));
+        assert!(link_target_stays_inside(0, "./world/a.txt"));
+        assert!(link_target_stays_inside(1, "../world/a.txt"));
+        assert!(link_target_stays_inside(2, "../../sibling"));
+        assert!(!link_target_stays_inside(0, ".."));
+        assert!(!link_target_stays_inside(0, "../../etc/passwd"));
+        assert!(!link_target_stays_inside(1, "../../../etc/passwd"));
+        assert!(!link_target_stays_inside(0, ""));
+    }
+
+    #[test]
+    fn only_the_container_root_is_an_internal_absolute_target() {
+        assert!(link_target_stays_inside(0, "/data"));
+        assert!(link_target_stays_inside(0, "/data/world/level.dat"));
+        assert!(!link_target_stays_inside(0, "/etc/shadow"));
+        assert!(!link_target_stays_inside(0, "/datax/world"));
+        // A `/data` prefix must not launder an escape.
+        assert!(!link_target_stays_inside(0, "/data/../../etc/passwd"));
+        assert!(!link_target_stays_inside(0, "/data/../etc"));
+    }
+
+    #[test]
+    fn container_relative_target_maps_only_data_paths() {
+        assert_eq!(
+            container_relative_target(Path::new("/data/world/x")),
+            Some(PathBuf::from("world/x"))
+        );
+        assert_eq!(
+            container_relative_target(Path::new("/data")),
+            Some(PathBuf::new())
+        );
+        assert_eq!(container_relative_target(Path::new("/etc/shadow")), None);
+        assert_eq!(
+            container_relative_target(Path::new("/data/../../etc/passwd")),
+            None
+        );
+        assert_eq!(container_relative_target(Path::new("world/x")), None);
+    }
+}
+
+/// The failure event the panel keys off to leave RESTORING early.
+#[cfg(test)]
+mod restore_failure_event_tests {
+    use super::*;
+
+    #[test]
+    fn carries_server_backup_and_reason() {
+        let msg = json!({
+            "serverId": "srv-1",
+            "serverUuid": "uuid-1",
+            "backupId": "bkp-9",
+            "backupPath": "/var/lib/catalyst/backups/uuid-1/nightly.tar.gz",
+        });
+        let event = restore_failure_event(&msg, "Backup contains link escaping").unwrap();
+        assert_eq!(event["type"], json!("backup_restore_failed"));
+        assert_eq!(event["serverId"], json!("srv-1"));
+        assert_eq!(event["backupId"], json!("bkp-9"));
+        assert_eq!(event["error"], json!("Backup contains link escaping"));
+    }
+
+    #[test]
+    fn omits_an_absent_backup_id_and_needs_a_server() {
+        let msg = json!({ "serverId": "srv-1" });
+        let event = restore_failure_event(&msg, "boom").unwrap();
+        assert!(event.get("backupId").is_none());
+        assert!(restore_failure_event(&json!({ "backupId": "b" }), "boom").is_none());
+    }
+}
+
+/// Restore-path coverage for the link policy: a real archive with a symlink,
+/// a hard link or a container-absolute link must restore; one whose link
+/// escapes must still be refused before anything is written.
+#[cfg(test)]
+mod backup_link_restore_tests {
+    use super::*;
+    use crate::storage_manager::StorageManager;
+    use std::path::Path;
+
+    fn write_file(path: &Path, data: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, data).unwrap();
+    }
+
+    fn make_archive(src: &Path, archive: &Path, flag: &str) {
+        std::fs::create_dir_all(archive.parent().unwrap()).unwrap();
+        let status = std::process::Command::new("tar")
+            .arg(flag)
+            .arg(archive)
+            .arg("-C")
+            .arg(src)
+            .arg(".")
+            .status()
+            .unwrap();
+        assert!(status.success(), "tar {flag} failed");
+    }
+
+    /// Extraction + validation + swap, mirroring `handle_restore_backup`.
+    async fn restore_into(data_dir: &Path, server_dir: &Path, archive: &Path) {
+        let len = std::fs::metadata(archive).unwrap().len();
+        prevalidate_backup_tarball(archive, len).await.unwrap();
+        ensure_restore_fits(archive, server_dir).await.unwrap();
+
+        let tmp_dir = data_dir.join(format!(".restore-{:032x}.tmp", rand::random::<u128>()));
+        std::fs::create_dir(&tmp_dir).unwrap();
+        let out = std::process::Command::new("tar")
+            .arg("-xf")
+            .arg(archive)
+            .arg("-C")
+            .arg(&tmp_dir)
+            .arg("--no-same-owner")
+            .arg("--no-same-permissions")
+            .arg("--anchored")
+            .arg("--exclude=../*")
+            .arg("--exclude=/*")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "tar -xf failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let canonical_tmp = tmp_dir.canonicalize().unwrap();
+        validate_restore_tree(&tmp_dir, &canonical_tmp)
+            .await
+            .unwrap();
+
+        StorageManager::new(data_dir.to_path_buf())
+            .replace_directory_contents(server_dir, &tmp_dir)
+            .await
+            .unwrap();
+    }
+
+    fn scratch() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf) {
+        let root = tempfile::tempdir().unwrap();
+        let data_dir = root.path().to_path_buf();
+        let staging = data_dir.join("staging");
+        let server_dir = data_dir.join("11111111-2222-3333-4444-555555555555");
+        (root, data_dir, staging, server_dir)
+    }
+
+    #[tokio::test]
+    async fn hard_links_restore_as_regular_files() {
+        let (_root, data_dir, staging, server_dir) = scratch();
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        write_file(&staging.join("world/level.dat"), b"level");
+        std::fs::hard_link(staging.join("world/level.dat"), staging.join("level.dat")).unwrap();
+
+        let archive = data_dir.join("backups/t/nightly.tar.gz");
+        make_archive(&staging, &archive, "-czf");
+        restore_into(&data_dir, &server_dir, &archive).await;
+
+        assert_eq!(
+            std::fs::read_to_string(server_dir.join("level.dat")).unwrap(),
+            "level"
+        );
+        assert_eq!(
+            std::fs::read_to_string(server_dir.join("world/level.dat")).unwrap(),
+            "level"
+        );
+    }
+
+    /// SteamCMD/Proton write `-> /data/...` links; the container resolves them
+    /// to the server directory, so restore must keep them.
+    #[tokio::test]
+    async fn container_absolute_links_restore() {
+        let (_root, data_dir, staging, server_dir) = scratch();
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        write_file(&staging.join("world/level.dat"), b"level");
+        std::os::unix::fs::symlink("/data/world/level.dat", staging.join("level.dat")).unwrap();
+
+        let archive = data_dir.join("backups/t/nightly.tar.gz");
+        make_archive(&staging, &archive, "-czf");
+        restore_into(&data_dir, &server_dir, &archive).await;
+
+        assert_eq!(
+            std::fs::read_link(server_dir.join("level.dat")).unwrap(),
+            PathBuf::from("/data/world/level.dat")
+        );
+    }
+
+    #[tokio::test]
+    async fn escaping_symlink_is_refused() {
+        let (_root, data_dir, staging, server_dir) = scratch();
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        write_file(&staging.join("world/level.dat"), b"level");
+        std::os::unix::fs::symlink("../../../../etc/passwd", staging.join("shadow")).unwrap();
+
+        let archive = data_dir.join("backups/t/nightly.tar.gz");
+        make_archive(&staging, &archive, "-czf");
+        let len = std::fs::metadata(&archive).unwrap().len();
+        let err = prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect_err("escaping symlink must be refused");
+        assert!(err.to_string().contains("escaping"), "{err}");
+        assert!(
+            server_dir.join("stale.txt").exists(),
+            "live dir must be untouched"
+        );
+    }
+
+    #[tokio::test]
+    async fn absolute_host_symlink_is_refused() {
+        let (_root, data_dir, staging, server_dir) = scratch();
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        std::fs::create_dir_all(&staging).unwrap();
+        std::os::unix::fs::symlink("/etc/shadow", staging.join("shadow")).unwrap();
+        // A `/data` prefix must not launder an escape through the container root.
+        std::os::unix::fs::symlink("/data/../../etc/shadow", staging.join("shadow2")).unwrap();
+
+        let archive = data_dir.join("backups/t/nightly.tar.gz");
+        make_archive(&staging, &archive, "-czf");
+        let len = std::fs::metadata(&archive).unwrap().len();
+        let err = prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect_err("host-absolute symlink must be refused");
+        assert!(err.to_string().contains("escaping"), "{err}");
+    }
+
+    #[tokio::test]
+    async fn fifo_member_is_refused() {
+        let (_root, data_dir, staging, server_dir) = scratch();
+        write_file(&server_dir.join("stale.txt"), b"stale");
+        write_file(&staging.join("ok.txt"), b"ok");
+        let status = std::process::Command::new("mkfifo")
+            .arg(staging.join("pipe"))
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // mkfifo unavailable — skip
+        }
+
+        let archive = data_dir.join("backups/t/nightly.tar.gz");
+        make_archive(&staging, &archive, "-czf");
+        let len = std::fs::metadata(&archive).unwrap().len();
+        let err = prevalidate_backup_tarball(&archive, len)
+            .await
+            .expect_err("fifo member must be refused");
+        assert!(err.to_string().contains("unsafe entry type"), "{err}");
     }
 }

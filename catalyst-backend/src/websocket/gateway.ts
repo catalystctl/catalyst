@@ -3374,6 +3374,46 @@ export class WebSocketGateway {
         }
 
         await this.routeToClients(message.serverId, message);
+      } else if (message.type === "backup_restore_failed") {
+        // The agent refused the restore (escaping link, no space, unreadable
+        // archive, ...). It never swapped the live tree, so take the server
+        // back to STOPPED now instead of leaving it in RESTORING until the
+        // stuck-state watchdog fires 15 minutes later.
+        const failedServer = await this.prisma.server.findUnique({
+          where: { id: message.serverId },
+          select: { nodeId: true },
+        });
+        if (!failedServer || failedServer.nodeId !== nodeId) {
+          this.logger.warn(
+            { nodeId, serverId: message.serverId },
+            "backup_restore_failed for server not on this node — dropping",
+          );
+          return;
+        }
+        const revertedFromRestoring = await this.prisma.server.updateMany({
+          where: { id: message.serverId, status: ServerState.RESTORING },
+          data: { status: ServerState.STOPPED },
+        });
+        if (revertedFromRestoring.count > 0) {
+          await this.routeToClients(message.serverId, {
+            type: "server_state_update",
+            serverId: message.serverId,
+            state: ServerState.STOPPED,
+            timestamp: Date.now(),
+          });
+        }
+        // Rebuild the payload instead of forwarding the agent frame: only
+        // these fields are consumed by the SSE allowlist and the frontend.
+        await this.routeToClients(message.serverId, {
+          type: "backup_restore_failed",
+          serverId: message.serverId,
+          ...(typeof message.backupId === "string" ? { backupId: message.backupId } : {}),
+          error:
+            typeof message.error === "string" && message.error
+              ? message.error
+              : "Backup restore failed",
+          timestamp: Date.now(),
+        });
       } else if (message.type === "backup_delete_complete") {
         await this.routeToClients(message.serverId, message);
       } else if (message.type === "storage_resize_complete") {

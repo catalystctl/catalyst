@@ -48,6 +48,7 @@
       "action": "Restore",
       "confirmPrefix": "Restore ",
       "confirmSuffix": " to this server? The server must be stopped before restoring and current files will be overwritten.",
+      "failed": "Backup restore failed",
       "success": "Backup restoration started",
       "title": "Restore backup"
     },

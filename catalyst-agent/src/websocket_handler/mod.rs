@@ -2484,6 +2484,11 @@ impl WebSocketHandler {
                     let _guard = __lock.lock().await;
                     if let Err(e) = handler.handle_restore_backup(&msg, &write).await {
                         error!("Error in handle_restore_backup handler: {}", e);
+                        // Leave RESTORING immediately; the panel otherwise waits
+                        // out the stuck-state watchdog before showing an error.
+                        handler
+                            .report_restore_failure(&msg, &format!("{}", e))
+                            .await;
                         handler
                             .report_error(
                                 ErrorLevel::Error,

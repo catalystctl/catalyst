@@ -14,6 +14,7 @@ import { setPendingEula } from './useEulaStore';
 import { useAuthStore } from '../stores/authStore';
 import { qk } from '../lib/queryKeys';
 import i18n from '@/i18n';
+import { notifyError } from '../utils/notify';
 
 const DEBOUNCE_MS = 16; // ~60fps
 
@@ -478,6 +479,20 @@ export function useServerStateUpdates() {
                   : srv,
               );
             },
+          );
+          return;
+        }
+
+        // A restore the agent refused (escaping link, no space, ...) must not
+        // leave the panel showing "restoring" until the stuck-state watchdog
+        // fires 15 minutes later: reconcile the server and say why.
+        if (type === 'backup_restore_failed') {
+          invalidateOnce(q, { queryKey: qk.server(serverId) });
+          invalidateOnce(q, { queryKey: qk.backups(serverId) });
+          notifyError(
+            typeof data.error === 'string' && data.error
+              ? data.error
+              : i18n.t('backups.restore.failed', { ns: 'server-tabs' }),
           );
           return;
         }

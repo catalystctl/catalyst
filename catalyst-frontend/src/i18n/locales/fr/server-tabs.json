@@ -49,6 +49,7 @@
       "action": "Restaurer",
       "confirmPrefix": "Restaurer ",
       "confirmSuffix": " sur ce serveur ? Le serveur doit être arrêté avant la restauration et les fichiers actuels seront écrasés.",
+      "failed": "Échec de la restauration de la sauvegarde",
       "success": "Restauration de la sauvegarde démarrée",
       "title": "Restaurer une sauvegarde"
     },

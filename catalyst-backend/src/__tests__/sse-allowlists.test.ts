@@ -47,6 +47,12 @@ describe('EVENT_TYPES allowlist (per-server + global stream)', () => {
     expect(EVENT_TYPES).toContain('clone_failed');
   });
 
+  it('contains backup_restore_failed', () => {
+    // Without it a refused restore leaves the server in RESTORING until the
+    // stuck-state watchdog fires.
+    expect(EVENT_TYPES).toContain('backup_restore_failed');
+  });
+
   it("keeps 'alert' — emitted for creation AND resolution (U1/P1.3)", () => {
     expect(EVENT_TYPES).toContain('alert');
   });

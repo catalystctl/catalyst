@@ -58,6 +58,7 @@ export const EVENT_TYPES = [
   'server_state_update',
   'backup_complete',
   'backup_restore_complete',
+  'backup_restore_failed',
   'backup_delete_complete',
   // Lifecycle start events (FE was listening; BE never subscribed — silent gap)
   'backup_started',
