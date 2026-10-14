@@ -87,6 +87,13 @@ export interface PluginEventSchema {
   description?: string;
 }
 
+/** A permission a plugin exposes for panel roles. */
+export interface PluginUserPermission {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 /**
  * Plugin manifest structure from plugin.json
  */
@@ -104,6 +111,13 @@ export interface PluginManifest {
    * the safety-consent dialog and permission reviewers.
    */
   permissionDescriptions?: Record<string, string>;
+  /**
+   * Role-facing permissions this plugin exposes to the panel's role editor —
+   * a separate namespace from `permissions`, which is the plugin's own API
+   * capability list. The plugin's frontend gates its tabs, pages and slot
+   * components on the same ids via `requiredPermissions`.
+   */
+  userPermissions?: PluginUserPermission[];
   runtime?: 'legacy' | 'isolated';
   storageEngine?: 'legacy' | 'dedicated';
   backend?: {

@@ -968,6 +968,17 @@ function ServerDetailsPage() {
  tabLabels,
  ]);
 
+ // Plugin slot components declare their own `requiredPermissions`; evaluate
+ // them the same way as plugin tabs on this page — global grant, or a
+ // server-scoped one (owner, subuser row, scoped role).
+ const pluginSlotHasPermission = useCallback(
+   (required: string[]) => {
+     if (hasAnyPermission(userPermissions, required)) return true;
+     return required.some((p) => hasServerPerm(p));
+   },
+   [userPermissions, hasServerPerm],
+ );
+
  const filteredServerPluginTabs = useMemo(() => {
  return serverPluginTabs.filter((t) => {
  // Template-scoped tabs (e.g. CS 1.6 Admin) only show for matching game servers.
@@ -1151,7 +1162,10 @@ function ServerDetailsPage() {
             metrics={displayMetrics}
             allocatedMemoryMb={server?.allocatedMemoryMb}
             allocatedDiskMb={diskLimitMb}
+            backupAllocationMb={server?.backupAllocationMb}
+            serverId={server?.id}
             serverStatus={server?.status}
+            hasPermission={pluginSlotHasPermission}
             live={metricsStreamConnected}
           />
         }

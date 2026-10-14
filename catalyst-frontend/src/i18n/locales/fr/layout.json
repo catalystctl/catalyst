@@ -16,7 +16,6 @@
   "nav": {
     "admin": "Administration",
     "alerts": "Alertes",
-    "allServers": "Tous les serveurs",
     "apiKeys": "Clés API",
     "auditLogs": "Journaux d’audit",
     "dashboard": "Tableau de bord",
@@ -94,9 +93,6 @@
       },
       "adminSecurity": {
         "description": "Limites de débit, politique de verrouillage et paramètres du tunnel de fichiers"
-      },
-      "adminServers": {
-        "description": "Consulter tous les serveurs de la plateforme"
       },
       "adminSystem": {
         "description": "Configuration de la santé du système, de SMTP et du gestionnaire de mods"

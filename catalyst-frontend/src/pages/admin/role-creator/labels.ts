@@ -23,6 +23,7 @@ export function groupTitle(t: TFunction<'admin-access'>, id: string): string {
     case 'access': return t('roles.creator.groups.access');
     case 'apikeys': return t('roles.creator.groups.apikeys');
     case 'system': return t('roles.creator.groups.system');
+    case 'plugins': return t('roles.creator.groups.plugins');
     default: return t('roles.creator.groups.other');
   }
 }

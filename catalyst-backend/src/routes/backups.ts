@@ -14,7 +14,7 @@ import {
 } from "../services/backup-storage";
 import { serialize } from '../utils/serialize';
 import { captureSystemError } from '../services/error-logger';
-import { hasNodeAccess } from '../lib/permissions';
+import { hasGrant, hasNodeAccess } from '../lib/permissions';
 import { Actor, enforceKeyScope } from './servers/_helpers.js';
 import { ServerState } from '../shared-types';
 import { createServerBackup } from '../services/create-backup';
@@ -112,16 +112,47 @@ export async function backupRoutes(app: FastifyInstance) {
     return server;
   };
 
+  /**
+   * Explicit `backup.pin` grant.
+   *
+   * Ownership does NOT imply it: the whole point of the permission is that a
+   * panel admin decides who may exempt a backup from the retention limit.
+   * `admin.write` / `*` still satisfy it through hasGrant, and an API key must
+   * itself carry the permission (enforceKeyScope).
+   */
+  const hasBackupPinGrant = async (
+    serverId: string,
+    userId: string,
+    nodeId: string,
+    actor: Actor,
+  ): Promise<boolean> => {
+    if (!enforceKeyScope(actor, "backup.pin")) return false;
+    const explicit = await prisma.serverAccess.findFirst({
+      where: { serverId, userId, permissions: { has: "backup.pin" } },
+      select: { id: true },
+    });
+    if (explicit) return true;
+    const { resolveServerPermissions } = await import("../lib/permissions-catalog.js");
+    const rolePerms = await resolveServerPermissions(userId, serverId, nodeId);
+    return hasGrant(rolePerms, "backup.pin");
+  };
+
   // Create a backup
   app.post(
     "/:serverId/backups",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, compressed: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, compressed: { type: "boolean" }, pinned: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { name, compressed } = request.body as { name?: string; compressed?: boolean };
+      const { name, compressed, pinned } = request.body as { name?: string; compressed?: boolean; pinned?: boolean };
       const userId = request.user.userId;
       const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create", request.user);
       if (!accessServer) return;
+
+      // Pinning bypasses the retention limit, so it needs its own explicit
+      // grant on top of backup.create.
+      if (pinned && !(await hasBackupPinGrant(serverId, userId, accessServer.nodeId, request.user))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
 
       // Get server
       const server = await prisma.server.findUnique({
@@ -144,6 +175,7 @@ export async function backupRoutes(app: FastifyInstance) {
         server,
         name,
         compressed,
+        pinned: pinned === true,
         sendToAgent: (nodeId, message) => gateway.sendToAgent(nodeId, message),
         onStarted: async ({ serverId: sid, backupId, backupName }) => {
           if (gateway.routeToClients) {
@@ -540,6 +572,46 @@ export async function backupRoutes(app: FastifyInstance) {
           timestamp: Date.now(),
         }).catch(() => {});
       }
+    }
+  );
+
+  // Pin or unpin a backup (exempt it from the retention limit)
+  app.patch(
+    "/:serverId/backups/:backupId/pin",
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Pin or unpin a server backup", description: "Toggle whether the retention job ignores a backup.", tags: ["Backups"], params: { type: "object", required: ["serverId", "backupId"], properties: { serverId: { type: "string" }, backupId: { type: "string" } } }, body: { type: "object", required: ["pinned"], properties: { pinned: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId, backupId } = request.params as {
+        serverId: string;
+        backupId: string;
+      };
+      const { pinned } = request.body as { pinned?: boolean };
+      const userId = request.user.userId;
+      const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.read", request.user);
+      if (!accessServer) return;
+
+      if (typeof pinned !== "boolean") {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "pinned must be a boolean");
+      }
+
+      // Pinning bypasses the retention limit — explicit grant required.
+      if (!(await hasBackupPinGrant(serverId, userId, accessServer.nodeId, request.user))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      }
+
+      const backup = await prisma.backup.findFirst({
+        where: { id: backupId, serverId },
+        select: { id: true },
+      });
+      if (!backup) {
+        return apiError(reply, 404, ErrorCodes.BACKUP_NOT_FOUND, "Backup not found");
+      }
+
+      const updated = await prisma.backup.update({
+        where: { id: backupId },
+        data: { pinned },
+      });
+
+      reply.send(serialize(updated));
     }
   );
 

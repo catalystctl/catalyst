@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { usePluginSlots } from './usePluginSlots';
+import { usePluginSlots, type PluginSlotPermissionCheck } from './usePluginSlots';
 import PluginErrorBoundary from './PluginErrorBoundary';
 
 interface PluginSlotProps {
@@ -13,6 +13,13 @@ interface PluginSlotProps {
   fallback?: React.ReactNode;
   /** Additional props to pass to each rendered component */
   componentProps?: Record<string, any>;
+  /**
+   * Surface-aware check for a component's declared `requiredPermissions`.
+   * Pass this from a page that grants permissions beyond the global set (for
+   * example a server page, where the viewer may hold a server-scoped grant).
+   * Defaults to the viewer's global permissions.
+   */
+  hasPermission?: PluginSlotPermissionCheck;
   /** Wrapper element or component for the slot container */
   as?: React.ElementType;
   /** Class name for the wrapper element */
@@ -20,24 +27,29 @@ interface PluginSlotProps {
 }
 
 /**
- * Renders all components registered for a given slot.
+ * Renders all components registered for a given plugin slot.
+ *
+ * A component whose plugin declared `requiredPermissions` renders only when
+ * the viewer holds one of them, so a plugin can ship UI for a permission the
+ * viewer does not have without the panel having to know about that plugin.
  *
  * @example
  * // In a dashboard layout:
  * <PluginSlot name="dashboard-widgets" fallback={<p>No widgets</p>} />
  *
- * // In a sidebar:
- * <PluginSlot name="sidebar-bottom" as="div" className="mt-auto border-t pt-4" />
+ * // On a server surface, where scoped grants count too:
+ * <PluginSlot name="server-header-stats" hasPermission={hasPermission} />
  */
 export function PluginSlot({
   name,
   fallback = null,
   componentProps,
+  hasPermission,
   as: Wrapper = 'div',
   className,
 }: PluginSlotProps) {
   const { t } = useTranslation('plugins');
-  const components = usePluginSlots(name);
+  const components = usePluginSlots(name, hasPermission);
 
   if (components.length === 0) {
     return <>{fallback}</>;

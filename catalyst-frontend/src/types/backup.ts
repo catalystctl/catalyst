@@ -9,6 +9,8 @@ export interface Backup {
   sizeMb: number;
   checksum?: string | null;
   compressed?: boolean;
+  /** Pinned backups are exempt from the retention job (count and age). */
+  pinned?: boolean;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
   restoredAt?: string | null;

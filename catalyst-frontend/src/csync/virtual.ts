@@ -158,15 +158,32 @@ export function useVirtualizer(options: Options) {
     if (changed) setMeasuredVersion((n) => n + 1);
   }, [count]);
 
-  // Invalidate key mapping when getItemKey identity changes. offsets depends on
-  // getItemKey so the window recomputes after the size map is cleared.
+  // Invalidate key mapping when the resolved keys actually change. A fresh
+  // getItemKey identity is not proof of that: callers routinely pass an inline
+  // arrow, and wiping on identity alone discarded every measurement on every
+  // render, so the list fell back to the estimate and kept phantom space past
+  // the last row. offsets depends on getItemKey so the window still recomputes.
+  const resolvedKeys = useMemo(() => {
+    const keys: Array<string | number> = new Array(count);
+    for (let i = 0; i < count; i++) keys[i] = getKey(i);
+    return keys;
+  }, [count, getKey]);
+
   const prevGetItemKeyRef = useRef(getItemKey);
+  const prevKeysRef = useRef<Array<string | number> | null>(null);
   if (prevGetItemKeyRef.current !== getItemKey) {
     prevGetItemKeyRef.current = getItemKey;
-    // Keys may have changed — clear size map keyed by old keys
-    sizeMapRef.current.clear();
-    keyAtIndexRef.current.clear();
+    const prevKeys = prevKeysRef.current;
+    const keysChanged =
+      prevKeys == null ||
+      prevKeys.length !== resolvedKeys.length ||
+      resolvedKeys.some((key, index) => key !== prevKeys[index]);
+    if (keysChanged) {
+      sizeMapRef.current.clear();
+      keyAtIndexRef.current.clear();
+    }
   }
+  prevKeysRef.current = resolvedKeys;
 
   const getSize = useCallback(
     (index: number) => {

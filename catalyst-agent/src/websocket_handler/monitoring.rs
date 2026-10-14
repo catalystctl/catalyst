@@ -70,10 +70,13 @@ fn throttling_fields(t: &Option<(u64, u64, u64)>) -> (Option<u64>, Option<f64>) 
 
 /// Resolve the host-side data dir for a container. Data dirs are keyed by
 /// server.uuid while containers are named by server.id; the stored start
-/// message (keyed by container id) carries the uuid. Falls back to the
-/// container id itself (older installs where the two coincide) and to None
-/// when the dir does not exist under the data root.
+/// message (keyed by container id) carries the uuid. That map is process-local
+/// and rebuilt empty on every agent restart, so a server that was already
+/// running has no entry; fall back to the /data bind source recorded in the
+/// container's OCI spec, then to the container id itself (older installs where
+/// the two coincide). None when no candidate exists under the data root.
 async fn resolve_server_data_dir(
+    runtime: &ContainerdRuntime,
     start_msgs: &RwLock<HashMap<String, Value>>,
     root: &std::path::Path,
     container_id: &str,
@@ -86,6 +89,14 @@ async fn resolve_server_data_dir(
         .map(|s| s.to_string());
     if let Some(u) = uuid {
         let p = root.join(&u);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    // Without this the running server reported 0 disk usage after an agent
+    // restart until it was restarted (which repopulated the map above).
+    if let Ok(Some(source)) = runtime.container_data_dir(container_id).await {
+        let p = std::path::PathBuf::from(source);
         if p.exists() {
             return Some(p);
         }
@@ -711,6 +722,7 @@ impl WebSocketHandler {
                 // On failure report zeros: block-IO counters measure
                 // throughput, not capacity, and must never stand in for usage.
                 let (disk_usage_mb, disk_total_mb) = match resolve_server_data_dir(
+                    &self.runtime,
                     &self.start_server_messages,
                     &self.config.server.data_dir,
                     target,
@@ -860,7 +872,7 @@ impl WebSocketHandler {
                 // start message. Unresolvable → (0, 0); block-IO counters are
                 // NOT substituted — they measure throughput, not capacity.
                 let server_path =
-                    resolve_server_data_dir(&start_msgs, &data_root, &container.id).await;
+                    resolve_server_data_dir(&runtime, &start_msgs, &data_root, &container.id).await;
                 let (disk_usage_mb, disk_total_mb) = match server_path {
                     Some(p) => data_dir_disk_usage_mb(&p),
                     None => (0, 0),

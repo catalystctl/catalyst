@@ -19,21 +19,37 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 
-function CreateBackupModal({ serverId, disabled = false }: { serverId: string; disabled?: boolean }) {
+function CreateBackupModal({
+  serverId,
+  disabled = false,
+  canPin = false,
+}: {
+  serverId: string;
+  disabled?: boolean;
+  /** Whether the user holds backup.pin (exempt from the retention limit). */
+  canPin?: boolean;
+}) {
   const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   // Compression is opt-out: checked by default, uncheck for a plain `.tar`.
   const [compress, setCompress] = useState(true);
+  // Pin bypasses the retention limit; only offered with the backup.pin grant.
+  const [pin, setPin] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () =>
-      backupsApi.create(serverId, { name: name.trim() || undefined, compressed: compress }),
+      backupsApi.create(serverId, {
+        name: name.trim() || undefined,
+        compressed: compress,
+        ...(pin ? { pinned: true } : {}),
+      }),
     onSuccess: () => {
       notifySuccess(t('backups.create.success'));
       setOpen(false);
       setName('');
       setCompress(true);
+      setPin(false);
     },
     onError: (error: any) => {
       notifyError(error);
@@ -74,6 +90,24 @@ function CreateBackupModal({ serverId, disabled = false }: { serverId: string; d
                 placeholder="nightly-backup"
               />
             </div>
+            {canPin ? (
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="create-backup-pin"
+                  checked={pin}
+                  onCheckedChange={(value) => setPin(value === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="create-backup-pin" className="min-w-0 cursor-pointer">
+                  <span className="block text-mini text-foreground">
+                    {t('backups.create.pinLabel')}
+                  </span>
+                  <span className="block text-micro text-muted-foreground">
+                    {t('backups.create.pinHint')}
+                  </span>
+                </label>
+              </div>
+            ) : null}
             <div className="flex items-start gap-2">
               <Checkbox
                 id="create-backup-compress"

@@ -16,7 +16,6 @@
   "nav": {
     "admin": "Admin",
     "alerts": "Alerts",
-    "allServers": "All Servers",
     "apiKeys": "API Keys",
     "auditLogs": "Audit Logs",
     "dashboard": "Dashboard",
@@ -94,9 +93,6 @@
       },
       "adminSecurity": {
         "description": "Rate limits, lockout policy, and file tunnel settings"
-      },
-      "adminServers": {
-        "description": "View every server on the platform"
       },
       "adminSystem": {
         "description": "Health, SMTP, and mod manager configuration"

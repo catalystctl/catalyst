@@ -716,14 +716,26 @@ select option {
 .server-list-container { container: server-list / inline-size; }
 .server-list-grid { grid-template-columns: minmax(0, 1fr); }
 .server-list-actions { justify-self: end; }
-.server-list-columns, .server-list-md, .server-list-xl { display: none; }
+.server-list-columns, .server-list-md, .server-list-lg, .server-list-xl { display: none; }
 @container server-list (min-width: 48rem) {
-  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 9rem 6rem 12rem; }
+  /* identity · address · state · actions */
+  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 13rem 8rem 8rem; }
   .server-list-columns { display: grid; }
   .server-list-md { display: flex; }
   .server-list-mobile-meta { display: none; }
 }
+@container server-list (min-width: 64rem) {
+  /* + game */
+  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 12rem 13rem 8rem 8rem; }
+  .server-list-lg { display: flex; }
+}
 @container server-list (min-width: 80rem) {
-  .server-list-grid { grid-template-columns: minmax(14rem, 1fr) 9rem 6.5rem 6.5rem 6.5rem 11rem 5.5rem 12rem; }
+  /* + cpu · ram · disk. Each metric is sized to one reading (bar + value) and
+     the actions to one row of five glyphs, so no column carries padding it
+     does not use. */
+  /* cpu · ram · disk: 88px holds the widest reading (28px bar + 0.75rem +
+     "100%") plus deliberate trailing air, so the gap BETWEEN resources is
+     clearly larger than the gap between a bar and its own number. */
+  .server-list-grid { grid-template-columns: minmax(15rem, 1fr) 13rem 5.5rem 5.5rem 5.5rem 15rem 10rem 8rem; }
   .server-list-xl { display: flex; }
 }

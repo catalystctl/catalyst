@@ -5,6 +5,8 @@ import { formatBytes } from '../../utils/formatters';
 import { cn } from '@/lib/utils';
 import { Meter } from '../deck/primitives';
 import LastUpdated from '../shared/LastUpdated';
+import { PluginSlot } from '../../plugins/PluginSlot';
+import type { PluginSlotPermissionCheck } from '../../plugins/usePluginSlots';
 import type { ServerMetrics } from '../../types/server';
 
 function formatMem(mb: number) {
@@ -53,13 +55,27 @@ export default function ServerHeaderStats({
   metrics,
   allocatedMemoryMb,
   allocatedDiskMb,
+  backupAllocationMb,
+  serverId,
   serverStatus,
+  hasPermission,
   live = true,
 }: {
   metrics: ServerMetrics | null;
   allocatedMemoryMb?: number | null;
   allocatedDiskMb?: number | null;
+  /** Server backup storage allocation (MB); 0 means unallocated. */
+  backupAllocationMb?: number | null;
+  /** Enables the `server-header-stats` plugin slot for this server. */
+  serverId?: string;
   serverStatus?: string;
+  /**
+   * Permission check for slot components that declare `requiredPermissions`.
+   * The server page supplies one that also honours server-scoped grants, so a
+   * plugin can target e.g. `backup.read` on this server rather than panel-wide
+   * admins only.
+   */
+  hasPermission?: PluginSlotPermissionCheck;
   /**
    * False while the metrics SSE stream is down and the readouts come from the
    * 30s REST fallback (P1-17): dims the numbers and shows how old they are.
@@ -97,7 +113,24 @@ export default function ServerHeaderStats({
     }
   }, [metrics, isRunning]);
 
-  if (!metrics) return null;
+  // Plugin extension point: extra header gauges (for example a backup-storage
+  // readout) render inline with the built-in stats. Plugins register via
+  // components: [{ slot: 'server-header-stats', … }]. Kept outside the
+  // `!metrics` guard so a plugin gauge is not gated on the metrics stream.
+  const pluginStats = serverId ? (
+    <PluginSlot
+      name="server-header-stats"
+      componentProps={{ serverId, serverStatus, backupAllocationMb }}
+      hasPermission={hasPermission}
+    />
+  ) : null;
+
+  if (!metrics) {
+    if (!pluginStats) return null;
+    return (
+      <div className={cn('hidden items-end gap-5 lg:flex', !live && 'opacity-60')}>{pluginStats}</div>
+    );
+  }
 
   // Offline servers must not render stale live usage. CPU/memory/network are
   // forced to zero; disk persists because files remain while stopped.
@@ -130,6 +163,7 @@ export default function ServerHeaderStats({
       <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
+      {pluginStats}
       <HeaderStat
         icon={Activity}
         label={t('metrics.labels.network')}

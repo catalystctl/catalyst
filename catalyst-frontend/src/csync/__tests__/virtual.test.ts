@@ -155,6 +155,40 @@ describe('useVirtualizer', () => {
     expect(result.current.scrollToIndex).toBe(first);
   });
 
+  it('keeps measured row sizes when getItemKey identity changes each render (regression)', () => {
+    // Regression: callers pass an inline arrow for getItemKey, so its identity
+    // changed on every render. Treating that as "keys changed" wiped the size
+    // map continuously, the list fell back to the estimate, and the total kept
+    // phantom space after the last row.
+    const rows = [0, 1, 2].map((i) => {
+      const row = document.createElement('div');
+      row.dataset.index = String(i);
+      row.getBoundingClientRect = () => ({ height: 41 }) as DOMRect;
+      document.body.appendChild(row);
+      return row;
+    });
+
+    const { result, rerender } = renderHook(() =>
+      useVirtualizer({
+        count: 3,
+        getScrollElement: () => el,
+        estimateSize: () => 56,
+        getItemKey: (index) => `row-${index}`,
+      }),
+    );
+
+    act(() => {
+      rows.forEach((row) => result.current.measureElement(row));
+    });
+    expect(result.current.totalSize).toBe(3 * 41);
+
+    rerender();
+    rerender();
+    expect(result.current.totalSize).toBe(3 * 41);
+
+    rows.forEach((row) => row.remove());
+  });
+
   it('scrollToIndex align end lands near the bottom of the list', () => {
     const { result } = renderHook(() =>
       useVirtualizer({

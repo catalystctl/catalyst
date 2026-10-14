@@ -5,7 +5,6 @@ import { useAuthStore } from '../../stores/authStore';
 const ADMIN_ROUTES: Array<{ path: string; permissions: string[] }> = [
  { path: '/admin/users', permissions: ['user.read', 'user.create', 'user.update', 'user.delete', 'user.set_roles', 'admin.read', 'admin.write'] },
  { path: '/admin/roles', permissions: ['role.read', 'role.create', 'role.update', 'role.delete', 'admin.read', 'admin.write'] },
- { path: '/admin/servers', permissions: ['server.read', 'server.create', 'server.delete', 'admin.read', 'admin.write'] },
  { path: '/admin/nodes', permissions: ['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write'] },
  { path: '/admin/templates', permissions: ['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write'] },
  { path: '/admin/alerts', permissions: ['alert.read', 'alert.create', 'alert.update', 'alert.delete', 'admin.read', 'admin.write'] },

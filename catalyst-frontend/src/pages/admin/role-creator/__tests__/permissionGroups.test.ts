@@ -24,6 +24,7 @@ const SCOPED = [
   'console.read', 'console.write',
   'file.read', 'file.write',
   'backup.read', 'backup.create', 'backup.restore', 'backup.delete', 'backup.download',
+  'backup.pin',
   'database.read', 'database.create', 'database.rotate', 'database.delete',
   'alert.read', 'alert.create', 'alert.update', 'alert.delete',
   'mods.manage', 'plugins.manage',

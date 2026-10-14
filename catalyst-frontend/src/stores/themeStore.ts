@@ -659,9 +659,12 @@ export const useThemeStore = create<ThemeState>()(
             : resolveEffectiveTheme(themePreference, settings.defaultTheme, storedTheme);
         if (effectiveTheme !== storedTheme) set({ theme: effectiveTheme });
 
-        const primary = !ignorePersonal && personalColors?.primaryColor ? personalColors.primaryColor : settings.primaryColor;
-        const secondary = !ignorePersonal && personalColors?.secondaryColor ? personalColors.secondaryColor : settings.secondaryColor;
-        const accent = !ignorePersonal && personalColors?.accentColor ? personalColors.accentColor : settings.accentColor;
+        // A fresh install has no ThemeSettings row, so the public endpoint
+        // returns null colors; fall back to the shipped palette instead of
+        // feeding null into hexToHSL (which crashed the whole app).
+        const primary = (!ignorePersonal && personalColors?.primaryColor) || settings.primaryColor || defaultThemeSettings.primaryColor;
+        const secondary = (!ignorePersonal && personalColors?.secondaryColor) || settings.secondaryColor || defaultThemeSettings.secondaryColor;
+        const accent = (!ignorePersonal && personalColors?.accentColor) || settings.accentColor || defaultThemeSettings.accentColor;
 
         const cssVars = applyThemeToDOM(effectiveTheme, primary, secondary, accent, colors);
         const cached = readThemeCache();

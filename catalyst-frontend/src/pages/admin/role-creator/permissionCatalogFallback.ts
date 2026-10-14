@@ -117,6 +117,7 @@ export const FALLBACK_PERMISSION_CATEGORIES: CatalogCategory[] = [
       { value: 'backup.delete', label: 'Delete backups' },
       { value: 'backup.restore', label: 'Restore backups' },
       { value: 'backup.download', label: 'Download backups' },
+      { value: 'backup.pin', label: 'Pin backups (ignore retention limit)' },
     ],
   },
   {

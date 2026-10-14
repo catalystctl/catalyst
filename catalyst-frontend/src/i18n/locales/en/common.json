@@ -110,6 +110,7 @@
     "backupCreate": "Create backups",
     "backupDelete": "Delete backups",
     "backupDownload": "Download backups",
+    "backupPin": "Pin backups (ignore retention limit)",
     "backupRead": "View backups",
     "backupRestore": "Restore backups",
     "clone": "Clone server",

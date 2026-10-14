@@ -1050,7 +1050,7 @@ describe('delete / resize / variables key-scope ceiling (owner bypass paths)', (
   });
 });
 
-describe('plugin inventory admin.read gate', () => {
+describe('plugin inventory visibility', () => {
   it('admits admin.read to GET /api/plugins', async () => {
     const app = buildApp();
     currentUserId = adminReadUserId;
@@ -1060,21 +1060,38 @@ describe('plugin inventory admin.read gate', () => {
     await app.close();
   });
 
-  it('rejects plain users from GET /api/plugins', async () => {
+  // A plugin owns its audience: it gates its tabs, pages and slot components
+  // with `requiredPermissions`, so the panel must hand every signed-in user the
+  // manifests to evaluate. Non-admins get a reduced list (enabled + frontend
+  // only, no consent/capability/licensing data), not the admin inventory.
+  it('serves non-admins a reduced, frontend-only inventory', async () => {
     const app = buildApp();
     currentUserId = noPermsUserId;
     const res = await app.inject({ method: 'GET', url: '/api/plugins' });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).data).toEqual([]);
     await app.close();
   });
 
-  it('rejects plain users from plugin frontend-manifest and assets', async () => {
+  it('keeps the plugin frontend manifest admin-only', async () => {
     const app = buildApp();
     currentUserId = noPermsUserId;
     const manifest = await app.inject({ method: 'GET', url: '/api/plugins/some-plugin/frontend-manifest' });
     expect(manifest.statusCode).toBe(403);
+    await app.close();
+  });
+
+  // Bundles are the plugin's browser UI and must reach the users a plugin
+  // targets. Sourcemaps embed the plugin's source and stay admin.read-tier.
+  it('opens plugin bundles to signed-in users but not sourcemaps', async () => {
+    const app = buildApp();
+    currentUserId = noPermsUserId;
     const asset = await app.inject({ method: 'GET', url: '/plugins-assets/some-plugin/index.js' });
-    expect(asset.statusCode).toBe(403);
+    // No such plugin is installed here, so the registry refuses it — the point
+    // is that the request is no longer 403 at the admin gate.
+    expect(asset.statusCode).toBe(404);
+    const sourcemap = await app.inject({ method: 'GET', url: '/plugins-assets/some-plugin/index.js.map' });
+    expect(sourcemap.statusCode).toBe(403);
     await app.close();
   });
 

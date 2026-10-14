@@ -268,7 +268,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
 
   return (
     <>
-      <div className={cn(compact ? 'flex items-center gap-1' : 'flex flex-wrap gap-1.5 text-mini')}>
+      <div className={cn(compact ? 'flex items-center gap-0.5' : 'flex flex-wrap gap-1.5 text-mini')}>
         {actions.filter((action) => !compact || action.applies).map((action) => {
           const Icon = action.icon;
           return (
@@ -276,7 +276,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
               key={action.key}
               size={compact ? 'icon-sm' : 'sm'}
               variant={compact ? 'ghost' : action.variant}
-              className={compact ? `${action.iconClass ?? ''} min-h-11 min-w-11 sm:min-h-7 sm:min-w-7 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 disabled:opacity-40` : action.className}
+              className={compact ? `${action.iconClass ?? ''} min-h-11 min-w-11 sm:h-6 sm:min-h-6 sm:w-6 sm:min-w-6 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 disabled:opacity-40` : action.className}
               disabled={action.disabled}
               aria-busy={action.pending}
               aria-label={compact ? action.label : undefined}

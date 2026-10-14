@@ -8,10 +8,20 @@ export const backupsApi = {
     });
     return data;
   },
-  create: async (serverId: string, payload: { name?: string; compressed?: boolean }) => {
+  create: async (
+    serverId: string,
+    payload: { name?: string; compressed?: boolean; pinned?: boolean },
+  ) => {
     const data = await apiClient.post<{ success: boolean; message?: string; backupName?: string }>(
       `/api/servers/${serverId}/backups`,
       payload,
+    );
+    return data;
+  },
+  setPinned: async (serverId: string, backupId: string, pinned: boolean) => {
+    const data = await apiClient.patch<Backup>(
+      `/api/servers/${serverId}/backups/${backupId}/pin`,
+      { pinned },
     );
     return data;
   },

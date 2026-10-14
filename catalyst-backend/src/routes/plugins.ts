@@ -576,10 +576,6 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      // Plugin inventory reads are admin-gated (TARGET-VOCABULARY §2.1):
-      // sourcemaps can embed original source, so even asset bundles stay
-      // admin.read-tier.
-      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const { name, filename } = request.params as { name: string; filename: string };
       if (!isValidPluginName(name)) {
         return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
@@ -590,6 +586,25 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
         !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(filename)
       ) {
         return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
+      }
+
+      const admin = isAdminCaller(request, 'admin.read');
+      // Sourcemaps embed the plugin's original source — admin.read-tier.
+      if (ext === '.map' && !admin) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Admin access required',
+          code: ErrorCodes.PERMISSION_DENIED,
+        });
+      }
+      // Bundles are the plugin's browser UI and ship to every signed-in user,
+      // because a plugin may target them (see GET /api/plugins). Non-admins
+      // reach only the frontend of an enabled plugin.
+      if (!admin) {
+        const entry = pluginLoader.getRegistry().get(name);
+        if (!entry || entry.status !== 'enabled' || !entry.manifest.frontend) {
+          return reply.status(404).send({ success: false, code: ErrorCodes.NOT_FOUND });
+        }
       }
 
       const pluginsRoot = path.resolve(pluginLoader.getPluginsDir());
@@ -617,7 +632,16 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
 
   /**
    * GET /api/plugins
-   * List all plugins with permission/consent state
+   * List all plugins with permission/consent state.
+   *
+   * Admins get the full inventory (capabilities, consent state, licensing).
+   * Every other signed-in user gets a reduced, frontend-only list so the panel
+   * can bootstrap the plugin store for them: a plugin decides who sees its
+   * tabs, pages and slot components through `requiredPermissions`, which the
+   * panel cannot evaluate if it never learns the plugin exists. The reduced
+   * shape carries no consent, licensing, capability or config data, and lists
+   * only enabled plugins that ship a frontend — a disabled or backend-only
+   * plugin has nothing to render and is not disclosed.
    */
   app.get(
     '/api/plugins',
@@ -625,11 +649,28 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
       onRequest: [app.authenticate],
     },
     async (request, reply) => {
-      // Plugin inventory (capabilities, consent state, licensing) is
-      // admin.read-tier (TARGET-VOCABULARY §2.1).
-      if (!ensureAdmin(request, reply, 'admin.read')) return;
       const registry = pluginLoader.getRegistry();
       const plugins = registry.getAll();
+
+      if (!isAdminCaller(request, 'admin.read')) {
+        const renderable = plugins.filter(
+          (p) => p.status === 'enabled' && Boolean(p.manifest.frontend),
+        );
+        return {
+          success: true,
+          data: renderable.map((p) => ({
+            name: p.manifest.name,
+            version: p.manifest.version,
+            displayName: p.manifest.displayName,
+            description: p.manifest.description,
+            author: p.manifest.author,
+            status: p.status,
+            enabled: true,
+            hasBackend: Boolean(p.manifest.backend),
+            hasFrontend: true,
+          })),
+        };
+      }
 
       const rows = await prisma.plugin.findMany({ select: { name: true, ...SAFETY_SELECT } });
       const rowsByName = new Map(rows.map((r) => [r.name, r]));
@@ -1073,6 +1114,8 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
                 plugin.context.originalConfig,
               ),
           permissions: plugin.manifest.permissions ?? [],
+          // Role-facing permissions the plugin exposes for the role editor.
+          userPermissions: plugin.manifest.userPermissions ?? [],
           events: plugin.manifest.events,
         },
       };

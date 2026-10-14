@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
@@ -402,7 +402,7 @@ function SecurityPage() {
  const [fileTunnelMaxUploadMb, setFileTunnelMaxUploadMb] = useState('500');
  const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
  const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
- const [requireEmailVerification, setRequireEmailVerification] = useState(true);
+ const [requireEmailVerification, setRequireEmailVerification] = useState(false);
 
  const { data: lockoutResponse, isLoading: lockoutsLoading } = useAuthLockouts({
  page: lockoutPage,
@@ -440,17 +440,16 @@ function SecurityPage() {
  setFileTunnelMaxUploadMb(String(settings.fileTunnelMaxUploadMb ?? 500));
  setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
  setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
- setRequireEmailVerification(settings.requireEmailVerification ?? true);
+ setRequireEmailVerification(settings.requireEmailVerification ?? false);
  }
  }
 
 
-  // Force email verification off when SMTP is not configured
-  useEffect(() => {
-    if (!smtpConfigured && requireEmailVerification) {
-      setRequireEmailVerification(false);
-    }
-  }, [smtpConfigured]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Email verification can only be on when SMTP is configured. Deriving this
+  // (rather than mutating state in an effect) keeps the toggle, the switch
+  // state, and the value sent on save in agreement even across remounts where
+  // the settings/smtp queries are served from cache.
+  const emailVerificationEnabled = smtpConfigured && requireEmailVerification;
 
  // ── Validate time window values ──
  const validTimeWindows = useMemo(() => new Set(TIME_WINDOWS.map((value) => Number(value))), []);
@@ -519,7 +518,7 @@ function SecurityPage() {
  fileTunnelMaxUploadMb: Number(fileTunnelMaxUploadMb),
  fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
  fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
- requireEmailVerification,
+ requireEmailVerification: emailVerificationEnabled,
  }),
  onSuccess: () => notifySuccess(t('security.toastUpdated')),
  onSettled: () => {
@@ -649,7 +648,7 @@ function SecurityPage() {
           )}
         </div>
         <Switch
-          checked={requireEmailVerification}
+          checked={emailVerificationEnabled}
           onCheckedChange={setRequireEmailVerification}
           disabled={!smtpConfigured}
           aria-label={t('security.requireEmailVerificationAria')}

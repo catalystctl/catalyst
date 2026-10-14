@@ -271,7 +271,6 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
     if (!stats) return undefined;
     if (to === '/servers') return { value: stats.servers ?? 0 };
     if (to === '/admin/nodes') return { value: stats.nodes ?? 0 };
-    if (to === '/admin/servers') return { value: stats.servers ?? 0 };
     if (to === '/admin/alerts') {
       const unack = stats.alertsUnacknowledged ?? 0;
       return unack > 0 ? { value: unack, tone: 'alarm' } : undefined;

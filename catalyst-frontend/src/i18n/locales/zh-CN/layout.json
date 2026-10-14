@@ -16,7 +16,6 @@
   "nav": {
     "admin": "管理",
     "alerts": "告警",
-    "allServers": "所有服务器",
     "apiKeys": "API 密钥",
     "auditLogs": "审计日志",
     "dashboard": "仪表盘",
@@ -94,9 +93,6 @@
       },
       "adminSecurity": {
         "description": "速率限制、锁定策略和文件隧道设置"
-      },
-      "adminServers": {
-        "description": "查看平台上的所有服务器"
       },
       "adminSystem": {
         "description": "健康状态、SMTP 和模组管理器配置"

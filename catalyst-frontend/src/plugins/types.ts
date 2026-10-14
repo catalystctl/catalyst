@@ -180,6 +180,13 @@ export interface PluginComponentSlot {
   slot: string;
   component: React.ComponentType<any>;
   order?: number;
+  /**
+   * Permissions that gate this slot component. The host renders it only when
+   * the viewer holds one of them — as a global grant, or as a server-scoped
+   * grant when the surface is a server. Omit to show it to everyone who can
+   * reach the surface at all.
+   */
+  requiredPermissions?: string[];
 }
 
 /**

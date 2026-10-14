@@ -46,6 +46,13 @@ export interface FrontendComponentSlot {
   slot: string;
   component: React.ComponentType<any>;
   order?: number;
+  /**
+   * Permissions that gate this slot component: the host renders it only when
+   * the viewer holds one of them (globally, or as a server-scoped grant when
+   * the surface is a server). Omit to show it to everyone who can reach the
+   * surface at all.
+   */
+  requiredPermissions?: string[];
 }
 
 export interface FrontendPluginDefinition {

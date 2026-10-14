@@ -27,6 +27,10 @@ import {
 } from '../lib/permissions-catalog';
 import { apiError } from '../lib/http-error';
 import { ErrorCodes } from '../shared-types';
+import {
+  buildPluginPermissionCategory,
+  type PluginPermissionSource,
+} from '../plugins/custom-permissions.js';
 
 /**
  * Hierarchy guards (TARGET §2.14): a role holding any of these is
@@ -254,7 +258,18 @@ function respondScopeError(reply: FastifyReply, err: unknown): boolean {
 }
 import { serialize } from '../utils/serialize';
 
-export async function roleRoutes(app: FastifyInstance) {
+/**
+ * @param options.pluginLoader Live plugin registry. Supplied so the permission
+ *   catalog can also offer the permissions installed plugins expose — a
+ *   plugin's own UI is gated on them, and nothing else lists them. Optional:
+ *   Fastify passes its own register options here when the plugin is registered
+ *   as `app.register(roleRoutes, { prefix })`.
+ */
+export async function roleRoutes(
+  app: FastifyInstance,
+  options?: { pluginLoader?: PluginPermissionSource },
+) {
+  const pluginLoader = options?.pluginLoader;
   const authenticate = (app as any).authenticate;
 
   // Request-based permission gate (Phase 3 key-scope swap): reads
@@ -1187,9 +1202,13 @@ export async function roleRoutes(app: FastifyInstance) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Insufficient permissions');
       }
 
+      // Built-in categories first, then one extra category for the custom
+      // tokens enabled plugins declare — otherwise they are unassignable.
+      const pluginCategory = buildPluginPermissionCategory(pluginLoader);
+
       reply.send({
         success: true,
-        data: PERMISSION_CATEGORIES,
+        data: pluginCategory ? [...PERMISSION_CATEGORIES, pluginCategory] : PERMISSION_CATEGORIES,
       });
     }
   );

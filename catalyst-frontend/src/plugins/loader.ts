@@ -163,6 +163,7 @@ function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): 
             slot: slot.slot,
             component: slot.component,
             order: slot.order ?? 50,
+            requiredPermissions: slot.requiredPermissions,
           });
         }
       }
@@ -226,11 +227,16 @@ function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): 
               order: 50,
             });
           } else if (component && typeof component === 'object' && 'component' in component) {
-            const slotConfig = component as { component: React.ComponentType<any>; order?: number };
+            const slotConfig = component as {
+              component: React.ComponentType<any>;
+              order?: number;
+              requiredPermissions?: string[];
+            };
             components.push({
               slot: slotName,
               component: slotConfig.component,
               order: slotConfig.order ?? 50,
+              requiredPermissions: slotConfig.requiredPermissions,
             });
           }
         }
@@ -246,6 +252,7 @@ function registerFrontendModule(mod: FrontendModule, manifest: PluginManifest): 
                 slot: entry.slot,
                 component: entry.component,
                 order: entry.order ?? 50,
+                requiredPermissions: entry.requiredPermissions,
               });
             }
           }

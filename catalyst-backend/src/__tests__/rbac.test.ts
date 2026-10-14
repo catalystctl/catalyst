@@ -726,6 +726,7 @@ describe('RBAC - Full Permission Coverage', () => {
     'role.read', 'role.create', 'role.update', 'role.delete',
     // Backup
     'backup.read', 'backup.create', 'backup.delete', 'backup.restore', 'backup.download',
+    'backup.pin',
     // Files
     'file.read', 'file.write',
     // Console

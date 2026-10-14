@@ -1495,6 +1495,41 @@ impl ContainerdRuntime {
         Ok(Some(info))
     }
 
+    /// Host-side source of the container's `/data` bind mount, read from the
+    /// stored OCI spec.
+    ///
+    /// Disk-usage reporting resolves the data dir through the in-memory
+    /// `start_server_messages` map (server.id → server.uuid). That map is empty
+    /// after an agent restart, so a server that was already running reported 0
+    /// used until it was restarted and the map repopulated. The spec is written
+    /// at container creation and survives restarts, so it is the durable
+    /// fallback.
+    pub async fn container_data_dir(&self, container_id: &str) -> AgentResult<Option<String>> {
+        let mut client = ContainersClient::new(self.channel.clone());
+        let req = GetContainerRequest {
+            id: container_id.to_string(),
+        };
+        let req = with_namespace!(req, &self.namespace);
+        let resp = tokio::time::timeout(Duration::from_secs(5), client.get(req))
+            .await
+            .map_err(|_| AgentError::ContainerError("container_data_dir timed out".to_string()))?
+            .map_err(grpc_err)?;
+
+        let Some(container) = resp.into_inner().container else {
+            return Ok(None);
+        };
+        let Some(spec_any) = container.spec else {
+            return Ok(None);
+        };
+        if spec_any.type_url != SPEC_TYPE_URL {
+            return Ok(None);
+        }
+        let Ok(spec_value) = serde_json::from_slice::<serde_json::Value>(&spec_any.value) else {
+            return Ok(None);
+        };
+        Ok(data_dir_from_spec(&spec_value))
+    }
+
     pub async fn is_container_running(&self, container_id: &str) -> AgentResult<bool> {
         let mut tasks = TasksClient::new(self.channel.clone());
         let req = containerd_client::services::v1::GetRequest {
@@ -2011,6 +2046,24 @@ impl ContainerdRuntime {
     }
 }
 
+/// Host bind source for the container's `/data` mount, read from a parsed OCI
+/// spec (see `base_mounts`, image_and_spec.rs). Pure function so the
+/// restart-recovery path is unit-testable without a live containerd.
+fn data_dir_from_spec(spec: &serde_json::Value) -> Option<String> {
+    let mounts = spec.get("mounts")?.as_array()?;
+    for mount in mounts {
+        if mount.get("destination").and_then(|d| d.as_str()) != Some("/data") {
+            continue;
+        }
+        if let Some(source) = mount.get("source").and_then(|s| s.as_str()) {
+            if !source.is_empty() {
+                return Some(source.to_string());
+            }
+        }
+    }
+    None
+}
+
 /// A decoded containerd task event relevant to lifecycle monitoring.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskExitEvent {
@@ -2240,5 +2293,47 @@ mod event_match_tests {
             event: None,
         };
         assert!(match_task_exit_event(&env, "srv-123", Some(42)).is_none());
+    }
+}
+
+#[cfg(test)]
+mod data_dir_spec_tests {
+    use super::data_dir_from_spec;
+    use serde_json::json;
+
+    #[test]
+    fn returns_data_bind_source() {
+        let spec = json!({
+            "mounts": [
+                {"destination": "/proc", "type": "proc", "source": "proc"},
+                {"destination": "/data", "type": "bind", "source": "/var/lib/catalyst/servers/uuid-1", "options": ["rbind", "rw"]}
+            ]
+        });
+        assert_eq!(
+            data_dir_from_spec(&spec).as_deref(),
+            Some("/var/lib/catalyst/servers/uuid-1")
+        );
+    }
+
+    #[test]
+    fn ignores_non_data_binds() {
+        // /home/container binds the same source but must not be mistaken for
+        // the /data mount.
+        let spec = json!({
+            "mounts": [
+                {"destination": "/home/container", "type": "bind", "source": "/srv/uuid-2"}
+            ]
+        });
+        assert!(data_dir_from_spec(&spec).is_none());
+    }
+
+    #[test]
+    fn missing_or_empty_mounts_yield_none() {
+        assert!(data_dir_from_spec(&json!({})).is_none());
+        assert!(data_dir_from_spec(&json!({"mounts": []})).is_none());
+        assert!(
+            data_dir_from_spec(&json!({"mounts": [{"destination": "/data", "source": ""}]}))
+                .is_none()
+        );
     }
 }

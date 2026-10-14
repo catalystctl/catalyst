@@ -58,7 +58,6 @@ export function buildGroups(t: TFunction): NavGroup[] {
       title: t('layout:sections.infrastructure'),
       links: [
         { to: '/admin/nodes', label: t('layout:nav.nodes'), icon: Network, permissions: ['node.read', 'node.create', 'node.update', 'node.delete', 'admin.read', 'admin.write'] },
-        { to: '/admin/servers', label: t('layout:nav.allServers'), icon: Server, permissions: ['admin.read', 'admin.write'] },
         { to: '/admin/templates', label: t('layout:nav.templates'), icon: FileText, permissions: ['template.read', 'template.create', 'template.update', 'template.delete', 'admin.read', 'admin.write'] },
       ],
     },

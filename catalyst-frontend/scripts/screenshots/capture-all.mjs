@@ -805,7 +805,6 @@ function staticInventory({ inviteToken }) {
     { url: '/admin', name: 'admin' },
     { url: '/admin/users', name: 'admin-users' },
     { url: '/admin/roles', name: 'admin-roles' },
-    { url: '/admin/servers', name: 'admin-servers' },
     { url: '/admin/nodes', name: 'admin-nodes' },
     { url: '/admin/templates', name: 'admin-templates' },
     { url: '/admin/database', name: 'admin-database' },
@@ -858,7 +857,7 @@ async function dynamicInventory(page, sidebarHrefs) {
   // Plugin user pages: sidebar links that are not known static routes.
   const known = new Set([
     '/dashboard', '/profile', '/servers', '/tickets', '/admin', '/admin/users', '/admin/roles',
-    '/admin/servers', '/admin/nodes', '/admin/templates', '/admin/database', '/admin/system',
+    '/admin/nodes', '/admin/templates', '/admin/database', '/admin/system',
     '/admin/security', '/admin/theme-settings', '/admin/alerts', '/admin/audit-logs',
     '/admin/system-errors', '/admin/api-keys', '/admin/migration', '/admin/plugins',
   ]);

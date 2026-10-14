@@ -307,6 +307,7 @@
         "fleet": "集群管理",
         "infrastructure": "基础设施",
         "other": "其他",
+        "plugins": "插件",
         "system": "系统管理"
       },
       "moreCount_other": "另有 {{count}} 个",
@@ -396,6 +397,7 @@
       "backupCreate": "创建备份",
       "backupDelete": "删除备份",
       "backupDownload": "下载备份",
+      "backupPin": "固定备份（忽略保留限制）",
       "backupRead": "查看备份",
       "backupRestore": "恢复备份",
       "consoleRead": "查看控制台",

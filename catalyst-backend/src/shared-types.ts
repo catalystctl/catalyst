@@ -100,6 +100,7 @@ export enum Permission {
   BACKUP_DELETE = "backup.delete",
   BACKUP_RESTORE = "backup.restore",
   BACKUP_DOWNLOAD = "backup.download",
+  BACKUP_PIN = "backup.pin",
   // File and console permissions
   FILE_READ = "file.read",
   FILE_WRITE = "file.write",

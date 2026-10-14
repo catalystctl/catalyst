@@ -42,6 +42,14 @@ export interface FrontendComponentSlot {
   slot: string;
   component: React.ComponentType<any>;
   order?: number;
+  /**
+   * Permissions that gate this component: the host renders it only when the
+   * viewer holds one of them — as a global grant, or as a server-scoped grant
+   * when the slot is on a server surface. Omit to show it to everyone who can
+   * reach the surface at all. Tokens are built-in panel permissions or ids the
+   * plugin declares in its manifest's `userPermissions`.
+   */
+  requiredPermissions?: string[];
 }
 
 /** What a frontend plugin module exports. */

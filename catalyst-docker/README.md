@@ -3,6 +3,12 @@
 The fastest way to run Catalyst. Uses pre-built images from [GitHub Container Registry](https://github.com/catalystctl/catalyst/pkgs/container/catalyst-backend) — no building required.
 
 > 🏠 **New here?** See [`docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the absolute fastest path, or [`docs/INSTALLATION_DETAILED.md`](../docs/INSTALLATION_DETAILED.md) for a deep-dive covering every option.
+>
+> 🧑💻 **Developing Catalyst itself?** This directory also holds the development
+> stack — `docker-compose.dev.yml` + `Dockerfile.dev`, driven by
+> `pnpm run dev:stack` (Postgres, Redis, backend and Vite dev server in
+> containers, hot-reloading). See [CONTRIBUTING.md](../CONTRIBUTING.md) and
+> `pnpm run dev:stack:help`.
 
 ---
 
@@ -722,4 +728,4 @@ docker compose logs --tail=100 backend
 
 ---
 
-*Last updated: 2026-05-11*
+*Last updated: 2026-10-14*

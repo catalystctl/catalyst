@@ -124,6 +124,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'backup.delete', label: 'Delete backups' },
       { value: 'backup.restore', label: 'Restore backups' },
       { value: 'backup.download', label: 'Download backups' },
+      { value: 'backup.pin', label: 'Pin backups (ignore retention limit)' },
     ],
   },
   {
@@ -311,6 +312,7 @@ export const ALL_SERVER_PERMISSIONS = [
   'console.read', 'console.write',
   'file.read', 'file.write',
   'backup.read', 'backup.create', 'backup.restore', 'backup.delete', 'backup.download',
+  'backup.pin',
   'database.read', 'database.create', 'database.rotate', 'database.delete',
   'alert.read', 'alert.create', 'alert.update', 'alert.delete',
   'mods.manage', 'plugins.manage',

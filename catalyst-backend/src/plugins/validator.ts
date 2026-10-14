@@ -19,6 +19,12 @@ export function isValidPluginName(name: string): boolean {
 // Permission description values — single reviewer-facing sentence.
 const PERMISSION_DESCRIPTION_MAX = 200;
 
+// Role-facing permissions a plugin may expose for the panel's role editor.
+// Same token shape as the manifest's capability scopes, minus the wildcard.
+const USER_PERMISSION_ID_REGEX = /^[a-zA-Z0-9_.-]{1,64}$/;
+const USER_PERMISSION_LABEL_MAX = 64;
+const MAX_USER_PERMISSIONS = 32;
+
 // ── Third-party licensing declaration ────────────────────────────────────────
 const LICENSE_URL_MAX = 500;
 const CONTACT_HOSTNAME_REGEX = /^[a-z0-9.-]{1,253}$/i;
@@ -92,6 +98,26 @@ export const PluginManifestSchema = z.object({
   permissionDescriptions: z
     .record(z.string(), z.string().min(1).max(PERMISSION_DESCRIPTION_MAX))
     .optional(),
+  /**
+   * Role-facing permissions this plugin exposes (separate namespace from
+   * `permissions`, which is the plugin's own API capability list). The panel
+   * lists these in the role editor so an admin can grant them; the plugin's
+   * frontend uses the same tokens in `requiredPermissions` to gate its tabs,
+   * pages and slot components.
+   */
+  userPermissions: z
+    .array(
+      z.object({
+        id: z
+          .string()
+          .regex(USER_PERMISSION_ID_REGEX, 'Permission id must be a token like "my-plugin.view"')
+          .refine((id) => id !== '*', { message: 'A plugin cannot expose the wildcard permission' }),
+        label: z.string().min(1).max(USER_PERMISSION_LABEL_MAX),
+        description: z.string().min(1).max(PERMISSION_DESCRIPTION_MAX).optional(),
+      }),
+    )
+    .max(MAX_USER_PERMISSIONS)
+    .optional(),
   // Isolation / storage engine flags — must be kept (not stripped) so loader can activate them.
   runtime: z.enum(['legacy', 'isolated']).optional(),
   storageEngine: z.enum(['legacy', 'dedicated']).optional(),
@@ -155,17 +181,32 @@ export const PluginManifestSchema = z.object({
   // loudly here gives authors an immediate, actionable error during discovery
   // instead of silently-missing copy in the admin consent/review UIs.
   const descriptions = manifest.permissionDescriptions;
-  if (!descriptions) return;
-  const declared = new Set(manifest.permissions ?? []);
-  for (const key of Object.keys(descriptions)) {
-    if (!declared.has(key)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['permissionDescriptions', key],
-        message: `permissionDescriptions key "${key}" is not declared in "permissions"`,
-      });
+  if (descriptions) {
+    const declared = new Set(manifest.permissions ?? []);
+    for (const key of Object.keys(descriptions)) {
+      if (!declared.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['permissionDescriptions', key],
+          message: `permissionDescriptions key "${key}" is not declared in "permissions"`,
+        });
+      }
     }
   }
+
+  // Duplicate user-permission ids would render two identical rows in the role
+  // editor, and the second copy would silently win — reject at discovery.
+  const seen = new Set<string>();
+  (manifest.userPermissions ?? []).forEach((permission, index) => {
+    if (seen.has(permission.id)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['userPermissions', index, 'id'],
+        message: `Duplicate user permission "${permission.id}"`,
+      });
+    }
+    seen.add(permission.id);
+  });
 });
 
 /**

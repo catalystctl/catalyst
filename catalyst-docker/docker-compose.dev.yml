@@ -1,0 +1,237 @@
+# =============================================================================
+# Catalyst - development stack (Docker / Podman Compose)
+#
+# A hot-reloading development environment for the whole panel:
+#
+#   postgres   127.0.0.1:5433   own volume - independent of the standalone
+#   redis      127.0.0.1:6380   catalyst-docker stack, which can keep running
+#   backend    :3000            tsx --watch over bind-mounted source
+#   frontend   :5173            Vite dev server + HMR over bind-mounted source
+#
+# Both app services run from one image (catalyst-docker/Dockerfile.dev) with the
+# pnpm workspace installed and the Prisma client generated. Source directories
+# are bind-mounted over it, so edits reload with no rebuild; rebuild only when a
+# dependency changes:
+#
+#   pnpm run dev:stack:build
+#
+# Use the wrapper rather than raw compose - it creates catalyst-docker/.env.dev,
+# generates the secrets, keeps the derived URLs in step with the host ports and
+# passes the project name:
+#
+#   pnpm run dev:stack           # start (and wait until the API answers)
+#   pnpm run dev:stack:logs      # follow logs
+#   pnpm run dev:stack:down      # stop (keeps the database)
+#   pnpm run dev:stack:reset     # stop and delete the dev database
+#   pnpm run dev:stack:help      # every command
+#
+# Every ${...} below is a plain substitution of a key that
+# catalyst-docker/.env.dev always defines. Do NOT introduce ${VAR:-default}
+# here: podman-compose 1.x passes an unset ${VAR:-default} through to the
+# container literally instead of applying the default (verified), so defaults
+# belong in the wrapper (ports, derived URLs) or in .env.dev.example.
+#
+# Files created inside the containers land in the bind-mounted source tree. With
+# rootless Podman (the default here) they are owned by your user; with a rootful
+# Docker daemon they are owned by root, so `sudo chown -R "$USER" .` after
+# authoring a migration with `dev:stack:migrate:dev`.
+#
+# The node agent is deliberately NOT part of this stack: it manages game servers
+# on a node and needs root, containerd and a seeded config.toml. Run it on the
+# host (`pnpm run dev:agent`) or through catalyst-docker/docker-compose.test.yml.
+# =============================================================================
+
+# Keeps this stack out of the `catalyst-docker` project used by the standalone
+# deployment, so the two can run side by side.
+name: catalyst-dev
+
+x-dev-build: &dev-build
+  build:
+    context: ..
+    dockerfile: catalyst-docker/Dockerfile.dev
+  image: catalyst-dev:local
+
+services:
+  # ===========================================================================
+  # PostgreSQL - dev database, separate volume from the standalone stack
+  # ===========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: catalyst-dev-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      # Loopback only: host tooling (psql, prisma studio) can reach it, the
+      # network cannot.
+      - "127.0.0.1:${DEV_POSTGRES_PORT}:5432"
+    volumes:
+      - catalyst-dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # -d <db>: without an explicit database, pg_isready defaults to one named
+      # after the user, which need not exist (POSTGRES_DB may differ).
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # ===========================================================================
+  # Redis - dev cache. No password (loopback-only) and no persistence: the
+  # backend degrades to Postgres when it is down and rebuilds the cache.
+  # ===========================================================================
+  redis:
+    image: redis:7.4-alpine
+    container_name: catalyst-dev-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+      - --appendonly
+      - "no"
+      - --save
+      - ""
+    ports:
+      - "127.0.0.1:${DEV_REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # ===========================================================================
+  # Backend - tsx --watch, migrations applied by the entrypoint
+  # ===========================================================================
+  backend:
+    <<: *dev-build
+    container_name: catalyst-dev-backend
+    restart: unless-stopped
+    working_dir: /app/catalyst-backend
+    command: ["sh", "/usr/local/bin/dev-backend-entrypoint.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Redis is intentionally not a startup dependency: the backend runs without
+    # it, and a Redis restart must not take the API down.
+    environment:
+      NODE_ENV: development
+      TZ: ${TZ}
+      LOG_LEVEL: ${LOG_LEVEL}
+      PORT: "3000"
+      # The browser only ever talks to the Vite dev server, which proxies /api
+      # and /ws here, so every URL the backend generates must be the frontend
+      # origin.
+      PUBLIC_URL: ${PUBLIC_URL}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+      # Agents run on the host in dev and reach the panel on the published port.
+      BACKEND_URL: ${BACKEND_URL}
+      BACKEND_EXTERNAL_ADDRESS: ${BACKEND_EXTERNAL_ADDRESS}
+      PASSKEY_RP_ID: ${PASSKEY_RP_ID}
+      # Service DNS names, never localhost: the stack has its own network.
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      # Empty falls back to BETTER_AUTH_SECRET (see catalyst-backend/.env.example).
+      API_KEY_SECRET: ${API_KEY_SECRET}
+      APP_NAME: ${APP_NAME}
+      ENABLE_COMPRESSION: "false"
+      WORKERS: "0"
+      PLUGIN_HOT_RELOAD: "true"
+      DEPLOY_SCRIPT_PATH: /app/scripts/deploy-agent.sh
+      SERVER_DATA_DIR: /var/lib/catalyst/servers
+      BACKUP_DIR: /var/lib/catalyst/backups
+      BACKUP_STORAGE_MODE: local
+      BACKUP_STREAM_DIR: /tmp/catalyst-backup-stream
+      BACKUP_TRANSFER_DIR: /tmp/catalyst-backup-transfer
+      # Same checkout the frontend compiles plugin UI from, so the plugin you
+      # edit is the plugin the backend discovers (manifests, backend entries,
+      # config routes). Mirrors the host convention in
+      # catalyst-backend/.env.example (`PLUGINS_DIR=./plugins`).
+      PLUGINS_DIR: /app/catalyst-plugins
+    ports:
+      - "${DEV_BACKEND_PORT}:3000"
+    volumes:
+      # Hot reload: the source tree is mounted over the image's copy. The
+      # workspace directory is mounted whole, so its node_modules needs an
+      # anonymous volume of its own to keep the image's install.
+      - ../catalyst-backend:/app/catalyst-backend
+      - /app/catalyst-backend/node_modules
+      # Entrypoint: generate + migrate before the watch server starts.
+      - ../catalyst-docker/dev/backend-entrypoint.sh:/usr/local/bin/dev-backend-entrypoint.sh:ro
+      # Served by GET /api/agent/deploy-script (default path is
+      # <cwd>/../scripts/deploy-agent.sh).
+      - ../scripts:/app/scripts:ro
+      # The plugin checkout the backend discovers (PLUGINS_DIR above) — the
+      # same one the frontend compiles UI from. Writable: the loader stages
+      # compiled backend entries under <PLUGINS_DIR>/.cache (gitignored), and
+      # a plugin's own storage lives in its directory. Without this mount the
+      # backend discovers nothing and no plugin UI ever renders.
+      - ../catalyst-plugins:/app/catalyst-plugins
+      # Installed plugins, plus the server/backup scratch dirs the entrypoint
+      # creates, survive a container recreate.
+      - catalyst-dev-backend-data:/var/lib/catalyst
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:$${PORT}/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  # ===========================================================================
+  # Frontend - Vite dev server, proxies /api, /plugins-assets and /ws
+  # ===========================================================================
+  frontend:
+    <<: *dev-build
+    container_name: catalyst-dev-frontend
+    restart: unless-stopped
+    working_dir: /app/catalyst-frontend
+    command: ["pnpm", "run", "dev"]
+    # Started together with the backend on purpose: Vite pre-bundles its
+    # dependencies while the backend applies migrations and boots. The wrapper
+    # waits for /health before printing the panel URL.
+    depends_on:
+      - backend
+    # Only VITE_BACKEND_PROXY_TARGET is injected. It is the one setting that
+    # cannot come from a .env file: it must name the sibling container, while
+    # the same file has to keep saying 127.0.0.1 for `pnpm run dev` on the host.
+    #
+    # Do NOT inject VITE_API_URL / VITE_WS_URL / VITE_BETTER_AUTH_URL /
+    # VITE_PASSKEY_RP_ID here. Vite resolves VITE_* with process.env taking
+    # precedence over every .env file, so a value set here silently overrides
+    # catalyst-frontend/.env.local - which is exactly what a tunnel sets up
+    # (VITE_PASSKEY_RP_ID=<tunnel host>, see .env.tunnel.example). Injecting
+    # localhost pinned allowedHosts to localhost in the container and every
+    # tunnelled request died with "Blocked request. This host is not allowed."
+    environment:
+      VITE_BACKEND_PROXY_TARGET: http://backend:3000
+    ports:
+      - "${DEV_FRONTEND_PORT}:5173"
+    volumes:
+      - ../catalyst-frontend:/app/catalyst-frontend
+      - /app/catalyst-frontend/node_modules
+      # Plugin frontends are compiled from the standalone plugins checkout
+      # (vite alias @plugins). A missing checkout means no plugin UI, not an
+      # error - clone catalystctl/catalyst-plugins next to this repo for it.
+      - ../catalyst-plugins:/app/catalyst-plugins
+      # The panel bundles the SDK's frontend source directly.
+      - ../packages/plugin-sdk/src:/app/packages/plugin-sdk/src:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:5173/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  catalyst-dev-postgres-data:
+    driver: local
+  catalyst-dev-backend-data:
+    driver: local

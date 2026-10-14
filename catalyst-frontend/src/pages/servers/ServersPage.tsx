@@ -136,7 +136,7 @@ function ServerRow({
       }}
       className={cn(
         GRID,
-        'group relative rounded-sm py-1.5 pl-3 pr-3 outline-none transition-colors',
+        'group relative rounded-sm py-2 pl-3 pr-3 outline-none transition-colors',
         'hover:bg-surface-1/40 focus-visible:bg-primary/10 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
       )}
     >
@@ -171,36 +171,29 @@ function ServerRow({
       </div>
 
       {/* game */}
-      <span className="server-list-xl min-w-0">
+      <span className="server-list-lg min-w-0">
         <span className="block truncate text-micro text-muted-foreground">{game ?? '—'}</span>
       </span>
 
       {/* live activity cluster — labelled by the column header, so the row
-          carries only the reading (bars + value) to stay dense and aligned */}
-      <span className="server-list-xl items-center justify-end gap-2">
-        <Meter value={cpu} />
-        <Segmented
-          muted={cpu == null}
-          className={cn('min-w-[3rem] text-right', severityClass(cpu))}
-        >
+          carries only the reading (bar + value). The value hugs its bar so the
+          pair reads as one unit; the spacing between resources comes from the
+          column, not from a shared value box. */}
+      <span className="server-list-xl items-center gap-2">
+        <Meter value={cpu} width="w-7" />
+        <Segmented muted={cpu == null} className={severityClass(cpu)}>
           {cpu == null ? '—' : `${Math.round(cpu)}%`}
         </Segmented>
       </span>
-      <span className="server-list-xl items-center justify-end gap-2">
-        <Meter value={ramPct} />
-        <Segmented
-          muted={ramPct == null}
-          className={cn('min-w-[3rem] text-right', severityClass(ramPct))}
-        >
+      <span className="server-list-xl items-center gap-2">
+        <Meter value={ramPct} width="w-7" />
+        <Segmented muted={ramPct == null} className={severityClass(ramPct)}>
           {ramPct == null ? '—' : `${Math.round(ramPct)}%`}
         </Segmented>
       </span>
-      <span className="server-list-xl items-center justify-end gap-2">
-        <Meter value={diskPct} />
-        <Segmented
-          muted={diskPct == null}
-          className={cn('min-w-[3rem] text-right', severityClass(diskPct))}
-        >
+      <span className="server-list-xl items-center gap-2">
+        <Meter value={diskPct} width="w-7" />
+        <Segmented muted={diskPct == null} className={severityClass(diskPct)}>
           {diskPct == null ? '—' : `${Math.round(diskPct)}%`}
         </Segmented>
       </span>
@@ -213,14 +206,14 @@ function ServerRow({
         </span>
       </span>
 
-      {/* state */}
-      <span className="server-list-md min-w-0 justify-end overflow-hidden">
+      {/* state — left-aligned like the rest of the text columns */}
+      <span className="server-list-md min-w-0 overflow-hidden">
         <span className={cn('truncate text-micro uppercase', stateTextClass(server.status))}>
           {serverStatusLabel(t, server.status)}
         </span>
       </span>
 
-      <span className="server-list-actions flex shrink-0 items-center justify-end gap-1">
+      <span className="server-list-actions flex shrink-0 items-center justify-end gap-0.5">
         <ServerControls
           serverId={server.id}
           status={server.status}
@@ -231,7 +224,7 @@ function ServerRow({
           to={`/servers/${server.id}/console`}
           title={t('tabs.console')}
           aria-label={t('tabs.console')}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-7 sm:min-w-7 sm:h-7 sm:w-7"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-6 sm:min-h-6 sm:w-6 sm:min-w-6"
         >
           <Terminal className="h-3.5 w-3.5" />
         </Link>
@@ -239,7 +232,7 @@ function ServerRow({
           to={`/servers/${server.id}`}
           title={t('card.manage')}
           aria-label={t('card.manage')}
-          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground focus-visible:border-primary focus-visible:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:min-h-7 sm:min-w-7 sm:h-7 sm:w-7"
+          className="flex min-h-11 min-w-11 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-6 sm:min-h-6 sm:w-6 sm:min-w-6"
         >
           <ChevronRight className="h-3.5 w-3.5" />
         </Link>
@@ -386,7 +379,7 @@ function ServersPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
       {/* ── Deck header ── */}
       <header className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1">
@@ -405,9 +398,14 @@ function ServersPage() {
       </header>
 
       {/* ── The deck: controls, columns, rows and footer in one frame ── */}
-      <div className="deck-panel server-list-container flex min-h-0 flex-col overflow-hidden">
-        {/* Control strip */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
+      {/* Content-height by default — the deck ends just past the last row —
+          but it is a shrinkable flex item inside the full-height page column,
+          so a long fleet caps it at the viewport and the row area scrolls. */}
+      <div className="deck-panel server-list-container flex min-h-0 shrink flex-col overflow-hidden">
+        {/* Control strip — the tabs and the search share the first row, the
+            status filter spans the second. One wrapped row squeezed the search
+            as soon as the filter grew. */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-border/50 bg-surface-1/40 px-3 py-2">
           <div className="flex items-center gap-0.5">
             <RailTab
               active={accessFilter === 'all'}
@@ -443,58 +441,60 @@ function ServersPage() {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('filters.searchPlaceholder')}
-              className="h-8 min-h-8 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+              className="h-8 min-h-8 w-full rounded-sm border border-border/70 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
             />
           </label>
 
-          <Select
-            value={status ?? '__all__'}
-            onValueChange={(value) =>
-              setStatus(value === '__all__' ? undefined : (value as ServerStatus))
-            }
-          >
-            <SelectTrigger
-              className="h-8 min-h-8 rounded-sm border-border/60 bg-background/40 px-2 text-mini"
-              aria-label={t('filters.allStatuses')}
+          <div className="flex w-full items-center gap-2">
+            <Select
+              value={status ?? '__all__'}
+              onValueChange={(value) =>
+                setStatus(value === '__all__' ? undefined : (value as ServerStatus))
+              }
             >
-              <SelectValue placeholder={t('filters.allStatuses')} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
-              {(
-                [
-                  'running',
-                  'stopped',
-                  'installing',
-                  'starting',
-                  'stopping',
-                  'crashed',
-                  'unhealthy',
-                  'transferring',
-                  'cloning',
-                  'suspended',
-                ] as ServerStatus[]
-              ).map((value) => (
-                <SelectItem key={value} value={value}>
-                  {serverStatusLabel(t, value)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                className="h-8 min-h-8 w-full rounded-sm border-border/70 bg-background/40 px-2 text-mini"
+                aria-label={t('filters.allStatuses')}
+              >
+                <SelectValue placeholder={t('filters.allStatuses')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t('filters.allStatuses')}</SelectItem>
+                {(
+                  [
+                    'running',
+                    'stopped',
+                    'installing',
+                    'starting',
+                    'stopping',
+                    'crashed',
+                    'unhealthy',
+                    'transferring',
+                    'cloning',
+                    'suspended',
+                  ] as ServerStatus[]
+                ).map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {serverStatusLabel(t, value)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          {hasFilters && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch('');
-                setStatus(undefined);
-              }}
-              className="flex h-8 min-h-8 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
-            >
-              <X className="h-3 w-3" />
-              {t('filters.clear')}
-            </button>
-          )}
+            {hasFilters && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch('');
+                  setStatus(undefined);
+                }}
+                className="flex h-8 min-h-8 items-center gap-1 rounded-sm px-2.5 text-mini text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              >
+                <X className="h-3 w-3" />
+                {t('filters.clear')}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Column header — same grid as the rows, so columns always line up */}
@@ -505,12 +505,12 @@ function ServersPage() {
           )}
         >
           <span className="type-overline">{cols.server}</span>
-          <span className="type-overline server-list-xl">{cols.game}</span>
-          <span className="type-overline server-list-xl justify-end">{cols.cpu}</span>
-          <span className="type-overline server-list-xl justify-end">{cols.ram}</span>
-          <span className="type-overline server-list-xl justify-end">{cols.disk}</span>
+          <span className="type-overline server-list-lg">{cols.game}</span>
+          <span className="type-overline server-list-xl">{cols.cpu}</span>
+          <span className="type-overline server-list-xl">{cols.ram}</span>
+          <span className="type-overline server-list-xl">{cols.disk}</span>
           <span className="type-overline server-list-md">{cols.address}</span>
-          <span className="type-overline server-list-md justify-end">{cols.state}</span>
+          <span className="type-overline server-list-md">{cols.state}</span>
           <span className="type-overline justify-self-end">{cols.actions}</span>
         </div>
 
@@ -521,7 +521,12 @@ function ServersPage() {
           ref={listRef}
           role="list"
           aria-label={t('page.title')}
-          className="min-h-[12rem] min-w-0 flex-1 overflow-y-auto bg-background/25"
+          className={cn(
+            'min-w-0 shrink overflow-y-auto bg-background/25',
+            // The empty and loading states keep a readable box; a populated list
+            // must hug its rows, so it drops the floor and can shrink instead.
+            filtered.length === 0 ? 'min-h-[12rem]' : 'min-h-0',
+          )}
         >
           {isLoading ? (
             <div role="status" aria-label={t('page.title')}>
@@ -531,19 +536,19 @@ function ServersPage() {
                     <div className="h-2 w-2 animate-pulse rounded-full bg-surface-3" />
                     <div className="h-3.5 w-40 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="server-list-xl min-w-0">
+                  <div className="server-list-lg min-w-0">
                     <div className="h-3 w-20 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="server-list-xl items-center justify-end gap-2">
-                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                  <div className="server-list-xl items-center gap-2">
+                    <div className="h-1 w-7 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="server-list-xl items-center justify-end gap-2">
-                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                  <div className="server-list-xl items-center gap-2">
+                    <div className="h-1 w-7 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="server-list-xl items-center justify-end gap-2">
-                    <div className="h-2 w-16 animate-pulse rounded-sm bg-surface-3" />
+                  <div className="server-list-xl items-center gap-2">
+                    <div className="h-1 w-7 animate-pulse rounded-sm bg-surface-3" />
                     <div className="h-3 w-10 animate-pulse rounded-sm bg-surface-3" />
                   </div>
                   <div className="server-list-md min-w-0">
@@ -552,8 +557,10 @@ function ServersPage() {
                   <div className="server-list-md min-w-0">
                     <div className="h-3 w-12 animate-pulse rounded-sm bg-surface-3" />
                   </div>
-                  <div className="flex justify-end gap-1">
-                    <div className="h-7 w-16 animate-pulse rounded-sm bg-surface-3" />
+                  <div className="flex justify-end gap-0.5">
+                    <div className="h-6 w-6 animate-pulse rounded-sm bg-surface-3" />
+                    <div className="h-6 w-6 animate-pulse rounded-sm bg-surface-3" />
+                    <div className="h-6 w-6 animate-pulse rounded-sm bg-surface-3" />
                   </div>
                 </div>
               ))}

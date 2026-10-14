@@ -28,6 +28,61 @@ export interface PermissionsManifestFragment {
 }
 
 /**
+ * One permission a plugin exposes to the panel's role editor.
+ *
+ * These are NOT plugin capabilities: `definePermissions` tokens are granted to
+ * the plugin by an admin, while these are granted to panel users through a
+ * role. The plugin's frontend gates its own tabs, pages and slot components on
+ * the same ids via `requiredPermissions`.
+ */
+export interface UserPermissionDefinition {
+  /** Token the plugin checks, e.g. "tickets.view". Max 64 chars. */
+  id: string;
+  /** Role-editor label, e.g. "View the ticket queue". Max 64 chars. */
+  label: string;
+  /** Optional role-editor sentence, max 200 chars. */
+  description?: string;
+}
+
+export interface UserPermissionsManifestFragment {
+  /** Entry list for manifest `userPermissions`. */
+  userPermissions: UserPermissionDefinition[];
+}
+
+/**
+ * Expose permissions panel roles can be granted.
+ *
+ * ```ts
+ * export const exposedPermissions = defineUserPermissions(
+ *   { id: 'tickets.view', label: 'View the ticket queue' },
+ *   { id: 'tickets.reply', label: 'Reply to tickets', description: 'Also sends the reply email.' },
+ * );
+ * // → { userPermissions: [{ id: 'tickets.view', label: 'View the ticket queue' }, ...] }
+ * ```
+ *
+ * The panel lists these under **Plugins** in the role editor. Ids that are
+ * also built-in permissions are ignored there — use the built-in directly.
+ */
+export function defineUserPermissions(
+  ...defs: UserPermissionDefinition[]
+): UserPermissionsManifestFragment {
+  const userPermissions: UserPermissionDefinition[] = [];
+  const seen = new Set<string>();
+
+  for (const def of defs) {
+    if (!def?.id || def.id === '*' || seen.has(def.id)) continue;
+    seen.add(def.id);
+    userPermissions.push({
+      id: def.id,
+      label: def.label || def.id,
+      ...(def.description ? { description: def.description.slice(0, 200) } : {}),
+    });
+  }
+
+  return { userPermissions };
+}
+
+/**
  * Declare a plugin's capabilities.
  *
  * ```ts

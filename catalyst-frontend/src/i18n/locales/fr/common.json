@@ -110,6 +110,7 @@
     "backupCreate": "Créer des sauvegardes",
     "backupDelete": "Supprimer des sauvegardes",
     "backupDownload": "Télécharger les sauvegardes",
+    "backupPin": "Épingler des sauvegardes (ignorer la limite de rétention)",
     "backupRead": "Consulter les sauvegardes",
     "backupRestore": "Restaurer des sauvegardes",
     "clone": "Cloner le serveur",

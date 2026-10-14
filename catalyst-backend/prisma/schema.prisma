@@ -744,6 +744,8 @@ model Backup {
   storageMode String    @default("local")
   sizeMb      Float
   compressed  Boolean   @default(true)
+  // Pinned backups are exempt from the retention job (count and age).
+  pinned      Boolean   @default(false)
   checksum    String? // SHA256 checksum for integrity
   metadata    Json      @default("{}") // Server config snapshot
   createdAt   DateTime  @default(now())

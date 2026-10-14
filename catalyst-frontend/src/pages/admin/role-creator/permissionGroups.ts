@@ -71,6 +71,9 @@ const CATEGORY_GROUP: Record<string, string> = {
   alerts: 'alerts',
   'server-content': 'content',
   operations: 'system',
+  // Custom permissions exposed by installed plugins (the backend appends one
+  // `plugins` category when any enabled plugin declares `userPermissions`).
+  plugins: 'plugins',
 };
 
 /**
@@ -80,7 +83,11 @@ const CATEGORY_GROUP: Record<string, string> = {
  */
 const FLEET_GROUP = 'fleet';
 
-/** Group for permissions a plugin adds that the shipped catalog does not know. */
+/**
+ * Catch-all group. Plugin-exposed permissions arrive in the catalog's own
+ * `plugins` category and keep their group; this is for anything else the
+ * shipped catalog does not recognize.
+ */
 const UNKNOWN_GROUP = 'other';
 
 /**
@@ -101,6 +108,8 @@ const GROUP_ORDER = [
   'access',
   'apikeys',
   'system',
+  // Plugin-exposed permissions sit last, ahead of the catch-all `other`.
+  'plugins',
 ] as const;
 
 /** Kind of a group id, before scope membership is considered. */

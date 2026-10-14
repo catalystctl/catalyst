@@ -124,7 +124,7 @@ const PERMISSION_CATEGORIES = [
  accent: 'text-primary',
  border: 'border-primary/20',
  bg: 'bg-primary/5',
- permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore', 'backup.download'],
+ permissions: ['backup.read', 'backup.create', 'backup.delete', 'backup.restore', 'backup.download', 'backup.pin'],
  },
  {
  key: 'fileManagement',

@@ -122,6 +122,14 @@ function BackupSection({
  const canCreate = hasPerm('backup.create') || globalPerms.includes('admin.write');
  const canRestore = hasPerm('backup.restore') || globalPerms.includes('admin.write');
  const canDelete = hasPerm('backup.delete') || globalPerms.includes('admin.write');
+ // Pinning bypasses the retention limit, so ownership does NOT imply it: only
+ // an explicit backup.pin grant (global role, scoped role, or subuser row)
+ // unlocks it. admin.write / * still satisfy it.
+ const canPin =
+   globalPerms.includes('*') ||
+   globalPerms.includes('admin.write') ||
+   globalPerms.includes('backup.pin') ||
+   (!isOwner && serverPerms.includes('backup.pin'));
  const canRead =
  hasPerm('backup.read') ||
  canCreate ||
@@ -175,7 +183,7 @@ function BackupSection({
  actions={
  <div className="flex flex-wrap items-center justify-end gap-2">
  <LastUpdated queryKey={qk.backups(serverId)} />
- <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />
+ <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} canPin={canPin} />
  </div>
  }
  />
@@ -557,13 +565,14 @@ function BackupSection({
  canWrite={canWrite}
  canRestore={canRestore}
  canDelete={canDelete}
+ canPin={canPin}
  />
  </div>
  ) : (
  <TabEmptyState
  title={t('backups.emptyTitle')}
  description={t('backups.emptyDescription')}
- action={<CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} />}
+ action={<CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} canPin={canPin} />}
  />
  )}
  </div>

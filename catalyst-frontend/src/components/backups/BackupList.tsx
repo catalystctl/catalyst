@@ -1,10 +1,15 @@
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useVirtualizer } from '@/csync';
+import { Pin } from 'lucide-react';
+import { useMutation, useVirtualizer } from '@/csync';
+import { qk } from '@/lib/queryKeys';
+import { queryClient } from '@/lib/queryClient';
 import type { Backup } from '../../types/backup';
 import { formatBackupSize } from '../../utils/formatters';
 import { formatDateTime } from '@/i18n/format';
 import { getBackupStatus } from '../../utils/backupStatus';
+import { backupsApi } from '../../services/api/backups';
+import { notifyError, notifySuccess } from '../../utils/notify';
 import BackupStatusBadge from './BackupStatusBadge';
 import RestoreBackupDialog from './RestoreBackupDialog';
 import DeleteBackupDialog from './DeleteBackupDialog';
@@ -36,6 +41,7 @@ function BackupList({
  canWrite = true,
  canRestore,
  canDelete,
+ canPin = false,
 }: {
  serverId: string;
  backups: BackupWithDownload[];
@@ -45,10 +51,25 @@ function BackupList({
  canWrite?: boolean;
  canRestore?: boolean;
  canDelete?: boolean;
+ /** Whether the user holds backup.pin (pin/unpin controls). */
+ canPin?: boolean;
 }) {
  const { t } = useTranslation('server-tabs');
  const allowRestore = canRestore ?? canWrite;
  const allowDelete = canDelete ?? canWrite;
+ const pinMutation = useMutation({
+   mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
+     backupsApi.setPinned(serverId, id, pinned),
+   onSuccess: (_data, variables) => {
+     notifySuccess(
+       variables.pinned ? t('backups.pin.pinned') : t('backups.pin.unpinned'),
+     );
+   },
+   onError: (error: any) => notifyError(error),
+   onSettled: () => {
+     queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+   },
+ });
  const sorted = useMemo(() => {
  const next = [...backups];
  next.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -112,6 +133,12 @@ function BackupList({
  <span className="flex min-w-0 items-center gap-2">
  <span className="truncate text-data font-semibold text-foreground">{backup.name}</span>
  <BackupStatusBadge status={status} />
+ {backup.pinned ? (
+ <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-micro font-medium text-primary">
+ <Pin className="h-3 w-3" aria-hidden="true" />
+ {t('backups.list.pinned')}
+ </span>
+ ) : null}
  </span>
  <span className="font-mono text-micro tabular-nums text-muted-foreground/70 md:hidden">
  {formatBackupSize(toNumber(backup.sizeMb))} · {backup.storageMode ?? 'local'}
@@ -171,6 +198,20 @@ function BackupList({
  disabled={downloading || isSuspended}
  >
  {backup.downloadProgress ?? t('common:actions.download')}
+ </button>
+ ) : null}
+ {canPin ? (
+ <button
+ type="button"
+ className={`inline-flex h-8 min-h-8 items-center rounded-sm border px-2 text-mini font-medium transition-colors disabled:opacity-60 ${
+ backup.pinned
+ ? 'border-primary/40 text-primary hover:bg-primary/10'
+ : 'border-border/60 text-muted-foreground hover:bg-surface-1/40 hover:text-foreground'
+ }`}
+ onClick={() => pinMutation.mutate({ id: backup.id, pinned: !backup.pinned })}
+ disabled={isSuspended || pinMutation.isPending}
+ >
+ {backup.pinned ? t('backups.pin.unpin') : t('backups.pin.action')}
  </button>
  ) : null}
  {allowRestore ? (

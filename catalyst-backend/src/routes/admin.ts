@@ -3051,15 +3051,15 @@ export async function adminRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Time windows must be valid (1000, 60000, 3600000, 86400000, or 2592000000 ms)');
       }
 
-      // Email verification requires SMTP to be configured
-      if (Boolean(requireEmailVerification) && !(await isMailConfigured())) {
-        return apiError(
-          reply,
-          400,
-          ErrorCodes.VALIDATION_ERROR,
-          'Email verification cannot be enabled when SMTP is not configured',
-        );
-      }
+      // Email verification requires SMTP to be configured. When mail is not
+      // set up we silently downgrade the flag to false rather than rejecting the
+      // whole payload — a stale client toggle must not block unrelated security
+      // edits (rate limits, lockouts, file tunnel, …). The UI derives the toggle
+      // to always be off in this state, so a hard error here only ever surfaced
+      // as an unexplained failed save.
+      const mailConfigured = await isMailConfigured();
+      const effectiveRequireEmailVerification =
+        Boolean(requireEmailVerification) && mailConfigured;
 
       await upsertSecuritySettings({
         authRateLimitMax: Number(authRateLimitMax),
@@ -3083,7 +3083,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelMaxUploadMb: sanitizeMaxUploadMb(Number(fileTunnelMaxUploadMb)),
         fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
-        requireEmailVerification: Boolean(requireEmailVerification),
+        requireEmailVerification: effectiveRequireEmailVerification,
         registrationEnabled: Boolean(registrationEnabled),
       });
 
@@ -3113,7 +3113,7 @@ export async function adminRoutes(app: FastifyInstance) {
           fileTunnelMaxUploadMb,
           fileTunnelMaxPendingPerNode,
           fileTunnelConcurrentMax,
-          requireEmailVerification,
+          requireEmailVerification: effectiveRequireEmailVerification,
           registrationEnabled,
         },
       });

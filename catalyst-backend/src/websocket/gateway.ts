@@ -3298,8 +3298,10 @@ export class WebSocketGateway {
             where: { serverId: message.serverId },
             orderBy: { createdAt: "desc" },
           });
-          const byCount = retentionCount > 0 ? backups.slice(retentionCount) : [];
-          const byAge = cutoff ? backups.filter((backup) => backup.createdAt < cutoff) : [];
+          // Pinned backups are never pruned and do not consume a count slot.
+          const unpinned = backups.filter((backup) => !backup.pinned);
+          const byCount = retentionCount > 0 ? unpinned.slice(retentionCount) : [];
+          const byAge = cutoff ? unpinned.filter((backup) => backup.createdAt < cutoff) : [];
           const toDelete = new Map(
             [...byCount, ...byAge].map((backup) => [backup.id, backup]),
           );

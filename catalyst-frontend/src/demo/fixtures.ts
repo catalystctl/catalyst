@@ -34,6 +34,7 @@ const allServerPermissions = [
   'backup.restore',
   'backup.delete',
   'backup.download',
+  'backup.pin',
   'database.read',
   'database.create',
   'database.rotate',

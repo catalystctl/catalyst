@@ -65,6 +65,7 @@ export function formatPermission(
     case 'backup.delete': return t('roles.permissionLabels.backupDelete');
     case 'backup.restore': return t('roles.permissionLabels.backupRestore');
     case 'backup.download': return t('roles.permissionLabels.backupDownload');
+    case 'backup.pin': return t('roles.permissionLabels.backupPin');
     case 'file.read': return t('roles.permissionLabels.fileRead');
     case 'file.write': return t('roles.permissionLabels.fileWrite');
     case 'console.read': return t('roles.permissionLabels.consoleRead');

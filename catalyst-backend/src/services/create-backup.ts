@@ -33,6 +33,12 @@ export interface CreateBackupParams {
    */
   compressed?: boolean;
   /**
+   * Pin the backup: the retention job (count and age) never prunes it and it
+   * does not consume a "keep last N" slot. Callers must have verified the
+   * `backup.pin` permission before setting this.
+   */
+  pinned?: boolean;
+  /**
    * Scheduled "backup & start": once the agent confirms the backup finished,
    * the panel starts the server again. Recorded on the Backup row's metadata so
    * the intent survives a panel restart between dispatch and completion.
@@ -216,6 +222,7 @@ export async function createServerBackup(
         storageMode: mode,
         sizeMb: 0,
         compressed: useCompression,
+        pinned: params.pinned === true,
         metadata: {
           agentPath,
           storageKey,

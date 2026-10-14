@@ -7,6 +7,8 @@
       "compressLabel": "Compress backup (gzip)",
       "description": "Leave blank to auto-generate a name with the current timestamp.",
       "nameLabel": "Backup name (optional)",
+      "pinHint": "Check to ignore the retention limit and pin this backup.",
+      "pinLabel": "Ignore limit",
       "success": "Backup creation started",
       "title": "Create backup"
     },
@@ -32,6 +34,7 @@
       "empty": "No backups yet. Create a backup to protect your server data.",
       "notAvailable": "n/a",
       "path": "Path",
+      "pinned": "Pinned",
       "restored": "Restored {{date}}",
       "size": "Size",
       "storage": "Storage"
@@ -42,6 +45,12 @@
       "count_other": "{{count}} backups",
       "pageOf": "Page {{page}} of {{totalPages}}",
       "previous": "Previous"
+    },
+    "pin": {
+      "action": "Pin",
+      "pinned": "Backup pinned",
+      "unpin": "Unpin",
+      "unpinned": "Backup unpinned"
     },
     "restore": {
       "acknowledgeOverwrite": "I understand that restoring this backup will overwrite the current server files.",

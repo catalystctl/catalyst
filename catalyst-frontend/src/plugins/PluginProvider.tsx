@@ -19,15 +19,13 @@ export function PluginProvider({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Plugin inventory reads are admin.read-gated on the backend. Skipping
-  // bootstrap for everyone else means no doomed /api/plugins request and
-  // no /plugins-assets bundle imports — non-admins just see no plugin
-  // store or tabs (fail-silent).
+  // Every signed-in user bootstraps the plugin store: a plugin decides who
+  // sees what it offers via per-tab / per-route / per-component
+  // `requiredPermissions`, so the panel cannot pre-filter by admin.read
+  // without hiding plugin UI from the users a plugin targeted. The backend
+  // serves a reduced, frontend-only inventory to non-admins.
   const permissions = useAuthStore((s) => s.user?.permissions);
-  const canBootstrapPlugins = useMemo(
-    () => hasAdminReadPermission(permissions),
-    [permissions],
-  );
+  const canBootstrapPlugins = isAuthenticated;
 
   const loadPlugins = useCallback(async (opts: { forceReload?: boolean } = {}) => {
     if (!canBootstrapPlugins) return;

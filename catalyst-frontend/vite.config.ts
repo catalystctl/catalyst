@@ -9,6 +9,15 @@ const require = createRequire(import.meta.url);
 export default defineConfig(async ({ mode }) => {
   const env = loadEnv(mode, path.resolve(import.meta.dirname, '.'), 'VITE_');
 
+  // Dev proxy target. Defaults to a backend on the host (`pnpm run dev`); the
+  // compose dev stack (catalyst-docker/docker-compose.dev.yml) points it at
+  // http://backend:3000, where the API is a sibling container, not localhost.
+  const backendTarget =
+    process.env.VITE_BACKEND_PROXY_TARGET ||
+    env.VITE_BACKEND_PROXY_TARGET ||
+    'http://127.0.0.1:3000';
+  const backendWsTarget = backendTarget.replace(/^http/, 'ws');
+
   const plugins: Plugin[] = [
     react(),
     // decimal.js-light (recharts' tick engine) ships a UMD browser build with a
@@ -84,10 +93,24 @@ export default defineConfig(async ({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 5173,
-      allowedHosts: env.VITE_PASSKEY_RP_ID ? [env.VITE_PASSKEY_RP_ID] : undefined,
+      // Vite resolves VITE_* with process.env taking precedence over .env
+      // files, so a tunnel configured in .env.local is silently ignored when
+      // anything in the environment sets VITE_PASSKEY_RP_ID (the compose dev
+      // stack used to). Accept both, so either route works.
+      allowedHosts: [
+        ...new Set(
+          [
+            process.env.VITE_PASSKEY_RP_ID,
+            env.VITE_PASSKEY_RP_ID,
+            ...(process.env.VITE_ALLOWED_HOSTS ?? '')
+              .split(',')
+              .map((host) => host.trim()),
+          ].filter((host): host is string => Boolean(host)),
+        ),
+      ],
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:3000',
+          target: backendTarget,
           changeOrigin: true,
           cookieDomainRewrite: '',
           // Long-lived SSE must not be timed out / buffered by the dev proxy.
@@ -105,12 +128,12 @@ export default defineConfig(async ({ mode }) => {
         },
         // Runtime-installed plugin frontend bundles (marketplace installs)
         '/plugins-assets': {
-          target: 'http://127.0.0.1:3000',
+          target: backendTarget,
           changeOrigin: true,
           cookieDomainRewrite: '',
         },
         '/ws': {
-          target: 'ws://127.0.0.1:3000',
+          target: backendWsTarget,
           ws: true,
           changeOrigin: true,
         },

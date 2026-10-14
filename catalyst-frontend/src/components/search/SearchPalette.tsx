@@ -213,18 +213,6 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  path: '/admin/nodes',
  },
  {
- id: 'admin-servers',
- label: t('layout:nav.allServers'),
- description: t('layout:search.items.adminServers.description'),
- icon: Server,
- to: '/admin/servers',
- category: 'Admin',
- keywords: ['all servers', 'server list', 'manage servers'],
- permissions: ['admin.read'],
- badge: t('layout:nav.admin'),
- path: '/admin/servers',
- },
- {
  id: 'admin-templates',
  label: t('layout:nav.templates'),
  description: t('layout:search.items.adminTemplates.description'),

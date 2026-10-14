@@ -315,6 +315,7 @@
         "fleet": "Fleet management",
         "infrastructure": "Infrastructure",
         "other": "Other",
+        "plugins": "Plugins",
         "system": "System administration"
       },
       "moreCount_one": "+ {{count}} more",
@@ -413,6 +414,7 @@
       "backupCreate": "Create backups",
       "backupDelete": "Delete backups",
       "backupDownload": "Download backups",
+      "backupPin": "Pin backups (ignore retention limit)",
       "backupRead": "View backups",
       "backupRestore": "Restore backups",
       "consoleRead": "View console",

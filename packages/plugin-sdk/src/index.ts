@@ -31,8 +31,13 @@ export type {
 } from './licensing.js';
 
 // Permissions
-export { definePermissions } from './permissions.js';
-export type { PermissionDefinition, PermissionsManifestFragment } from './permissions.js';
+export { definePermissions, defineUserPermissions } from './permissions.js';
+export type {
+  PermissionDefinition,
+  PermissionsManifestFragment,
+  UserPermissionDefinition,
+  UserPermissionsManifestFragment,
+} from './permissions.js';
 
 // Storage
 export { createTypedCollection } from './storage.js';

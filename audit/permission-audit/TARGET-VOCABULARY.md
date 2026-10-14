@@ -77,6 +77,11 @@ delegates to it; the duplicate subset logic in _helpers.ts is deleted.
    database-hosts read/ping, diagnostics, admin stats, dashboard global counts,
    plugin inventory reads GET /api/plugins + /:name + manifest + assets): `admin.read`
    via hasGrant. Plugin inventory reads: `admin.read` (no plugin.read — no persona).
+   AMENDED (1.83.0): `GET /api/plugins` and `GET /plugins-assets/:name/:filename` now
+   answer signed-in non-admins too — a reduced, frontend-only inventory and the bundle
+   of an enabled frontend plugin — because a plugin gates its own UI with
+   `requiredPermissions` and the panel cannot evaluate what it never learns. The admin
+   inventory (`/:name`, frontend-manifest, sourcemaps) stays `admin.read`.
 2. **GET /api/update/check** (currently auth-only): `admin.read`.
 3. **GET /api/servers/database-hosts** (currently any server owner): `admin.read`.
 4. **Server creation**: requires `server.create` OR the node_manage path (node assignment

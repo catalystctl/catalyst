@@ -36,6 +36,9 @@ node_modules/
 # Root environment (docker compose config)
 .env
 
+# Development compose stack settings (generated; see .env.dev.example)
+catalyst-docker/.env.dev
+
 # Docker
 .docker/
 

@@ -1,0 +1,60 @@
+# syntax=docker/dockerfile:1
+# =============================================================================
+# Catalyst - development image
+#
+# One image for every app service in docker-compose.dev.yml: the full pnpm
+# workspace (backend + frontend + the SDK packages) installed and the Prisma
+# client generated, so a container boots straight into hot-reload mode.
+#
+# Source directories are bind-mounted over this image at run time (see the
+# compose file), so it only needs rebuilding when a dependency changes:
+#
+#   pnpm run dev:stack:build
+#
+# The build context is the repo root: catalyst-backend and catalyst-frontend
+# are pnpm workspace members and share the root lockfile.
+# =============================================================================
+FROM node:22-alpine
+
+# Pinned to the version the production images use (catalyst-backend/Dockerfile,
+# catalyst-frontend/Dockerfile) so a dev install matches CI and the releases.
+RUN corepack enable && corepack prepare pnpm@10.34.5 --activate
+
+# python3/make/g++: native addons (ssh2, cpu-features) built during install.
+# curl: container healthchecks. git: git-hosted deps, plus handy in the shell.
+# openssl/libc6-compat: Prisma query engine on Alpine.
+# bash: the dev scripts and `pnpm run dev:stack:shell`.
+RUN apk add --no-cache bash curl git openssl libc6-compat make g++ python3
+
+WORKDIR /app
+
+# Install before any source is copied, so the dependency layer survives every
+# edit that does not touch a package.json.
+#
+# The root manifest is synthesized from the real one, exactly like the
+# production images: pnpm --frozen-lockfile only checks dependency specifiers,
+# and dropping the scripts keeps `prepare` (husky) from running in a checkout
+# that has no .git directory.
+COPY pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json /tmp/root-package.json
+RUN node -e "const fs=require('fs');const p=require('/tmp/root-package.json');fs.writeFileSync('package.json',JSON.stringify({name:p.name,private:true,devDependencies:p.devDependencies}))"
+
+COPY catalyst-backend/package.json ./catalyst-backend/
+COPY catalyst-frontend/package.json ./catalyst-frontend/
+COPY packages/plugin-sdk/package.json ./packages/plugin-sdk/
+COPY packages/mcp-server/package.json ./packages/mcp-server/
+
+RUN pnpm install --frozen-lockfile
+
+# Generate the Prisma client here so the backend container does not spend its
+# first seconds doing it. The schema is only copied for this step: at run time
+# catalyst-backend/prisma is bind-mounted over it. DATABASE_URL is a throwaway
+# value - generate reads the schema, it never connects.
+COPY catalyst-backend/prisma ./catalyst-backend/prisma
+RUN DATABASE_URL="postgresql://catalyst:catalyst@postgres:5432/catalyst_db" \
+    pnpm --filter catalyst-backend exec prisma generate --config prisma/prisma.config.ts
+
+# Sources, plugin frontends and the SDK sources are bind-mounted by
+# docker-compose.dev.yml, so nothing else is copied.
+WORKDIR /app/catalyst-backend
+CMD ["pnpm", "run", "dev"]

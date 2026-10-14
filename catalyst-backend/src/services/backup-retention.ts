@@ -46,6 +46,38 @@ export function startBackupRetention(
   return setInterval(run, intervalMs);
 }
 
+/**
+ * Decide which backups the retention policy prunes.
+ *
+ * `backups` must be ordered newest-first. Pinned backups are exempt from both
+ * the count and the age rule and do not consume a "keep last N" slot, so the
+ * count applies to unpinned backups only.
+ */
+export function selectBackupsToPrune<
+  T extends { pinned?: boolean | null; createdAt: Date },
+>(
+  backups: readonly T[],
+  policy: { count: number; days: number },
+  now: Date = new Date(),
+): T[] {
+  const toDelete: T[] = [];
+  const maxAgeMs = policy.days > 0 ? policy.days * 24 * 60 * 60 * 1000 : 0;
+  let unpinnedSeen = 0;
+
+  for (const backup of backups) {
+    if (backup.pinned) continue;
+    const exceedsCount = policy.count > 0 && unpinnedSeen >= policy.count;
+    const tooOld =
+      maxAgeMs > 0 && now.getTime() - backup.createdAt.getTime() > maxAgeMs;
+    unpinnedSeen++;
+    if (exceedsCount || tooOld) {
+      toDelete.push(backup);
+    }
+  }
+
+  return toDelete;
+}
+
 async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gateway?: WebSocketGateway) {
   const servers = await prisma.server.findMany({
     where: {
@@ -91,6 +123,7 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
         name: true,
         path: true,
         storageMode: true,
+        pinned: true,
         metadata: true,
         createdAt: true,
       },
@@ -98,34 +131,10 @@ async function enforceRetention(prisma: PrismaClient, logger: pino.Logger, gatew
 
     if (backups.length === 0) continue;
 
-    const toDelete: typeof backups = [];
-    const now = new Date();
-
-    for (let i = 0; i < backups.length; i++) {
-      const backup = backups[i];
-      let shouldDelete = false;
-      const reason: string[] = [];
-
-      // Count-based retention (skip the first N most recent)
-      if (server.backupRetentionCount > 0 && i >= server.backupRetentionCount) {
-        shouldDelete = true;
-        reason.push(`exceeds count limit (${server.backupRetentionCount})`);
-      }
-
-      // Age-based retention
-      if (server.backupRetentionDays > 0) {
-        const ageMs = now.getTime() - backup.createdAt.getTime();
-        const maxAgeMs = server.backupRetentionDays * 24 * 60 * 60 * 1000;
-        if (ageMs > maxAgeMs) {
-          shouldDelete = true;
-          reason.push(`older than ${server.backupRetentionDays} days`);
-        }
-      }
-
-      if (shouldDelete) {
-        toDelete.push(backup);
-      }
-    }
+    const toDelete = selectBackupsToPrune(backups, {
+      count: server.backupRetentionCount,
+      days: server.backupRetentionDays,
+    });
 
     if (toDelete.length === 0) continue;
 

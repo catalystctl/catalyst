@@ -1,7 +1,8 @@
 export { usePlugins, useEnabledPlugins, usePlugin, usePluginRoutes, usePluginTabs, usePluginComponents, usePluginLoading } from './hooks';
 export { PluginProvider } from './PluginProvider';
 export { usePluginContext } from './usePluginContext';
-export { usePluginSlots } from './usePluginSlots';
+export { usePluginSlots, globalSlotPermissionCheck } from './usePluginSlots';
+export type { PluginSlotPermissionCheck } from './usePluginSlots';
 export { PluginSlot } from './PluginSlot';
 export { usePluginWebSocket } from './usePluginWebSocket';
 export { createPluginApiClient, fetchPluginApi } from './plugin-api';

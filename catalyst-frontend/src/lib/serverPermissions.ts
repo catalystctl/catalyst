@@ -50,6 +50,7 @@ export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'backup.restore',
   'backup.delete',
   'backup.download',
+  'backup.pin',
   'database.read',
   'database.create',
   'database.rotate',
@@ -119,6 +120,8 @@ export function serverPermissionLabel(perm: string): string {
       return i18n.t('serverPermissions.backupDelete', { ns: 'common' });
     case 'backup.download':
       return i18n.t('serverPermissions.backupDownload', { ns: 'common' });
+    case 'backup.pin':
+      return i18n.t('serverPermissions.backupPin', { ns: 'common' });
     case 'database.read':
       return i18n.t('serverPermissions.databaseRead', { ns: 'common' });
     case 'database.create':

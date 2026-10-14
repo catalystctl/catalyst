@@ -1056,7 +1056,7 @@ await app.register(settingsRoutes, { prefix: "/api/settings" });
 		await app.register((app) => adminEventsRoutes(app, wsGateway), {
 			prefix: "/api/admin/events",
 		});
-		await app.register(roleRoutes, { prefix: "/api/roles" });
+		await app.register((app) => roleRoutes(app, { pluginLoader }), { prefix: "/api/roles" });
 		await app.register(taskRoutes, { prefix: "/api/servers" });
 		await app.register(bulkServerRoutes, { prefix: "/api/servers" });
 		await app.register(alertRoutes, { prefix: "/api" });

@@ -7,6 +7,8 @@
       "compressLabel": "Compresser la sauvegarde (gzip)",
       "description": "Laissez vide pour générer automatiquement un nom avec l’horodatage actuel.",
       "nameLabel": "Nom de la sauvegarde (facultatif)",
+      "pinHint": "Cochez pour ignorer la limite de rétention et épingler cette sauvegarde.",
+      "pinLabel": "Ignorer la limite",
       "success": "Création de la sauvegarde démarrée",
       "title": "Créer une sauvegarde"
     },
@@ -32,6 +34,7 @@
       "empty": "Aucune sauvegarde pour le moment. Créez une sauvegarde pour protéger les données de votre serveur.",
       "notAvailable": "n/d",
       "path": "Chemin",
+      "pinned": "Épinglée",
       "restored": "Restaurée le {{date}}",
       "size": "Taille",
       "storage": "Stockage"
@@ -43,6 +46,12 @@
       "count_other": "{{count}} sauvegardes",
       "pageOf": "Page {{page}} sur {{totalPages}}",
       "previous": "Précédent"
+    },
+    "pin": {
+      "action": "Épingler",
+      "pinned": "Sauvegarde épinglée",
+      "unpin": "Détacher",
+      "unpinned": "Sauvegarde détachée"
     },
     "restore": {
       "acknowledgeOverwrite": "Je comprends que la restauration de cette sauvegarde écrasera les fichiers actuels du serveur.",

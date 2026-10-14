@@ -7,6 +7,8 @@
       "compressLabel": "压缩备份（gzip）",
       "description": "留空将使用当前时间戳自动生成名称。",
       "nameLabel": "备份名称（可选）",
+      "pinHint": "勾选后忽略保留数量限制并固定此备份。",
+      "pinLabel": "忽略限制",
       "success": "已开始创建备份",
       "title": "创建备份"
     },
@@ -32,6 +34,7 @@
       "empty": "暂无备份。创建备份以保护服务器数据。",
       "notAvailable": "不适用",
       "path": "路径",
+      "pinned": "已固定",
       "restored": "恢复于 {{date}}",
       "size": "大小",
       "storage": "存储"
@@ -41,6 +44,12 @@
       "count_other": "{{count}} 个备份",
       "pageOf": "第 {{page}} 页，共 {{totalPages}} 页",
       "previous": "上一页"
+    },
+    "pin": {
+      "action": "固定",
+      "pinned": "备份已固定",
+      "unpin": "取消固定",
+      "unpinned": "已取消固定备份"
     },
     "restore": {
       "acknowledgeOverwrite": "我了解恢复此备份将覆盖服务器当前的文件。",

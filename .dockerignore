@@ -1,0 +1,48 @@
+# Build-context trimming for images built from the repo root:
+#   catalyst-backend/Dockerfile      (production backend)
+#   catalyst-frontend/Dockerfile     (production panel)
+#   catalyst-docker/Dockerfile.dev   (development stack)
+#
+# Everything each of those Dockerfiles COPYs must stay visible here. The Rust
+# agent builds from its own context (catalyst-agent/) with its own .dockerignore.
+
+# The agent's target/ is tens of GB and no root-context image needs the crate.
+catalyst-agent
+
+# Standalone docs checkout (separate repo).
+catalyst-doc
+
+# Dependencies and build output are produced inside the image.
+**/node_modules
+catalyst-backend/dist
+catalyst-frontend/dist
+packages/plugin-sdk/dist
+packages/mcp-server/dist
+
+# VCS, CI and local tooling state.
+.git
+.github
+.husky
+.githooks
+.dsh-code-index
+.graphflow-cache
+graphflow-out
+.serena
+.swarm
+.venv-kokoro
+eggs
+
+# Reports, fixtures and working documents.
+benchmarks
+audit
+security-audit
+test-results
+test-install-sh
+tests
+
+# Local env files, logs and databases.
+.env
+**/.env
+**/.env.local
+*.log
+dump.rdb

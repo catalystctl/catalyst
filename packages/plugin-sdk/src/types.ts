@@ -12,6 +12,12 @@ export interface PluginManifest {
    * Keys must be declared permissions; see `definePermissions()`.
    */
   permissionDescriptions?: Record<string, string>;
+  /**
+   * Permissions this plugin exposes to the panel's role editor — a separate
+   * namespace from `permissions`, which an admin grants to the plugin. See
+   * `defineUserPermissions()`.
+   */
+  userPermissions?: { id: string; label: string; description?: string }[];
   backend?: { entry: string };
   frontend?: { entry: string };
   dependencies?: Record<string, string>;

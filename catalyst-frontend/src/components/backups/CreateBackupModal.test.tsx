@@ -49,3 +49,30 @@ describe('CreateBackupModal compression toggle', () => {
     expect(create).toHaveBeenCalledWith('server-1', { name: undefined, compressed: false });
   });
 });
+
+describe('CreateBackupModal pin toggle', () => {
+  afterEach(cleanup);
+
+  it('hides the pin option without the backup.pin grant', async () => {
+    create.mockReset().mockResolvedValue({});
+    render(<CreateBackupModal serverId="server-1" />);
+    const dialog = await openDialog();
+    expect(dialog.getAllByRole('checkbox')).toHaveLength(1);
+  });
+
+  it('sends pinned: true when Ignore limit is checked', async () => {
+    create.mockReset().mockResolvedValue({});
+    render(<CreateBackupModal serverId="server-1" canPin />);
+    const dialog = await openDialog();
+    const boxes = dialog.getAllByRole('checkbox');
+    expect(boxes).toHaveLength(2);
+    fireEvent.click(boxes[0]);
+    expect(boxes[0]).toBeChecked();
+    fireEvent.click(dialog.getByRole('button', { name: 'backups.create.action' }));
+    expect(create).toHaveBeenCalledWith('server-1', {
+      name: undefined,
+      compressed: true,
+      pinned: true,
+    });
+  });
+});

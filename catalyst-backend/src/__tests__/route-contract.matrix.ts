@@ -6,6 +6,9 @@
  *  - GET /api/admin/events → T3 (SSE hijack, deny-side only);
  *  - GET /api/plugins/{name}/frontend-manifest → PU denied (admin.read gate,
  *    TARGET-VOCABULARY §2.1);
+ *  - GET /api/plugins → PU allowed: the plugin store bootstraps for every
+ *    signed-in user (reduced, frontend-only payload) so a plugin can target
+ *    non-admins with `requiredPermissions`; the admin inventory stays gated;
  *  - node/update/migration reads already admitted admin.read per decisions.
  *
  * Cell semantics: 'allow' = response MUST NOT be 403 (200/400/404/409 all prove
@@ -222,7 +225,10 @@ export const CONTRACT_ROWS: readonly ContractRow[] = [
   { op: 'GET /api/nodes/{nodeId}/stats', method: 'GET', path: '/api/nodes/{nodeId}/stats', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-' },
   { op: 'GET /api/nodes/{nodeId}/unregistered-containers', method: 'GET', path: '/api/nodes/{nodeId}/unregistered-containers', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T0', keyScope: '-' },
   { op: 'GET /api/nodes/{nodeId}/unregistered-containers/{containerId}/suggest-template', method: 'GET', path: '/api/nodes/{nodeId}/unregistered-containers/{containerId}/suggest-template', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T0', keyScope: '-' },
-  { op: 'GET /api/plugins', method: 'GET', path: '/api/plugins', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T2', keyScope: '-' },
+  // PU allowed: every signed-in user gets the reduced frontend-only inventory,
+  // because a plugin decides its own audience via `requiredPermissions`. The
+  // admin inventory (consent, capabilities, licensing) stays behind the gate.
+  { op: 'GET /api/plugins', method: 'GET', path: '/api/plugins', klass: 'read', ar: 'allow', aw: 'allow', pu: 'allow', star: 'allow', tier: 'T2', keyScope: '-' },
   { op: 'POST /api/plugins/install', method: 'POST', path: '/api/plugins/install', klass: 'write', ar: 'deny', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T2', keyScope: '-' },
   { op: 'GET /api/plugins/marketplace', method: 'GET', path: '/api/plugins/marketplace', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T2', keyScope: '-' },
   { op: 'GET /api/plugins/marketplace/sources', method: 'GET', path: '/api/plugins/marketplace/sources', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T2', keyScope: '-' },
@@ -293,6 +299,8 @@ export const CONTRACT_ROWS: readonly ContractRow[] = [
   { op: 'DELETE /api/servers/{serverId}/backups/{backupId}', method: 'DELETE', path: '/api/servers/{serverId}/backups/{backupId}', klass: 'write', ar: 'masked', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'W' },
   { op: 'GET /api/servers/{serverId}/backups/{backupId}/download', method: 'GET', path: '/api/servers/{serverId}/backups/{backupId}/download', klass: 'read', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'W' },
   { op: 'POST /api/servers/{serverId}/backups/{backupId}/restore', method: 'POST', path: '/api/servers/{serverId}/backups/{backupId}/restore', klass: 'write', ar: 'masked', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'W' },
+  { op: 'PATCH /api/servers/{serverId}/backups/{backupId}/pin', method: 'PATCH', path: '/api/servers/{serverId}/backups/{backupId}/pin', klass: 'write', ar: 'masked', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'W',
+    payload: {"pinned": true},},
   { op: 'POST /api/servers/{serverId}/cancel-install', method: 'POST', path: '/api/servers/{serverId}/cancel-install', klass: 'write', ar: 'deny', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: '-' },
   { op: 'POST /api/servers/{serverId}/clone', method: 'POST', path: '/api/servers/{serverId}/clone', klass: 'write', ar: 'deny', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
     payload: {"name": "contract-clone-probe", "mode": "full", "targetNodeId": "__NODE__"},},
