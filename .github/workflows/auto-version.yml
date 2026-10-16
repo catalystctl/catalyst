@@ -784,7 +784,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: catalystctl/catalyst-plugins
-          ref: e3d2e3ee786e19bb40ecf5a565638e3f6db7c186 # pinned main 2026-09-18 (discord-oauth 1.0.1)
+          ref: 8e2d87975fe05a33793e03024f4e6e8c65a0ab38 # pinned main 2026-10-14 (backup-gauge 1.0.0)
           path: catalyst-plugins
 
       - name: Set up Docker Buildx
