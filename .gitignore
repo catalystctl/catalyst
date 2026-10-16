@@ -87,8 +87,12 @@ SESSION_BRIDGE_CATCODE_OPENCODE.md
 .sphinxignore
 .opencode/
 
-# Dedicated templates repo (own git project: catalystctl/catalyst-templates)
+# Dedicated templates repo (own git project: catalystctl/catalyst-templates).
+# Cloned/symlinked here as a sibling for monorepo dev; never commit its contents.
+# Both spellings are ignored: the repo is "templates" (plural), the historical
+# local checkout was "template" (singular).
 /catalyst-template/
+/catalyst-templates/
 
 # Plugins live in the standalone catalystctl/catalyst-plugins repo (checked out as a sibling or symlinked here for monorepo dev)
 /catalyst-plugins

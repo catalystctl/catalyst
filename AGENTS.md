@@ -9,6 +9,12 @@ Agent instructions for the Catalyst monorepo (game-server control panel).
 - `catalyst-agent/` — the Rust node agent (`cargo`).
 - `packages/plugin-sdk/`, `packages/plugin-sdk-cli/` — plugin SDKs.
 - Plugin frontends live in the separate `catalystctl/catalyst-plugins` repo. CI checks it out to `catalyst-plugins/`; the panel build globs it in, so a local build needs that directory present.
+- Game/app templates live in the separate `catalystctl/catalyst-templates` repo, checked out or symlinked here as `catalyst-templates/` (ignored, never committed). Add and update templates there, not in this repo — the panel imports them from it. `eggs/` is a local, ignored checkout of upstream `pterodactyl/game-eggs` used only as import-test fixtures.
+  - A template is one `PTDL_v2` egg JSON named `egg-<slug>.json` plus a `README.md`, under `<category>/<game>/`. The panel's batch importer only discovers paths matching `/egg[._-][^/]*\.json$/i`.
+  - Egg JSON is the contract the panel reads: `name`, `startup`, `docker_images` (first entry = default image), `config.stop`, `variables`, `scripts.installation.script`. `ports: [N]` is a Catalyst extension that pre-fills the create-server port.
+  - The importer rewrites `$UPPER_VAR` / `${UPPER_VAR}` in `startup` to `{{UPPER_VAR}}`, and unresolved placeholders stay literal. Only vars assigned as `VAR=$!` or `VAR=$(…)` are restored (`utils/sanitize-startup.ts`), so never *reference* an upper-case shell var in a startup command — inline the value.
+  - Wine/Proton templates: invoke the Proton binary by absolute path (a relative path makes Proton resolve a relative dist dir and it fails to find `steam.exe`), and make sure the image has glibc ≥ 2.38 + `libvulkan.so.1` for GE-Proton 11.
+  - Verify locally with `shellcheck --severity=error` on `scripts.installation.script` and by running the repo's `.github/workflows/validate-templates.yml` checks before pushing.
 - Public docs live in the separate `catalystctl/catalyst-doc` repo (docs site source + docs agent). It is NOT a submodule: clone it next to this repo (`../catalyst-doc`) or anywhere else and pass `--source-repo/--docs-repo` explicitly. Never nest product work inside a docs checkout. Docs-only pushes must not trigger release builds — `auto-version.yml` ignores docs paths for exactly this reason, and nothing in a docs change may cancel an in-flight release pipeline.
 
 ## Verify before claiming something works

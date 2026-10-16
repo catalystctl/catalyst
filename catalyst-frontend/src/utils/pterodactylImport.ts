@@ -8,6 +8,8 @@ import * as yaml from 'js-yaml';
 
 import i18n from '@/i18n';
 
+import { deriveTemplatePort } from './eggPort';
+
 interface PtdlVariable {
   name: string;
   description?: string;
@@ -469,15 +471,14 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');
 
-  // Try to extract a port from variables or startup command
-  const portVar = variables.find(
-    (v) =>
-      v.name === 'SERVER_PORT' ||
-      v.name === 'PORT' ||
-      v.name === 'GAME_PORT' ||
-      v.name === 'QUERY_PORT',
-  );
-  const defaultPort = portVar ? Number(portVar.default) || 25565 : 25565;
+  // The egg has no top-level port field. Derive it from the egg's own config
+  // bindings / pinned variables instead of guessing 25565 (Minecraft's port).
+  const defaultPort =
+    deriveTemplatePort({
+      variables: (egg.variables ?? []) as unknown as Array<Record<string, unknown>>,
+      config: egg.config as Record<string, unknown> | undefined,
+      ports: (egg as { ports?: unknown }).ports,
+    }) ?? 25565;
 
   // Try to extract memory from variables
   const memoryVar = variables.find(

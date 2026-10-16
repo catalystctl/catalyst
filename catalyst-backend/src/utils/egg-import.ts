@@ -19,6 +19,7 @@
  */
 
 import { describeError } from './describe-error.js';
+import { deriveTemplatePort } from './egg-port.js';
 
 // ============================================================================
 // Types
@@ -590,15 +591,15 @@ export function importPterodactylEgg(
 	}
 
 	// ── Default Resource Values ────────────────────────────────────────
-	// Extract port from variables if possible
-	const portVar = mappedVariables.find(
-		(v) =>
-			v.name === "SERVER_PORT" ||
-			v.name === "PORT" ||
-			v.name === "GAME_PORT" ||
-			v.name === "QUERY_PORT",
-	);
-	const defaultPort = portVar ? Number(portVar.default) || 25565 : 25565;
+	// The egg has no top-level port field. Derive it from the egg's own config
+	// bindings / pinned variables instead of guessing 25565 (Minecraft's port),
+	// which used to be stamped onto every non-Minecraft template.
+	const derivedPort = deriveTemplatePort({
+		variables: rawVars,
+		config: egg.config,
+		ports: (egg as { ports?: unknown }).ports,
+	});
+	const defaultPort = derivedPort ?? 25565;
 
 	// Extract memory from variables if possible
 	const memoryVar = mappedVariables.find(
