@@ -198,13 +198,19 @@ jobs:
             " 2>/dev/null || true
           done
 
-      - name: Update Cargo.toml
+      - name: Update Cargo.toml and Cargo.lock
         if: steps.bump.outputs.bump != 'none'
         run: |
           VERSION="${{ steps.version.outputs.new_version }}"
           if [ -f catalyst-agent/Cargo.toml ]; then
             sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" catalyst-agent/Cargo.toml
             echo "Updated catalyst-agent/Cargo.toml → $VERSION"
+          fi
+          # The workspace member version is duplicated in the lockfile; cargo
+          # rewrites it on the next build, which leaves the tree dirty.
+          if [ -f catalyst-agent/Cargo.lock ]; then
+            sed -i "/^name = \"catalyst-agent\"$/{n;s/^version = \"[^\"]*\"/version = \"$VERSION\"/;}" catalyst-agent/Cargo.lock
+            echo "Updated catalyst-agent/Cargo.lock → $VERSION"
           fi
 
       - name: Commit, tag and push
