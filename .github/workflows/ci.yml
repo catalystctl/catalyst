@@ -184,6 +184,9 @@ jobs:
       - name: Run ESLint (frontend)
         run: pnpm --filter catalyst-frontend run lint
 
+      - name: Typecheck frontend
+        run: cd catalyst-frontend && npx tsc --noEmit
+
       - name: Check translation catalogs
         run: pnpm i18n:check
 
@@ -383,11 +386,14 @@ jobs:
 
       # ── Tests ──
       # Maps to: step_test() in run-workflow.sh
-      # Scope tests to backend only — frontend tests need jsdom which is
-      # not installed in CI, and the original backend-ci.yml only ran
-      # backend tests anyway.
+      # Backend and frontend both run Vitest. jsdom is a declared
+      # devDependency of catalyst-frontend and vitest.config.ts sets
+      # environment: 'jsdom', so the frontend suite runs in CI too.
       - name: Run Vitest
         run: pnpm --filter catalyst-backend run test
+
+      - name: Run frontend Vitest
+        run: pnpm --filter catalyst-frontend exec vitest run
 
       - name: Run Cargo tests
         run: cargo test --manifest-path catalyst-agent/Cargo.toml
