@@ -128,7 +128,7 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 			"Runtime mode. Controls HSTS, secure cookies and error detail. Set in .env before startup.",
 	}),
 	base("LOG_LEVEL", "general", "enum", {
-		options: ["trace", "debug", "info", "warn", "error"],
+		options: ["trace", "debug", "info", "warn", "error", "fatal"],
 		default: "info",
 		description: "Backend log verbosity.",
 	}),
@@ -307,9 +307,9 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 		description: "Block power actions and file access on suspended servers.",
 	}),
 	base("SUSPENSION_DELETE_POLICY", "suspension", "enum", {
-		options: ["block", "delete"],
+		options: ["block", "allow"],
 		default: "block",
-		description: "What happens to suspended servers on deletion.",
+		description: "Whether deleting a suspended server is blocked or allowed.",
 	}),
 	base("SUSPENSION_DELETE_BLOCKED", "suspension", "boolean", {
 		default: "true",
@@ -334,9 +334,12 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 		description: "Scratch directory for backup transfers.",
 	}),
 	base("BACKUP_STORAGE_MODE", "storage", "enum", {
-		options: ["local", "s3"],
+		// Keep in step with the BackupStorageMode union in services/backup-storage.ts
+		// and the per-server validModes list in routes/servers/admin-ops.ts.
+		options: ["local", "s3", "stream", "sftp"],
 		default: "local",
-		description: "Where backups are stored.",
+		description:
+			"Where backups are stored: local disk, an S3-compatible bucket, the streaming scratch directory, or a per-server SFTP target.",
 	}),
 
 	// ── Backups: encryption & S3 ──────────────────────────────────────────
@@ -392,7 +395,8 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 	}),
 	base("PLUGIN_MARKETPLACE_ALLOW_LOCAL", "plugins", "boolean", {
 		default: "false",
-		description: "Allow installing plugins from local file paths.",
+		description:
+			"Allow plugin downloads from local/private hosts other than the configured index hosts.",
 	}),
 	base("PLUGIN_MARKETPLACE_DISABLE_OFFICIAL", "plugins", "boolean", {
 		default: "false",

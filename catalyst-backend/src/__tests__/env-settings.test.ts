@@ -18,6 +18,7 @@ import {
 	validateEnvValue,
 } from "../services/env-settings";
 import { prisma } from "../db";
+import { resolveBackupStorageMode } from "../services/backup-storage";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC_ROOT = path.resolve(HERE, "..");
@@ -113,7 +114,26 @@ describe("validateEnvValue", () => {
 	it("restricts enum values", () => {
 		const spec = ENV_VAR_BY_KEY.get("LOG_LEVEL")!;
 		expect(validateEnvValue(spec, "warn")).toBe("warn");
+		expect(validateEnvValue(spec, "fatal")).toBe("fatal");
 		expect(() => validateEnvValue(spec, "verbose")).toThrow(EnvValidationError);
+	});
+
+	it("accepts every backup storage mode the resolver understands", () => {
+		// Guards against the registry falling behind BackupStorageMode: an enum
+		// entry missing a real mode rejects a value the backend happily uses.
+		const spec = ENV_VAR_BY_KEY.get("BACKUP_STORAGE_MODE")!;
+		for (const mode of ["local", "s3", "stream", "sftp"] as const) {
+			expect(validateEnvValue(spec, mode)).toBe(mode);
+			expect(resolveBackupStorageMode({ backupStorageMode: mode })).toBe(mode);
+		}
+		expect(() => validateEnvValue(spec, "ftp")).toThrow(EnvValidationError);
+	});
+
+	it("accepts every suspension delete policy the config schema understands", () => {
+		const spec = ENV_VAR_BY_KEY.get("SUSPENSION_DELETE_POLICY")!;
+		expect(validateEnvValue(spec, "block")).toBe("block");
+		expect(validateEnvValue(spec, "allow")).toBe("allow");
+		expect(() => validateEnvValue(spec, "delete")).toThrow(EnvValidationError);
 	});
 
 	it("rejects bootstrap-only keys", () => {
