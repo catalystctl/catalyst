@@ -3,11 +3,13 @@
 #
 # Quick start:
 #   1. cp .env.example .env
-#   2. Edit .env — set POSTGRES_PASSWORD and BETTER_AUTH_SECRET
+#   2. Edit .env — set PUBLIC_URL, POSTGRES_PASSWORD and BETTER_AUTH_SECRET
 #   3. docker compose up -d
-#   4. Visit http://<your-host> and register the first admin user
+#   4. Open PUBLIC_URL and complete the Setup wizard
 #
-# The first registered user automatically becomes the administrator.
+# The Setup wizard creates the first administrator and then switches open
+# self-registration off (REGISTRATION_ENABLED). There is no first-user
+# auto-promotion: signing up does not make an account an administrator.
 # =============================================================================
 
 services:

@@ -2,7 +2,7 @@
 
 The fastest way to run Catalyst. Uses pre-built images from [GitHub Container Registry](https://github.com/catalystctl/catalyst/pkgs/container/catalyst-backend) — no building required.
 
-> 🏠 **New here?** See [`docs/QUICKSTART.md`](../docs/QUICKSTART.md) for the absolute fastest path, or [`docs/INSTALLATION_DETAILED.md`](../docs/INSTALLATION_DETAILED.md) for a deep-dive covering every option.
+> 🏠 **New here?** See [docs.catalystctl.com](https://docs.catalystctl.com/admin/installation/) for the absolute fastest path, or [First-time setup](https://docs.catalystctl.com/admin/first-time-setup/) for what the wizard asks and why.
 >
 > 🧑💻 **Developing Catalyst itself?** This directory also holds the development
 > stack — `docker-compose.dev.yml` + `Dockerfile.dev`, driven by
@@ -395,7 +395,7 @@ docker compose up -d
 
 The backend entrypoint automatically runs database migrations on startup. No manual migration step needed.
 
-> **Post-upgrade:** Verify node agents are connected in the admin panel. For node deployment procedures, see [`docs/agent.md`](../docs/agent.md).
+> **Post-upgrade:** Verify node agents are connected in the admin panel. For node deployment procedures, see [Installing a node](https://docs.catalystctl.com/admin/nodes/installing/).
 
 ---
 
@@ -720,11 +720,11 @@ docker compose logs --tail=100 backend
 
 ## Next Steps
 
-- **New user?** Read [`docs/getting-started.md`](../docs/getting-started.md) for a walkthrough: create your first server, install the agent, manage templates.
-- **Admin?** Read [`docs/admin-guide.md`](../docs/admin-guide.md) for node deployment, user management, RBAC, and system configuration.
-- **Developer?** Read [`docs/development.md`](../docs/development.md) for local dev setup, testing, and plugin development.
-- **API integration?** Read [`docs/api-reference.md`](../docs/api-reference.md) for the complete REST API reference.
-- **Full details?** Read [`docs/INSTALLATION_DETAILED.md`](../docs/INSTALLATION_DETAILED.md) for every option, edge case, and advanced configuration.
+- **New user?** Read [Your first server](https://docs.catalystctl.com/getting-started/first-server/) for a walkthrough: create your first server, install the agent, manage templates.
+- **Admin?** Read the [Administrator Guide](https://docs.catalystctl.com/admin/overview/) for node deployment, user management, RBAC, and system configuration.
+- **Developer?** Read [CONTRIBUTING.md](../CONTRIBUTING.md) for local dev setup and testing, and [Plugin development](https://docs.catalystctl.com/api/plugins/) for the plugin SDK.
+- **API integration?** Read the [REST API guide](https://docs.catalystctl.com/api/overview/) and the [generated reference](https://docs.catalystctl.com/api/reference/) for the complete contract.
+- **Full details?** Read [Installation](https://docs.catalystctl.com/admin/installation/) and [Configuration](https://docs.catalystctl.com/admin/configuration/) for every option, edge case, and advanced setting.
 
 ---
 
