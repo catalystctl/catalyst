@@ -21,6 +21,7 @@
     "dashboard": "Tableau de bord",
     "databases": "Bases de données",
     "environment": "Environnement",
+    "marketplace": "Place de marché",
     "migration": "Migration",
     "nodes": "Nœuds",
     "overview": "Vue d’ensemble",
@@ -73,6 +74,9 @@
       },
       "adminEnvironment": {
         "description": "Gérer les variables d'environnement et redémarrer le panneau"
+      },
+      "adminMarketplace": {
+        "description": "Parcourir et installer des extensions depuis les places de marché configurées"
       },
       "adminMigration": {
         "description": "Importer des serveurs depuis Pterodactyl"

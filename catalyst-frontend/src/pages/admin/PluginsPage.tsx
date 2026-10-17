@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQuery, useMutation } from '@/csync';
@@ -7,6 +8,7 @@ import { qk } from '@/lib/queryKeys';
 import LastUpdated from '@/components/shared/LastUpdated';
 import { queryClient } from '@/lib/queryClient';
 import {
+  ArrowUpCircle,
   ChevronRight,
   CircleAlert,
   CircleOff,
@@ -23,7 +25,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { fetchPlugins, fetchMarketplace, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, uninstallPlugin, type SafetyConsentRequiredError } from '../../plugins/api';
+import { fetchPlugins, fetchMarketplace, installPlugin, togglePlugin, reloadPlugin, updatePluginConfig, fetchPluginDetails, uninstallPlugin, type MarketplaceEntry, type SafetyConsentRequiredError } from '../../plugins/api';
 import { toast } from 'sonner';
 import { notifyError } from '../../utils/notify';
 import { usePluginContext } from '../../plugins/usePluginContext';
@@ -43,9 +45,10 @@ import { cn } from '@/lib/utils';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import { PluginDetailsDialog } from './plugins/PluginDetailsDialog';
 import { SafetyConsentDialog, PLUGIN_DISCLAIMER_VERSION } from './plugins/SafetyConsentDialog';
-import { MarketplaceDialog } from './plugins/MarketplaceDialog';
 import { UninstallPluginDialog } from './plugins/UninstallPluginDialog';
 import { permissionLabel } from './plugins/permissionMeta';
+import { isNewerVersion } from './plugins/marketplace-utils';
+import { formatDateTime, formatRelativeTime } from '../../i18n/format';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,35 +79,45 @@ function statusText(t: TFunction<'admin-system'>, status: string) {
 // ── Plugin Row ───────────────────────────────────────────────────────────────
 
 /**
- * One grid template shared by the column header and every row so the actions
- * column lines up. Fixed / minmax(0,1fr) tracks only — never `auto`.
+ * One grid template shared by the column header and every row so the version
+ * and actions columns line up. Fixed / minmax(0,1fr) tracks only — never `auto`.
  */
-const GRID = 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_12.5rem]';
+const GRID = 'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 md:grid-cols-[minmax(0,1fr)_6.5rem_15rem]';
 
 function PluginRow({
   plugin,
   isProcessing,
-  latestMarketplaceVersion,
+  isUpdating,
+  marketplaceEntry,
   onToggle,
   onReload,
   onSettings,
   onDetails,
   onUninstall,
+  onUpdate,
 }: {
   plugin: PluginManifest;
   isProcessing: boolean;
-  latestMarketplaceVersion?: string;
+  isUpdating: boolean;
+  /** Newest marketplace listing for this plugin, when the index has one. */
+  marketplaceEntry?: MarketplaceEntry;
   onToggle: () => void;
   onReload: () => void;
   onSettings: () => void;
   onDetails: () => void;
  onUninstall: () => void;
+ onUpdate: () => void;
 }) {
  const { t } = useTranslation('admin-system');
  const revoked = plugin.revokedPermissions?.length ?? 0;
   const declaredCount = plugin.declaredPermissions?.length ?? 0;
   const caps = plugin.capabilityCounts;
-  const updateAvailable = Boolean(latestMarketplaceVersion && latestMarketplaceVersion !== plugin.version);
+  const latestVersion = marketplaceEntry?.version;
+  const updateAvailable = isNewerVersion(plugin.version, latestVersion);
+  // A manifest with a blank version is possible (older/partial plugin.json) —
+  // render a dash rather than a dangling "v".
+  const installedVersion = plugin.version?.trim() || '—';
+  const loadedAt = plugin.loadedAt ? formatRelativeTime(new Date(plugin.loadedAt).getTime()) : null;
 
   return (
     <div
@@ -125,9 +138,10 @@ function PluginRow({
             <Badge variant={statusBadgeVariant(plugin.status, plugin.error)} className="text-micro">
               {statusText(t, plugin.status)}
             </Badge>
-            {updateAvailable && (
+            {updateAvailable && latestVersion && (
               <Badge variant="outline" className="gap-1 border-warning/40 text-warning text-micro">
-                {t('pluginsAdmin.updateAvailable', { from: plugin.version, to: latestMarketplaceVersion })}
+                <ArrowUpCircle className="h-3 w-3" />
+                {t('pluginsAdmin.updateAvailable', { from: plugin.version, to: latestVersion })}
               </Badge>
             )}
             {plugin.legacyAcceptance && (
@@ -145,13 +159,33 @@ function PluginRow({
           </div>
           <p className="mt-0.5 truncate text-micro text-muted-foreground" title={plugin.description}>
             {plugin.description}
-            {' — '}
-            <span className="font-mono">{plugin.name}@{plugin.version}</span>
+          </p>
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-micro text-muted-foreground/70">
+            <span className="font-mono">{plugin.name}</span>
+            {plugin.author && (
+              <>
+                <span aria-hidden>·</span>
+                <span className="truncate">{plugin.author}</span>
+              </>
+            )}
             {caps && (caps.routes > 0 || caps.tasks > 0) && (
-              <> · {[
-                caps.routes > 0 && t('pluginsAdmin.routeCount', { count: caps.routes }),
-                caps.tasks > 0 && t('pluginsAdmin.taskCount', { count: caps.tasks }),
-              ].filter(Boolean).join(', ')}</>
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {[
+                    caps.routes > 0 && t('pluginsAdmin.routeCount', { count: caps.routes }),
+                    caps.tasks > 0 && t('pluginsAdmin.taskCount', { count: caps.tasks }),
+                  ].filter(Boolean).join(', ')}
+                </span>
+              </>
+            )}
+            {loadedAt && (
+              <>
+                <span aria-hidden>·</span>
+                <span title={plugin.loadedAt ? formatDateTime(plugin.loadedAt, { dateStyle: 'medium', timeStyle: 'medium' }) : undefined}>
+                  {t('pluginsAdmin.loadedAt', { when: loadedAt })}
+                </span>
+              </>
             )}
           </p>
           {plugin.error && (
@@ -159,23 +193,53 @@ function PluginRow({
           )}
         </div>
       </div>
+
+      {/* Version — its own mono column so versions compare down the list. */}
+      <div className="flex min-w-0 flex-col gap-0.5 pl-6 font-mono text-micro tabular-nums md:pl-0">
+        <span className="text-foreground">v{installedVersion}</span>
+        {updateAvailable && latestVersion ? (
+          <span className="text-warning">{t('pluginsAdmin.updateArrow', { version: latestVersion })}</span>
+        ) : (
+          <span className="text-muted-foreground/50">
+            {!marketplaceEntry
+              ? t('pluginsAdmin.notInMarketplace')
+              : plugin.version?.trim()
+                ? t('pluginsAdmin.upToDate')
+                : t('pluginsAdmin.unknownVersion')}
+          </span>
+        )}
+      </div>
+
       <div className="flex shrink-0 items-center justify-start gap-1.5 md:justify-end">
+        {updateAvailable && (
+          <Button
+            variant="default"
+            size="sm"
+            className="h-7 rounded-sm px-2.5 text-mini"
+            onClick={(e) => { e.stopPropagation(); onUpdate(); }}
+            disabled={isUpdating || isProcessing}
+            title={t('pluginsAdmin.updateNowTitle', { name: plugin.name, version: latestVersion ?? '' })}
+          >
+            {isUpdating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowUpCircle className="h-3.5 w-3.5" />}
+            {t('pluginsAdmin.update')}
+          </Button>
+        )}
         <Button
           variant={plugin.enabled ? 'outline' : 'default'}
           size="sm"
           className="h-7 rounded-sm px-2.5 text-mini"
           onClick={(e) => { e.stopPropagation(); onToggle(); }}
-          disabled={isProcessing || plugin.status === 'error'}
+          disabled={isProcessing || isUpdating || plugin.status === 'error'}
         >
           {isProcessing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : plugin.enabled ? t('common:actions.disable') : t('common:actions.enable')}
         </Button>
-        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.reloadAria')}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onReload(); }} disabled={isProcessing || isUpdating} aria-label={t('pluginsAdmin.reloadAria')}>
           <RefreshCw className="h-3.5 w-3.5" />
         </Button>
         <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onSettings(); }} aria-label={t('pluginsAdmin.settingsAria')}>
           <Settings className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing} aria-label={t('pluginsAdmin.uninstallAria', { name: plugin.name })}>
+        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={(e) => { e.stopPropagation(); onUninstall(); }} disabled={isProcessing || isUpdating} aria-label={t('pluginsAdmin.uninstallAria', { name: plugin.name })}>
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
         <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0 rounded-sm border border-border/60 text-muted-foreground hover:border-primary/50 hover:text-foreground" onClick={onDetails} aria-label={t('pluginsAdmin.detailsAria')}>
@@ -429,7 +493,7 @@ export default function PluginsPage() {
   const [processingPlugin, setProcessingPlugin] = useState<string | null>(null);
   const [settingsPlugin, setSettingsPlugin] = useState<string | null>(null);
   const [detailsPlugin, setDetailsPlugin] = useState<string | null>(null);
-  const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [updatingPlugin, setUpdatingPlugin] = useState<string | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<PluginManifest | null>(null);
   const [uninstallBusy, setUninstallBusy] = useState(false);
 
@@ -458,19 +522,49 @@ export default function PluginsPage() {
     queryFn: () => fetchMarketplace(false),
     staleTime: 60_000,
   });
+  // Newest listing per plugin name — several sources may carry the same
+  // plugin, so keep the highest version rather than the last one merged.
   const marketplaceByName = useMemo(() => {
-    const installed = new Map((plugins ?? []).map((p) => [p.name, p.version]));
-    const map = new Map<string, { version?: string; updateAvailable?: boolean }>();
+    const map = new Map<string, MarketplaceEntry>();
     for (const entry of marketplace?.entries ?? []) {
-      const installedVersion = entry.installedVersion ?? installed.get(entry.name);
-      const updateAvailable =
-        Boolean(entry.updateAvailable) ||
-        Boolean(installedVersion && entry.version && installedVersion !== entry.version &&
-          entry.version.localeCompare(installedVersion, undefined, { numeric: true }) > 0);
-      map.set(entry.name, { version: entry.version, updateAvailable });
+      const existing = map.get(entry.name);
+      if (!existing || isNewerVersion(existing.version, entry.version)) map.set(entry.name, entry);
     }
     return map;
-  }, [marketplace?.entries, plugins]);
+  }, [marketplace?.entries]);
+
+  const updateCount = useMemo(
+    () => (plugins ?? []).filter((p) => isNewerVersion(p.version, marketplaceByName.get(p.name)?.version)).length,
+    [plugins, marketplaceByName],
+  );
+
+  /**
+   * Install the marketplace listing over the running copy. The replacement
+   * lands inert: the loader re-gates on the safety disclaimer when the version
+   * changes, so an update never silently widens a plugin's access.
+   */
+  const updatePlugin = async (plugin: PluginManifest) => {
+    const entry = marketplaceByName.get(plugin.name);
+    if (!entry) return;
+    setUpdatingPlugin(plugin.name);
+    try {
+      const result = await installPlugin(entry.downloadUrl, entry.sha256);
+      toast.success(
+        t('pluginsAdmin.toastPluginUpgraded', { name: result.name, version: result.version }),
+        { duration: 6000 },
+      );
+      reloadPlugins();
+      queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
+      queryClient.invalidateQueries({ queryKey: ['plugins', 'marketplace'] });
+      if (detailsPlugin === plugin.name) {
+        queryClient.invalidateQueries({ queryKey: qk.adminPlugin(plugin.name) });
+      }
+    } catch (error: any) {
+      notifyError(error);
+    } finally {
+      setUpdatingPlugin(null);
+    }
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
@@ -611,9 +705,19 @@ export default function PluginsPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <LastUpdated queryKey={qk.adminPlugins()} />
-          <Button variant="outline" size="sm" className="h-8 rounded-sm px-3 text-mini" onClick={() => setMarketplaceOpen(true)}>
-            <Store className="h-3.5 w-3.5" />
-            {t('pluginsAdmin.marketplace')}
+          {updateCount > 0 && (
+            <Button asChild size="sm" className="h-8 rounded-sm px-3 text-mini">
+              <Link to="/admin/plugins/marketplace?status=updates">
+                <ArrowUpCircle className="h-3.5 w-3.5" />
+                {t('pluginsAdmin.updatesAvailable', { count: updateCount })}
+              </Link>
+            </Button>
+          )}
+          <Button asChild variant="outline" size="sm" className="h-8 rounded-sm px-3 text-mini">
+            <Link to="/admin/plugins/marketplace">
+              <Store className="h-3.5 w-3.5" />
+              {t('pluginsAdmin.marketplace')}
+            </Link>
           </Button>
           <Badge variant="outline" className="text-micro">
             {t('pluginsAdmin.installedCount', { count: totalCount })}
@@ -673,6 +777,7 @@ export default function PluginsPage() {
           )}
         >
           <span className="type-overline">{t('pluginsAdmin.pluginsTitle')}</span>
+          <span className="type-overline">{t('pluginsAdmin.versionColumn')}</span>
           <span className="type-overline justify-self-end">{t('common:actions.more')}</span>
         </div>
 
@@ -705,16 +810,14 @@ export default function PluginsPage() {
                 key={plugin.name}
                 plugin={plugin}
                 isProcessing={processingPlugin === plugin.name}
-                latestMarketplaceVersion={
-                  marketplaceByName.get(plugin.name)?.updateAvailable
-                    ? marketplaceByName.get(plugin.name)?.version
-                    : undefined
-                }
+                isUpdating={updatingPlugin === plugin.name}
+                marketplaceEntry={marketplaceByName.get(plugin.name)}
                 onToggle={() => requestToggle(plugin)}
                 onReload={() => reloadMutation.mutate(plugin.name)}
                 onSettings={() => setSettingsPlugin(plugin.name)}
                 onDetails={() => setDetailsPlugin(plugin.name)}
                 onUninstall={() => setUninstallTarget(plugin)}
+                onUpdate={() => updatePlugin(plugin)}
               />
             ))
           )}
@@ -739,18 +842,6 @@ export default function PluginsPage() {
             setDetailsPlugin(null);
             setUninstallTarget(target);
           }
-        }}
-      />
-
-      {/* ── Marketplace ── */}
-      <MarketplaceDialog
-        open={marketplaceOpen}
-        onOpenChange={setMarketplaceOpen}
-        installedVersions={Object.fromEntries((plugins ?? []).map((p) => [p.name, p.version]))}
-        onInstalled={() => {
-          reloadPlugins();
-          queryClient.invalidateQueries({ queryKey: qk.adminPlugins() });
-          queryClient.invalidateQueries({ queryKey: ['plugins', 'marketplace'] });
         }}
       />
 

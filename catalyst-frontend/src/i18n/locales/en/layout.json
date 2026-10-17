@@ -21,6 +21,7 @@
     "dashboard": "Dashboard",
     "databases": "Databases",
     "environment": "Environment",
+    "marketplace": "Marketplace",
     "migration": "Migration",
     "nodes": "Nodes",
     "overview": "Overview",
@@ -73,6 +74,9 @@
       },
       "adminEnvironment": {
         "description": "Manage environment variables and restart the panel"
+      },
+      "adminMarketplace": {
+        "description": "Browse and install plugins from configured marketplaces"
       },
       "adminMigration": {
         "description": "Import servers from Pterodactyl"

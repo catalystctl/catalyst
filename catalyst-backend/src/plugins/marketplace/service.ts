@@ -480,8 +480,10 @@ export class PluginMarketplaceService {
 
     // Extract onto the plugins volume (hidden `.staging`) so the final
     // promote is a same-filesystem rename. `/tmp` is a different device in
-    // the Docker image, and rename(2) then fails with EXDEV.
-    const stagingRoot = path.join(this.pluginsDir, '.staging');
+    // the Docker image, and rename(2) then fails with EXDEV. Resolve to an
+    // absolute path first: extract-zip refuses a relative target directory,
+    // and PLUGINS_DIR is relative in the shipped .env.example.
+    const stagingRoot = path.resolve(this.pluginsDir, '.staging');
     await fsp.mkdir(stagingRoot, { recursive: true });
     const stagedDir = await fsp.mkdtemp(path.join(stagingRoot, 'catpkg-'));
 

@@ -150,8 +150,11 @@ function NavRow({
   );
 
   if (expanded) {
+    // `end` keeps NavLink's own aria-current from marking every ancestor row
+    // (/admin and /admin/plugins both prefix /admin/plugins/marketplace); the
+    // `active` prop below already resolves the one longest-match destination.
     return (
-      <NavLink to={to} aria-current={active ? 'page' : undefined} className={className}>
+      <NavLink to={to} end aria-current={active ? 'page' : undefined} className={className}>
         {body}
       </NavLink>
     );
@@ -160,7 +163,7 @@ function NavRow({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <NavLink to={to} aria-label={badge ? `${label} · ${badge.value}` : label} className={className}>
+        <NavLink to={to} end aria-label={badge ? `${label} · ${badge.value}` : label} className={className}>
           {body}
         </NavLink>
       </TooltipTrigger>

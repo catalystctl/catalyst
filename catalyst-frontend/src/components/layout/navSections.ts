@@ -16,6 +16,7 @@ import {
   Activity,
   Bug,
   Plug,
+  Store,
   Palette,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -95,6 +96,7 @@ export function buildGroups(t: TFunction): NavGroup[] {
       title: t('layout:sections.extensions'),
       links: [
         { to: '/admin/plugins', label: t('layout:nav.plugins'), icon: Plug, permissions: ['admin.read', 'admin.write'] },
+        { to: '/admin/plugins/marketplace', label: t('layout:nav.marketplace'), icon: Store, permissions: ['admin.read', 'admin.write'] },
         { to: '/admin/theme-settings', label: t('layout:nav.theme'), icon: Palette, permissions: ['admin.write'] },
       ],
     },

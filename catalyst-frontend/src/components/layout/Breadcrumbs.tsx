@@ -46,6 +46,8 @@ function formatSegment(t: TFunction, segment: string): string | null {
       return t('layout:nav.apiKeys');
     case 'plugins':
       return t('layout:nav.plugins');
+    case 'marketplace':
+      return t('layout:nav.marketplace');
     case 'theme-settings':
       return t('layout:nav.theme');
     case 'security':

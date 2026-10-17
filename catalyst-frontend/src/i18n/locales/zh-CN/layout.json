@@ -21,6 +21,7 @@
     "dashboard": "仪表盘",
     "databases": "数据库",
     "environment": "环境变量",
+    "marketplace": "插件市场",
     "migration": "迁移",
     "nodes": "节点",
     "overview": "概览",
@@ -73,6 +74,9 @@
       },
       "adminEnvironment": {
         "description": "管理环境变量并重启面板"
+      },
+      "adminMarketplace": {
+        "description": "浏览并安装已配置市场中的插件"
       },
       "adminMigration": {
         "description": "从 Pterodactyl 导入服务器"

@@ -51,6 +51,7 @@ const SystemErrorsPage = lazy(() => import('./pages/admin/SystemErrorsPage'));
 const SecurityPage = lazy(() => import('./pages/admin/SecurityPage'));
 const ThemeSettingsPage = lazy(() => import('./pages/admin/ThemeSettingsPage'));
 const PluginsPage = lazy(() => import('./pages/admin/PluginsPage'));
+const MarketplacePage = lazy(() => import('./pages/admin/plugins/MarketplacePage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 
 const PluginTabPage = lazy(() => import('./pages/PluginTabPage'));
@@ -621,6 +622,18 @@ function App() {
  <Suspense fallback={<PageFallback />}>
  <PageTransition>
  <PluginsPage />
+ </PageTransition>
+ </Suspense>
+ </ProtectedRoute>
+ }
+ />
+ <Route
+ path="admin/plugins/marketplace"
+ element={
+ <ProtectedRoute requirePermissions={['admin.read', 'admin.write']}>
+ <Suspense fallback={<PageFallback />}>
+ <PageTransition>
+ <MarketplacePage />
  </PageTransition>
  </Suspense>
  </ProtectedRoute>
