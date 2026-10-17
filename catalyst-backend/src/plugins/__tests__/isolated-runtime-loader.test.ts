@@ -4,6 +4,7 @@ import path from 'node:path';
 import pino from 'pino';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { PluginLoader } from '../loader';
+import { DISCLAIMER_VERSION } from '../safety';
 
 const dirs: string[] = [];
 
@@ -33,6 +34,28 @@ function dependencies() {
     },
     systemError: {
       create: async () => ({}),
+    },
+  } as any;
+}
+
+// Enabled + consented row so the legacy in-process load path activates under
+// the consent gate (code runs only when enabled AND consent is satisfied).
+function consentedDeps() {
+  return {
+    ...dependencies(),
+    plugin: {
+      findUnique: async () => ({
+        config: {},
+        enabled: true,
+        grantedPermissions: null,
+        version: '1.0.0',
+        safetyAcceptedAt: new Date(),
+        safetyDisclaimerVersion: DISCLAIMER_VERSION,
+        safetyAcceptedPluginVersion: '1.0.0',
+        safetyAcceptedPermissions: [],
+      }),
+      upsert: async () => ({}),
+      update: async () => ({}),
     },
   } as any;
 }
@@ -88,7 +111,7 @@ describe('PluginLoader runtime isolation', () => {
     })));
     await writeFile(path.join(pluginDir, 'backend.mjs'), "export default { onLoad: async () => { await import('node:fs/promises').then(({ writeFile }) => writeFile(process.env.CATALYST_TEST_MARKER, 'loaded')); } }");
 
-    const instance = loader(root);
+    const instance = loader(root, consentedDeps());
     await instance.loadPlugin(pluginDir);
 
     await expect(import('node:fs/promises').then(({ readFile }) => readFile(marker, 'utf8'))).resolves.toBe('loaded');

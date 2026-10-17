@@ -444,6 +444,8 @@ export interface LoadedPlugin {
   enabledRef?: { value: boolean };
   /** Worker thread host for isolated runtime */
   workerHost?: any;
+  /** Resolved on-disk path; lets enablePlugin activate a plugin that loaded inert. */
+  resolvedPath?: string;
 }
 
 /**

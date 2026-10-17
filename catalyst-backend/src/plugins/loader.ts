@@ -15,7 +15,7 @@ import { captureSystemError } from '../services/error-logger';
 import { PluginRegistry } from './registry';
 import { createGatedHandler, DEFAULT_GATE_CONFIG, setPluginGateEnabled } from './runtime/request-gate';
 import { PluginRouteTable, registerPluginRouteDispatcher } from './route-table';
-import { normalizePermissionList } from './safety';
+import { normalizePermissionList, consentStateFor, PluginConsentRequiredError } from './safety';
 import EventEmitter from 'events';
 import { buildRuntimeConfig, isStoredSchemaPollution, getDeclaredFieldType } from './config-utils';
 import { getCurrentVersion } from '../lib/panel-version';
@@ -23,6 +23,14 @@ import { getCurrentVersion } from '../lib/panel-version';
 // Real panel version (package.json) — hardcoded values rejected every plugin
 // whose manifest declared a realistic minimum catalystVersion.
 const CATALYST_VERSION = getCurrentVersion();
+
+/** Safety columns needed to compute consent in the loader (no grants — consent only). */
+const CONSENT_SELECT = {
+  safetyAcceptedAt: true,
+  safetyDisclaimerVersion: true,
+  safetyAcceptedPluginVersion: true,
+  safetyAcceptedPermissions: true,
+} as const;
 
 export class PluginLoader {
   private pluginsDir: string;
@@ -352,7 +360,6 @@ export class PluginLoader {
     const pluginName = path.basename(pluginPath);
     const resolvedPath = this.resolvePluginDir(pluginPath);
     this.logger.info({ plugin: pluginName }, 'Loading plugin');
-    let stagedFor: string | null = null;
 
     try {
       // Read manifest
@@ -407,7 +414,16 @@ export class PluginLoader {
       // only bump version — then rehydrate runtime values below.
       const existingRow = await this.prisma.plugin.findUnique({
         where: { name: manifest.name },
-        select: { config: true, enabled: true, grantedPermissions: true },
+        select: {
+          config: true,
+          enabled: true,
+          grantedPermissions: true,
+          version: true,
+          safetyAcceptedAt: true,
+          safetyDisclaimerVersion: true,
+          safetyAcceptedPluginVersion: true,
+          safetyAcceptedPermissions: true,
+        },
       });
 
       await this.prisma.plugin.upsert({
@@ -485,104 +501,54 @@ export class PluginLoader {
       );
 
       loadedPlugin.context = context;
+      loadedPlugin.resolvedPath = resolvedPath;
 
-      // Load backend if exists
-      if (manifest.backend?.entry) {
-        const requestedEntry = path.resolve(resolvedPath, manifest.backend.entry);
-        // Prevent path traversal via manifest.backend.entry
-        const canonicalPluginPath = path.resolve(resolvedPath);
-        if (
-          !requestedEntry.startsWith(canonicalPluginPath + path.sep) &&
-          requestedEntry !== canonicalPluginPath
-        ) {
-          throw new Error(`Backend entry path escapes plugin directory: ${manifest.backend.entry}`);
-        }
-        const entryRel = path.relative(canonicalPluginPath, requestedEntry);
-        // Stage to a unique dir so ESM re-evaluates latest code (incl. sibling
-        // imports). Same-path re-import would return the stale cached module.
-        const stagedRoot = await this.stageBackendForImport(manifest.name, resolvedPath);
-        stagedFor = manifest.name;
-        const backendPath = path.resolve(stagedRoot, entryRel);
-        const backendUrl = `${pathToFileURL(backendPath).href}?reload=${Date.now()}-${this.loadSeq}`;
-        const backendModule = await import(backendUrl);
-        loadedPlugin.backend = backendModule.default || backendModule;
+      // Consent gate: only execute plugin code (import/onLoad) when the DB row
+      // is enabled AND consent is satisfied (or grandfathered). Otherwise
+      // register inert (status disabled, no backend) so enablePlugin can
+      // activate it after the admin accepts the disclaimer.
+      const consent = consentStateFor(manifest, existingRow);
+      const grandfathered =
+        !!existingRow &&
+        existingRow.enabled === true &&
+        !existingRow.safetyAcceptedAt &&
+        existingRow.version === manifest.version;
+      const shouldActivate =
+        !!existingRow &&
+        existingRow.enabled === true &&
+        (!consent.consentRequired || grandfathered);
 
-        // Call onLoad lifecycle hook
-        if (loadedPlugin.backend?.onLoad) {
-          await loadedPlugin.backend.onLoad(context);
-        }
+      if (shouldActivate) {
+        await this.activatePlugin(loadedPlugin, resolvedPath);
+      } else {
+        loadedPlugin.status = 'disabled' as PluginStatus;
       }
 
-      // ── Apply middleware wrapping to all routes ─────────────────────────
-      const globalMiddlewares = loadedPlugin.middlewares.filter((m) => m.scope === 'global');
-
-      for (const route of loadedPlugin.routes) {
-        const originalHandler = route.handler;
-        const routeKey = `${route.method}:${route.url}`;
-
-        // Store original handler for potential future use
-        if (loadedPlugin.originalHandlers) {
-          loadedPlugin.originalHandlers.set(routeKey, originalHandler);
-        }
-
-        // Build wrapped handler: middleware chain → enabled check → original handler
-        const coreHandler = async (request: FastifyRequest, reply: FastifyReply) => {
-          // Run global middleware chain
-          for (const mw of globalMiddlewares) {
-            try {
-              await runMiddleware(mw.handler, request, reply);
-            } catch (err: any) {
-              reply.status(500).send({
-                success: false,
-                error: 'Middleware error',
-                details: err.message,
-              });
-              return;
-            }
-            // If middleware already sent a reply, stop processing
-            if (reply.sent) return;
-          }
-
-          // Check if plugin is enabled
-          if (!enabledRef.value) {
-            return reply.status(503).send({
-              success: false,
-              error: 'Plugin is disabled',
-            });
-          }
-
-          // Call original handler
-          return (originalHandler as Function)(request, reply);
-        };
-
-        // Wrap with request gate for timeout, heap-pressure observation, and concurrency limits
-        const gateConfig = {
-          ...DEFAULT_GATE_CONFIG,
-          pluginName: manifest.name,
-          requestTimeoutMs: manifest.config?.requestTimeoutMs?.default ?? DEFAULT_GATE_CONFIG.requestTimeoutMs,
-          memoryLimitMb: manifest.config?.memoryLimitMb?.default ?? DEFAULT_GATE_CONFIG.memoryLimitMb,
-          maxConcurrentRequests: manifest.config?.maxConcurrentRequests?.default ?? DEFAULT_GATE_CONFIG.maxConcurrentRequests,
-        };
-        route.handler = createGatedHandler(gateConfig, coreHandler);
-
-        // registerRoute() in context.ts already prefixes with /api/plugins/{name}/…
-        // Do NOT prefix again here — that produced /api/plugins/{name}/api/plugins/{name}/…
-        // Fastify cannot add routes after listen(); the catch-all dispatcher
-        // (registered in initialize()) forwards to these handlers instead.
-        this.routeTable.register(manifest.name, route);
+      // Fail-closed UI accuracy: a previously-consented plugin whose
+      // version/permissions changed can no longer auto-start — reflect that in
+      // the DB so the panel shows it disabled. Grandfathered (never-accepted)
+      // plugins are left enabled so server.ts backfill can record acceptance.
+      if (
+        !!existingRow &&
+        existingRow.enabled === true &&
+        existingRow.safetyAcceptedAt &&
+        consent.consentRequired
+      ) {
+        await this.prisma.plugin
+          .update({ where: { name: manifest.name }, data: { enabled: false, enabledAt: null } })
+          .catch(() => {});
+        this.logger.warn(
+          { plugin: manifest.name, reason: consent.reason },
+          'Previously-enabled plugin requires re-consent; disabled',
+        );
       }
 
-      // Register plugin in registry
-      loadedPlugin.status = 'loaded' as PluginStatus;
-      loadedPlugin.loadedAt = new Date();
       this.registry.register(loadedPlugin);
-
-      this.logger.info({ plugin: manifest.name }, 'Plugin loaded successfully');
+      this.logger.info({ plugin: manifest.name, activated: shouldActivate }, 'Plugin loaded');
     } catch (error: any) {
+      // activatePlugin owns staged-dir cleanup on its own failures; this is a
+      // redundant safety net for failures before/around activation.
       await this.cleanupBackendStage(pluginName).catch(() => {});
-      if (stagedFor && stagedFor !== pluginName) {
-        await this.cleanupBackendStage(stagedFor).catch(() => {});
-      }
       captureSystemError({
         level: 'error',
         component: 'PluginLoader',
@@ -647,6 +613,110 @@ export class PluginLoader {
   }
 
   /**
+   * Import the backend, run onLoad, wrap+register routes, set status 'loaded'.
+   * Idempotent (no-op if backend already imported). Throws on failure after
+   * cleaning up the staged ESM copy. Does NOT register in the PluginRegistry —
+   * the caller (loadPlugin/enablePlugin) owns that.
+   */
+  private async activatePlugin(plugin: LoadedPlugin, resolvedPath: string): Promise<void> {
+    if (plugin.backend) return; // idempotent — already activated
+    const manifest = plugin.manifest;
+    let stagedFor: string | null = null;
+    try {
+      if (manifest.backend?.entry) {
+        const requestedEntry = path.resolve(resolvedPath, manifest.backend.entry);
+        // Prevent path traversal via manifest.backend.entry
+        const canonicalPluginPath = path.resolve(resolvedPath);
+        if (
+          !requestedEntry.startsWith(canonicalPluginPath + path.sep) &&
+          requestedEntry !== canonicalPluginPath
+        ) {
+          throw new Error(`Backend entry path escapes plugin directory: ${manifest.backend.entry}`);
+        }
+        const entryRel = path.relative(canonicalPluginPath, requestedEntry);
+        // Stage to a unique dir so ESM re-evaluates latest code (incl. sibling
+        // imports). Same-path re-import would return the stale cached module.
+        const stagedRoot = await this.stageBackendForImport(manifest.name, resolvedPath);
+        stagedFor = manifest.name;
+        const backendPath = path.resolve(stagedRoot, entryRel);
+        const backendUrl = `${pathToFileURL(backendPath).href}?reload=${Date.now()}-${this.loadSeq}`;
+        const backendModule = await import(backendUrl);
+        plugin.backend = backendModule.default || backendModule;
+
+        // Call onLoad lifecycle hook
+        if (plugin.backend?.onLoad) {
+          await plugin.backend.onLoad(plugin.context);
+        }
+      }
+
+      // ── Apply middleware wrapping to all routes ─────────────────────────
+      const globalMiddlewares = plugin.middlewares.filter((m) => m.scope === 'global');
+
+      for (const route of plugin.routes) {
+        const originalHandler = route.handler;
+        const routeKey = `${route.method}:${route.url}`;
+
+        // Store original handler for potential future use
+        if (plugin.originalHandlers) {
+          plugin.originalHandlers.set(routeKey, originalHandler);
+        }
+
+        // Build wrapped handler: middleware chain → enabled check → original handler
+        const coreHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+          // Run global middleware chain
+          for (const mw of globalMiddlewares) {
+            try {
+              await runMiddleware(mw.handler, request, reply);
+            } catch (err: any) {
+              reply.status(500).send({
+                success: false,
+                error: 'Middleware error',
+                details: err.message,
+              });
+              return;
+            }
+            // If middleware already sent a reply, stop processing
+            if (reply.sent) return;
+          }
+
+          // Check if plugin is enabled
+          if (!plugin.enabledRef?.value) {
+            return reply.status(503).send({
+              success: false,
+              error: 'Plugin is disabled',
+            });
+          }
+
+          // Call original handler
+          return (originalHandler as Function)(request, reply);
+        };
+
+        // Wrap with request gate for timeout, heap-pressure observation, and concurrency limits
+        const gateConfig = {
+          ...DEFAULT_GATE_CONFIG,
+          pluginName: manifest.name,
+          requestTimeoutMs: manifest.config?.requestTimeoutMs?.default ?? DEFAULT_GATE_CONFIG.requestTimeoutMs,
+          memoryLimitMb: manifest.config?.memoryLimitMb?.default ?? DEFAULT_GATE_CONFIG.memoryLimitMb,
+          maxConcurrentRequests: manifest.config?.maxConcurrentRequests?.default ?? DEFAULT_GATE_CONFIG.maxConcurrentRequests,
+        };
+        route.handler = createGatedHandler(gateConfig, coreHandler);
+
+        // registerRoute() in context.ts already prefixes with /api/plugins/{name}/…
+        // Do NOT prefix again here — that produced /api/plugins/{name}/api/plugins/{name}/…
+        // Fastify cannot add routes after listen(); the catch-all dispatcher
+        // (registered in initialize()) forwards to these handlers instead.
+        this.routeTable.register(manifest.name, route);
+      }
+
+      plugin.status = 'loaded' as PluginStatus;
+      plugin.loadedAt = new Date();
+    } catch (error) {
+      if (stagedFor) await this.cleanupBackendStage(stagedFor).catch(() => {});
+      throw error;
+    }
+  }
+
+  /**
    * Enable a plugin
    */
   async enablePlugin(name: string): Promise<void> {
@@ -664,9 +734,26 @@ export class PluginLoader {
       throw new Error(`Cannot enable plugin in error state: ${plugin.error?.message}`);
     }
 
+    // Consent gate BEFORE any import/activation: throws cleanly without
+    // marking the plugin error-state (it is legitimately pending consent).
+    const consentRow = await this.prisma.plugin.findUnique({
+      where: { name },
+      select: CONSENT_SELECT,
+    });
+    const consent = consentStateFor(plugin.manifest, consentRow);
+    if (consent.consentRequired) {
+      throw new PluginConsentRequiredError(consent.reason ?? 'never_accepted');
+    }
+
     this.logger.info({ plugin: name }, 'Enabling plugin');
 
     try {
+      // Activate an inert plugin (import + onLoad + routes) before onEnable.
+      // Frontend-only plugins skip this (no backend entry); already-active
+      // plugins skip it (activatePlugin is idempotent on plugin.backend).
+      if (!plugin.backend && plugin.manifest.backend?.entry && plugin.resolvedPath) {
+        await this.activatePlugin(plugin, plugin.resolvedPath);
+      }
       // Toggle the enabled ref so routes become active
       if (plugin.enabledRef) {
         plugin.enabledRef.value = true;
@@ -709,6 +796,9 @@ export class PluginLoader {
         plugin.enabledRef.value = false;
       }
       setPluginGateEnabled(name, false);
+      // Activation can fail partway through the route loop, leaving a subset
+      // of inert (503) routes in the table. Drop them so a retry starts clean.
+      this.routeTable.removePlugin(name);
       throw error;
     }
   }
@@ -894,9 +984,26 @@ export class PluginLoader {
     // Load plugin again
     await this.loadPlugin(pluginPath);
 
-    // Enable if it was enabled before
+    // Re-enable if it was enabled before. A version/permission bump during
+    // the update now requires re-consent: enablePlugin throws
+    // PluginConsentRequiredError, which we handle by leaving the freshly-loaded
+    // (inert) copy disabled rather than propagating a hard failure.
     if (wasEnabled) {
-      await this.enablePlugin(name);
+      try {
+        await this.enablePlugin(name);
+      } catch (error) {
+        if (error instanceof PluginConsentRequiredError) {
+          await this.prisma.plugin
+            .update({ where: { name }, data: { enabled: false, enabledAt: null } })
+            .catch(() => {});
+          this.logger.warn(
+            { plugin: name, reason: error.reason },
+            'Plugin update requires re-consent; left disabled',
+          );
+        } else {
+          throw error;
+        }
+      }
     }
 
     this.logger.info({ plugin: name }, 'Plugin reloaded successfully');

@@ -186,6 +186,43 @@ export function computeConsentState(inputs: ConsentInputs): ConsentState {
   return { consentRequired: false };
 }
 
+/** Thrown when enabling/activating a plugin whose safety consent is not satisfied. */
+export class PluginConsentRequiredError extends Error {
+  readonly reason: ConsentReason;
+  constructor(reason: ConsentReason) {
+    super(`Plugin safety consent required: ${reason}`);
+    this.name = 'PluginConsentRequiredError';
+    this.reason = reason;
+  }
+}
+
+/**
+ * Row→ConsentState adapter wrapping computeConsentState + normalizePermissionList.
+ * Mirrors the inline computation in routes/plugins.ts buildConsentSummary so the
+ * loader and the HTTP layer reach identical consent conclusions.
+ */
+export function consentStateFor(
+  manifest: { version: string; permissions?: string[] },
+  row: {
+    safetyAcceptedAt: Date | null;
+    safetyDisclaimerVersion: string | null;
+    safetyAcceptedPluginVersion: string | null;
+    safetyAcceptedPermissions: unknown;
+  } | null,
+): ConsentState {
+  return computeConsentState({
+    hasAcceptance: !!row?.safetyAcceptedAt,
+    acceptedDisclaimerVersion: row?.safetyDisclaimerVersion ?? null,
+    acceptedPluginVersion: row?.safetyAcceptedPluginVersion ?? null,
+    acceptedPermissions:
+      row && Array.isArray(row.safetyAcceptedPermissions)
+        ? normalizePermissionList(row.safetyAcceptedPermissions as unknown[])
+        : null,
+    manifestPermissions: normalizePermissionList(manifest.permissions ?? []),
+    manifestVersion: manifest.version,
+  });
+}
+
 /**
  * Split declared permissions into granted vs revoked given effective grants.
  * Grants of null mean "everything declared is granted".
