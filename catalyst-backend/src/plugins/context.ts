@@ -13,6 +13,7 @@ import type {
   PluginCollectionOptions,
   PluginEventSchema,
   PluginFileTunnel,
+  PluginWebSocketHost,
   ScopedPluginDB,
 } from './types';
 import type { PluginRegistry } from './registry';
@@ -26,6 +27,7 @@ import { createCollectionStorage } from './storage/collection-storage';
 import { resolveConfigValue } from './config-utils';
 import { matchFilter, applyUpdateOperators } from './path-utils';
 import { normalizePermissionList } from './safety';
+import { createPluginCapabilities } from './capabilities.js';
 import { hasGrant } from '../lib/permissions.js';
 
 // ── Simple unique ID generator ──────────────────────────────────────────────
@@ -708,6 +710,18 @@ export function createPluginContext(
   // Create scoped database wrapper based on live effective permissions
   const scopedDb = new ScopedPluginDBClient(prisma, manifest.name, pluginLogger, getPermissions);
 
+  // B3-2: replace the raw WebSocket gateway + file tunnel the plugin sees
+  // with scoped facades. The facades keep the same property names so plugin
+  // code is unchanged, but host internals (clients/agents maps, arbitrary
+  // methods) are no longer reachable. Grant checks are live per call.
+  const { wsGateway: pluginWsGateway, fileTunnel: pluginFileTunnel } = createPluginCapabilities(
+    wsGateway,
+    fileTunnel,
+    getPermissions,
+    pluginLogger,
+    manifest.name,
+  );
+
   /** Live capability check for the auth bridge (`*` grants everything). */
   const hasCapability = (token: string) => {
     const perms = getPermissions();
@@ -754,8 +768,8 @@ export function createPluginContext(
     originalConfig,
     db: scopedDb,
     logger: pluginLogger,
-    wsGateway,
-    fileTunnel,
+    wsGateway: pluginWsGateway,
+    fileTunnel: pluginFileTunnel,
     installId,
 
     registerRoute(options: RouteOptions) {
@@ -779,10 +793,50 @@ export function createPluginContext(
         }
       }
 
+      // B3-9: host-enforced per-caller authorization. A route may declare
+      // requiredPermissions; the dispatcher checks request.user.permissions
+      // against them after host auth. Normalize + cap so a plugin cannot
+      // smuggle huge or malformed token lists. Validation of token shape is
+      // done by normalizePermissionList (PERMISSION_TOKEN_RE).
+      const declaredRaw = (options.config as { requiredPermissions?: unknown } | undefined)
+        ?.requiredPermissions;
+      const requiredPermissions = normalizePermissionList(declaredRaw).slice(0, 16);
+
+      // A scoped token (`server.read:srv_1`) fails PERMISSION_TOKEN_RE and is
+      // dropped. Silently dropping it would leave the route open to any
+      // authenticated caller — the opposite of what the plugin asked for — so
+      // say so loudly.
+      if (Array.isArray(declaredRaw) && declaredRaw.length > requiredPermissions.length) {
+        const dropped = declaredRaw.filter((t) => !requiredPermissions.includes(t as string));
+        pluginLogger.warn(
+          { route: prefixedPath, dropped },
+          'Route requiredPermissions entries were discarded as malformed — the route is LESS restricted than declared',
+        );
+      }
+
+      // Warn (do not throw) if a declared route permission is not covered by
+      // the plugin's live effective grants — the route will deny every caller
+      // until the grant is added, but a plugin must not be able to fail the
+      // panel load by declaring an uncovered permission.
+      if (requiredPermissions.length > 0) {
+        const liveGrants = getPermissions();
+        const uncovered = requiredPermissions.filter((p) => !hasGrant(liveGrants, p));
+        if (uncovered.length > 0) {
+          pluginLogger.warn(
+            { route: prefixedPath, requiredPermissions, uncovered },
+            'Route declares requiredPermissions not covered by plugin effective grants — route will deny all callers until the grant is added',
+          );
+        }
+      }
+
       const routeOptions: RouteOptions = {
         ...options,
         url: prefixedPath,
-        config: { ...(options.config as object | undefined), auth: authMode },
+        config: {
+          ...(options.config as object | undefined),
+          auth: authMode,
+          requiredPermissions,
+        },
       };
       // SECURITY: Always inject host authentication middleware.
       // Plugin-provided preHandler/onRequest are run AFTER the host auth check.
@@ -846,39 +900,25 @@ export function createPluginContext(
     onWebSocketMessage(type: string, handler: PluginWebSocketHandler) {
       // Store locally for backward compat
       wsHandlers.set(type, handler);
-      // Also register with gateway using prefixed type for dispatch
+      // Register with the scoped gateway facade (which delegates to the real
+      // gateway). The facade always exposes registerPluginWsHandler, so the
+      // previous optional-method probe is no longer needed.
       const prefixedType = `plugin:${manifest.name}:${type}`;
-      if (wsGateway.registerPluginWsHandler) {
-        wsGateway.registerPluginWsHandler(prefixedType, handler, manifest.name);
-      }
+      pluginWsGateway.registerPluginWsHandler(prefixedType, handler, manifest.name);
       pluginLogger.info({ type, prefixedType }, 'Registered WebSocket handler');
     },
 
     sendWebSocketMessage(target: string, message: any) {
       if (target === '*') {
-        // Broadcast to all authenticated clients
-        if (wsGateway.broadcastToAuthenticated) {
-          wsGateway.broadcastToAuthenticated(message);
-        }
+        // Broadcast to all authenticated clients via the scoped facade.
+        pluginWsGateway.broadcastToAuthenticated(message);
         return;
       }
-      // Send to specific client
-      const client = (wsGateway as any).clients?.get?.(target);
-      if (client) {
-        try {
-          client.socket.send(JSON.stringify(message));
-        } catch (error: any) {
-          captureSystemError({
-            level: 'warn',
-            component: 'PluginWebSocket',
-            message: `Failed to send WebSocket message: ${describeError(error)}`,
-            stack: error?.stack,
-            metadata: { plugin: manifest.name, target },
-          }).catch(() => {});
-          pluginLogger.error({ error: error.message, target }, 'Failed to send WebSocket message');
-        }
-      } else {
-        pluginLogger.warn({ target }, 'WebSocket client not found');
+      // Send to a specific client via the scoped facade — never touch the
+      // raw clients map. The facade returns whether delivery succeeded.
+      const sent = pluginWsGateway.sendToClient(target, message);
+      if (!sent) {
+        pluginLogger.warn({ target }, 'WebSocket client not found or not authenticated');
       }
     },
 

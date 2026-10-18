@@ -5875,6 +5875,26 @@ export class WebSocketGateway {
     }
   }
 
+  /**
+   * Send a message to a single authenticated browser client by id.
+   * Returns whether the message was delivered (client present,
+   * authenticated, socket open, send succeeded). Used by the plugin WS
+   * facade so plugins never touch the raw `clients` map.
+   */
+  sendToClient(clientId: string, message: unknown): boolean {
+    const client = this.clients.get(clientId);
+    if (!client || !client.authenticated || client.socket?.readyState !== 1) return false;
+    try {
+      // Always JSON-encode, matching the previous plugin send path exactly
+      // (broadcastToAuthenticated passes strings through verbatim; plugins
+      // expecting JSON must not get a different wire format per target).
+      client.socket.send(JSON.stringify(message));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   // ── Discovered container accessors (for auto-import) ───────────────────
 
   getDiscoveredContainers(nodeId: string) {

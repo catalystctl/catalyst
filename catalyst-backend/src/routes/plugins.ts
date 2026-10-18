@@ -416,14 +416,19 @@ export async function pluginRoutes(app: FastifyInstance, pluginLoader: PluginLoa
 
   const InstallPluginSchema = z.object({
     url: z.string().url(),
-    sha256: z.string().regex(/^[0-9a-fA-F]{64}$/).optional(),
+    // Required: an unverified package is refused. The digest must match the
+    // marketplace-pinned sha256 before the downloaded bytes are accepted.
+    sha256: z.string().regex(/^[0-9a-fA-F]{64}$/),
   });
 
   /**
    * POST /api/plugins/install
-   * Download, verify and stage a plugin package (.catpkg.zip). The code lands
-   * inert — it cannot execute until an admin accepts the safety disclaimer
-   * and enables it via the normal gate.
+   * Download, verify and stage a plugin package (.catpkg.zip). The request
+   * MUST pin a 64-hex sha256 checksum — an unverified package is refused and
+   * the download is aborted on any redirect so a first-hop host cannot
+   * re-point the fetch at a private/metadata address. The code lands inert:
+   * it cannot execute until an admin accepts the safety disclaimer and
+   * enables it via the normal gate.
    */
   app.post(
     '/api/plugins/install',
