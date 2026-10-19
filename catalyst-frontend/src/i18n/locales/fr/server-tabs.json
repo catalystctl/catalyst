@@ -620,6 +620,8 @@
     "mods": {
       "adjustFilters": "Essayez de modifier votre recherche ou votre filtre.",
       "allUpToDate": "Tous les mods sont à jour",
+      "categoryAny": "Toutes les catégories",
+      "categoryLabel": "Catégorie",
       "checkUpdates": "Rechercher des mises à jour",
       "checkUpdatesFailed": "Échec de la recherche de mises à jour",
       "description": "Parcourez et installez des mods, datapacks et modpacks.",
@@ -634,6 +636,8 @@
         "updates": "Mises à jour disponibles"
       },
       "filteredOf": " sur {{total}}",
+      "gameVersionDetected": "Toutes versions (serveur : {{version}})",
+      "gameVersionHint": "Laissez vide pour rechercher dans toutes les versions du jeu.",
       "gameVersionPlaceholder": "Version du jeu",
       "install": "Installer",
       "installedCount_one": "{{count}} installé",
@@ -643,7 +647,42 @@
       "installFailed": "Échec de l’installation du mod",
       "installHint": "Installez des mods depuis l’onglet Parcourir pour les voir ici.",
       "installing": "Installation…",
+      "loaderAny": "Tous les chargeurs",
+      "loaderLabel": "Chargeur de mods",
       "missingSelection": "Sélection de mod manquante",
+      "modpack": {
+        "description": "Importez une archive .zip, .mrpack, .mr, .tar ou .tar.gz, ou indiquez une URL. Les packs Modrinth et CurseForge sont lus depuis leur manifeste ; les surcharges du pack sont appliquées au serveur.",
+        "fileLabel": "Archive du modpack",
+        "format": "Format du pack",
+        "install": "Installer le modpack",
+        "installAnother": "Installer un autre pack",
+        "installedSuccess": "{{name}} installé",
+        "installFailed": "Le modpack n'a pas pu être installé.",
+        "modsInstalled": "Mods téléchargés",
+        "needSource": "Choisissez un fichier de modpack ou saisissez une URL.",
+        "overridesApplied": "Surcharges appliquées",
+        "pathLabel": "Installer dans",
+        "pathPlaceholder": "Laissez vide pour utiliser la racine du serveur",
+        "phase": {
+          "applying-overrides": "Application des surcharges",
+          "extracting": "Extraction de l'archive",
+          "finalizing": "Finalisation",
+          "installing-files": "Téléchargement des mods"
+        },
+        "skipped": "Entrées ignorées",
+        "status": {
+          "completed": "Installé",
+          "failed": "Échec",
+          "queued": "En attente",
+          "running": "Installation"
+        },
+        "stepOf": "Étape {{current}} sur {{total}}",
+        "title": "Installer un modpack",
+        "urlLabel": "Ou installer depuis une URL",
+        "warnings_one": "{{count}} avertissement",
+        "warnings_many": "",
+        "warnings_other": "{{count}} avertissements"
+      },
       "noMatching": "Aucun mod correspondant",
       "noneInstalledDatapacks": "Aucun datapack installé",
       "noneInstalledModpacks": "Aucun modpack installé",
@@ -657,6 +696,7 @@
       "previous": "Précédent",
       "providerFallback": "fournisseur",
       "providerKeyMissing": "Clé API du fournisseur non configurée. Définissez-la dans Administration → Système → Clés API du gestionnaire de mods.",
+      "providerLabel": "Fournisseur",
       "removeConfirm": "Retirer {{name}} ? Cette action est irréversible.",
       "removeConfirmMany_one": "Retirer {{count}} mod sélectionné ? Cette action est irréversible.",
       "removeConfirmMany_many": "Retirer {{count}} mods sélectionnés ? Cette action est irréversible.",
@@ -683,13 +723,24 @@
         "name": "Nom",
         "size": "Taille"
       },
+      "sortLabel": "Trier par",
+      "sortOption": {
+        "default": "Ordre par défaut",
+        "downloads": "Téléchargements",
+        "follows": "Abonnés",
+        "newest": "Plus récents",
+        "relevance": "Pertinence",
+        "updated": "Mis à jour récemment"
+      },
       "tabBrowse": "Parcourir",
       "tabInstalled": "Installés",
+      "tabModpack": "Installer un pack",
       "target": {
         "datapacks": "Datapacks",
         "modpacks": "Modpacks",
         "mods": "Mods"
       },
+      "targetLabel": "Type de contenu",
       "title": "Mods",
       "unavailableDescription": "Ce modèle de serveur n’a pas de gestionnaire de mods configuré.",
       "unavailableTitle": "Gestionnaire de mods indisponible",

@@ -605,6 +605,8 @@
     "mods": {
       "adjustFilters": "Try adjusting your search or filter.",
       "allUpToDate": "All mods are up to date",
+      "categoryAny": "All categories",
+      "categoryLabel": "Category",
       "checkUpdates": "Check Updates",
       "checkUpdatesFailed": "Failed to check for updates",
       "description": "Browse and install mods, datapacks, and modpacks.",
@@ -618,6 +620,8 @@
         "updates": "Has Updates"
       },
       "filteredOf": " of {{total}}",
+      "gameVersionDetected": "Any version (server: {{version}})",
+      "gameVersionHint": "Leave empty to search every game version.",
       "gameVersionPlaceholder": "Game version",
       "install": "Install",
       "installedCount_one": "{{count}} installed",
@@ -626,7 +630,41 @@
       "installFailed": "Failed to install mod",
       "installHint": "Install mods from the Browse tab to see them here.",
       "installing": "Installing…",
+      "loaderAny": "Any loader",
+      "loaderLabel": "Mod loader",
       "missingSelection": "Missing mod selection",
+      "modpack": {
+        "description": "Upload a .zip, .mrpack, .mr, .tar or .tar.gz pack, or point at a URL. Modrinth and CurseForge packs are read from their manifest; the pack's overrides are applied to the server.",
+        "fileLabel": "Modpack archive",
+        "format": "Pack format",
+        "install": "Install modpack",
+        "installAnother": "Install another pack",
+        "installedSuccess": "{{name}} installed",
+        "installFailed": "The modpack could not be installed.",
+        "modsInstalled": "Mods downloaded",
+        "needSource": "Choose a modpack file or enter a URL.",
+        "overridesApplied": "Overrides applied",
+        "pathLabel": "Install into",
+        "pathPlaceholder": "Leave empty to use the server root",
+        "phase": {
+          "applying-overrides": "Applying overrides",
+          "extracting": "Extracting archive",
+          "finalizing": "Finishing up",
+          "installing-files": "Downloading mods"
+        },
+        "skipped": "Skipped entries",
+        "status": {
+          "completed": "Installed",
+          "failed": "Failed",
+          "queued": "Queued",
+          "running": "Installing"
+        },
+        "stepOf": "Step {{current}} of {{total}}",
+        "title": "Install a modpack",
+        "urlLabel": "Or install from a URL",
+        "warnings_one": "{{count}} warning",
+        "warnings_other": "{{count}} warnings"
+      },
       "noMatching": "No matching mods",
       "noneInstalledDatapacks": "No datapacks installed",
       "noneInstalledModpacks": "No modpacks installed",
@@ -640,6 +678,7 @@
       "previous": "Previous",
       "providerFallback": "provider",
       "providerKeyMissing": "Provider API key not configured. Set it under Admin → System → Mod Manager API Keys.",
+      "providerLabel": "Provider",
       "removeConfirm": "Remove {{name}}? This cannot be undone.",
       "removeConfirmMany_one": "Remove {{count}} selected mods? This cannot be undone.",
       "removeConfirmMany_other": "Remove {{count}} selected mods? This cannot be undone.",
@@ -663,13 +702,24 @@
         "name": "Name",
         "size": "Size"
       },
+      "sortLabel": "Sort by",
+      "sortOption": {
+        "default": "Default order",
+        "downloads": "Downloads",
+        "follows": "Followers",
+        "newest": "Newest",
+        "relevance": "Relevance",
+        "updated": "Recently updated"
+      },
       "tabBrowse": "Browse",
       "tabInstalled": "Installed",
+      "tabModpack": "Install pack",
       "target": {
         "datapacks": "Datapacks",
         "modpacks": "Modpacks",
         "mods": "Mods"
       },
+      "targetLabel": "Content type",
       "title": "Mods",
       "unavailableDescription": "This server template does not have a mod manager configured.",
       "unavailableTitle": "Mod manager not available",

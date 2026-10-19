@@ -142,6 +142,8 @@
   "MOD_PROVIDER_UNSUPPORTED": "Unsupported provider.",
   "MOD_TARGET_NOT_ENABLED": "This target is not enabled for the selected provider.",
   "MOD_UNINSTALL_FAILED": "Failed to uninstall the mod or plugin.",
+  "MODPACK_FORMAT_UNSUPPORTED": "Unsupported modpack archive type. Use a .zip, .mrpack, .mr, .tar, .tar.gz or .tar.xz file.",
+  "MODPACK_INSTALL_FAILED": "The modpack could not be installed.",
   "NEST_NAME_TAKEN": "A nest with this name already exists.",
   "NEST_NOT_FOUND": "Nest not found.",
   "NETWORK_ERROR": "A network error occurred. Check your connection and try again.",

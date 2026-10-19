@@ -590,6 +590,8 @@
     "mods": {
       "adjustFilters": "请尝试调整搜索词或筛选条件。",
       "allUpToDate": "所有模组均为最新",
+      "categoryAny": "全部分类",
+      "categoryLabel": "分类",
       "checkUpdates": "检查更新",
       "checkUpdatesFailed": "检查更新失败",
       "description": "浏览并安装模组、数据包和整合包。",
@@ -602,6 +604,8 @@
         "updates": "有更新"
       },
       "filteredOf": " / {{total}} ·",
+      "gameVersionDetected": "所有版本（服务器：{{version}}）",
+      "gameVersionHint": "留空则搜索所有游戏版本。",
       "gameVersionPlaceholder": "游戏版本",
       "install": "安装",
       "installedCount_other": "已安装 {{count}} 个",
@@ -609,7 +613,41 @@
       "installFailed": "安装模组失败",
       "installHint": "从“浏览”标签页安装模组后即可在此查看。",
       "installing": "正在安装…",
+      "loaderAny": "所有加载器",
+      "loaderLabel": "模组加载器",
       "missingSelection": "未选择模组",
+      "modpack": {
+        "description": "上传 .zip、.mrpack、.mr、.tar 或 .tar.gz 整合包，或填写一个链接。Modrinth 与 CurseForge 整合包会从清单文件读取；整合包中的覆盖文件会应用到服务器。",
+        "fileLabel": "整合包压缩文件",
+        "format": "整合包格式",
+        "install": "安装整合包",
+        "installAnother": "安装其他整合包",
+        "installedSuccess": "{{name}} 已安装",
+        "installFailed": "无法安装该整合包。",
+        "modsInstalled": "已下载的模组",
+        "needSource": "请选择整合包文件或输入链接。",
+        "overridesApplied": "已应用的覆盖文件",
+        "pathLabel": "安装到",
+        "pathPlaceholder": "留空则使用服务器根目录",
+        "phase": {
+          "applying-overrides": "正在应用覆盖文件",
+          "extracting": "正在解压文件",
+          "finalizing": "正在完成",
+          "installing-files": "正在下载模组"
+        },
+        "skipped": "已跳过的条目",
+        "status": {
+          "completed": "已安装",
+          "failed": "失败",
+          "queued": "排队中",
+          "running": "正在安装"
+        },
+        "stepOf": "第 {{current}} 步，共 {{total}} 步",
+        "title": "安装整合包",
+        "urlLabel": "或从链接安装",
+        "warnings_one": "{{count}} 条警告",
+        "warnings_other": "{{count}} 条警告"
+      },
       "noMatching": "没有匹配的模组",
       "noneInstalledDatapacks": "未安装数据包",
       "noneInstalledModpacks": "未安装整合包",
@@ -623,6 +661,7 @@
       "previous": "上一页",
       "providerFallback": "提供方",
       "providerKeyMissing": "未配置提供方 API 密钥。请在“管理 → 系统 → 模组管理器 API 密钥”中设置。",
+      "providerLabel": "来源平台",
       "removeConfirm": "移除 {{name}}？此操作无法撤销。",
       "removeConfirmMany_other": "移除选中的 {{count}} 个模组？此操作无法撤销。",
       "removed": "模组已移除",
@@ -643,13 +682,24 @@
         "name": "名称",
         "size": "大小"
       },
+      "sortLabel": "排序方式",
+      "sortOption": {
+        "default": "默认排序",
+        "downloads": "下载量",
+        "follows": "关注数",
+        "newest": "最新",
+        "relevance": "相关度",
+        "updated": "最近更新"
+      },
       "tabBrowse": "浏览",
       "tabInstalled": "已安装",
+      "tabModpack": "安装整合包",
       "target": {
         "datapacks": "数据包",
         "modpacks": "整合包",
         "mods": "模组"
       },
+      "targetLabel": "内容类型",
       "title": "模组",
       "unavailableDescription": "此服务器模板未配置模组管理器。",
       "unavailableTitle": "模组管理器不可用",

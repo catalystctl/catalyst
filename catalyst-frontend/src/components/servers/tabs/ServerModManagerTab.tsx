@@ -24,6 +24,7 @@ import {
 } from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
 import { useStreamAwareInterval } from '../../../hooks/useStreamAwareInterval';
+import { useDebounce } from '../../../hooks/useDebounce';
 import {
  notifyError,
  notifySuccess,
@@ -51,6 +52,7 @@ import UpdateConfirmModal, {
  type UpdateItem,
 } from './UpdateConfirmModal';
 import ServerTabCard from './ServerTabCard';
+import ModpackInstallPanel from './ModpackInstallPanel';
 import TabEmptyState from './TabEmptyState';
 import TabHeader from './TabHeader';
 
@@ -100,6 +102,8 @@ const RESULTS_PER_PAGE = 12;
 
 // ── Types ──
 type ModManagerTarget = 'mods' | 'datapacks' | 'modpacks';
+/** Empty string = provider default (relevance when searching, downloads when browsing). */
+type ModManagerSort = '' | 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated';
 type ModManagerProviderOption = {
  key: string;
  providerId: string;
@@ -344,13 +348,17 @@ export default function ServerModManagerTab({
  // ── Browse state ──
  const [modQuery, setModQuery] = useState('');
  const [modTarget, setModTarget] = useState<ModManagerTarget>('mods');
- const [modLoader, setModLoader] = useState('forge');
+ // Empty = any loader. Defaulting to Forge (as this used to) hid most
+ // modpacks: of 843 Cobblemon packs, 674 are Fabric and only 45 Forge.
+ const [modLoader, setModLoader] = useState('');
  const [modGameVersion, setModGameVersion] = useState('');
+ const [modSort, setModSort] = useState<ModManagerSort>('');
+ const [modCategories, setModCategories] = useState<string[]>([]);
  const [searchPage, setSearchPage] = useState(1);
  const [selectedProject, setSelectedProject] = useState<string | null>(null);
  const [selectedProjectName, setSelectedProjectName] = useState('');
  const [selectedVersion, setSelectedVersion] = useState('');
- const [modSubTab, setModSubTab] = useState<'browse' | 'installed'>('browse');
+ const [modSubTab, setModSubTab] = useState<'browse' | 'installed' | 'modpack'>('browse');
 
  // ── Installed state ──
  const [selectedModFiles, setSelectedModFiles] = useState<Set<string>>(
@@ -404,16 +412,16 @@ export default function ServerModManagerTab({
  setModGameVersion('');
  }
 
- const [prevServerGameVersion, setPrevServerGameVersion] = useState(serverGameVersion);
- if (serverGameVersion !== prevServerGameVersion) {
- setPrevServerGameVersion(serverGameVersion);
- const detectedVersion = serverGameVersion?.trim();
- if (detectedVersion) {
- setModGameVersion((current) => (current ? current : detectedVersion));
- }
- }
+ // The server's own version is offered as a placeholder, never applied
+ // implicitly: filtering every search to it hid almost every modpack, which
+ // track older Minecraft releases than the newest one.
+ const detectedGameVersion = serverGameVersion?.trim() || '';
 
- const filterKey = `${modProvider}|${modProviderGame ?? ''}|${modQuery}|${modTarget}|${modLoader}|${modGameVersion}`;
+ // Typing must not fire one provider request per keystroke: Modrinth rate
+ // limits, and a burst of 429s makes the whole search look broken.
+ const debouncedModQuery = useDebounce(modQuery, 400);
+
+ const filterKey = `${modProvider}|${modProviderGame ?? ''}|${debouncedModQuery}|${modTarget}|${modLoader}|${modGameVersion}|${modSort}|${modCategories.join(',')}`;
  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
  if (filterKey !== prevFilterKey) {
  setPrevFilterKey(filterKey);
@@ -442,15 +450,29 @@ export default function ServerModManagerTab({
  isError: modSearchError,
  error: modSearchErrorDetail,
  } = useQuery({
- queryKey: qk.modManagerSearch(serverId ?? '', modProvider, modQuery.trim(), modGameVersion.trim(), searchPage),
+ queryKey: qk.modManagerSearch(
+ serverId ?? '',
+ modProvider,
+ debouncedModQuery.trim(),
+ modGameVersion.trim(),
+ searchPage,
+ {
+ target: modTarget,
+ loader: supportsModLoaderFilter ? modLoader : undefined,
+ sort: modSort || undefined,
+ categories: modCategories.length ? modCategories : undefined,
+ },
+ ),
  queryFn: () =>
  modManagerApi.search(serverId ?? '', {
  provider: modProvider,
  game: modProviderGame,
  target: modTarget,
- query: modQuery.trim() || undefined,
+ query: debouncedModQuery.trim() || undefined,
  loader: supportsModLoaderFilter ? modLoader : undefined,
  gameVersion: modGameVersion.trim() || undefined,
+ sort: modSort || undefined,
+ categories: modCategories.length ? modCategories : undefined,
  page: searchPage,
  }),
  // Wait for key status to settle and for a provider to be available, so a
@@ -459,6 +481,18 @@ export default function ServerModManagerTab({
  Boolean(serverId && modProvider) &&
  keyStatusSettled &&
  availableModProviderOptions.length > 0,
+ });
+
+ const { data: modCategoryOptions = [] } = useQuery({
+ queryKey: qk.modManagerCategories(serverId ?? '', modProvider, modProviderGame ?? '', modTarget),
+ queryFn: () =>
+ modManagerApi.categories(serverId ?? '', {
+ provider: modProvider,
+ game: modProviderGame,
+ target: modTarget,
+ }),
+ enabled: Boolean(serverId && modProvider === 'modrinth'),
+ staleTime: 30 * 60 * 1000,
  });
 
  const {
@@ -720,7 +754,10 @@ export default function ServerModManagerTab({
 
  {/* ── Sub-tab toggle ── */}
  <motion.div variants={itemVariants} className="flex items-center gap-1 rounded-sm border border-border bg-card p-1">
- {(['browse', 'installed'] as const).map((tab) => (
+ {(modTargetOptions.includes('modpacks')
+ ? (['browse', 'installed', 'modpack'] as const)
+ : (['browse', 'installed'] as const)
+ ).map((tab) => (
  <button
  key={tab}
  type="button"
@@ -734,7 +771,11 @@ export default function ServerModManagerTab({
  if (tab === 'installed') refetchInstalledMods();
  }}
  >
- {tab === 'browse' ? t('tabs.mods.tabBrowse') : t('tabs.mods.tabInstalled')}
+ {tab === 'browse'
+ ? t('tabs.mods.tabBrowse')
+ : tab === 'installed'
+ ? t('tabs.mods.tabInstalled')
+ : t('tabs.mods.tabModpack')}
  {tab === 'installed' && installedMods.length > 0 && (
  <span className={`inline-flex h-4 min-w-4 items-center justify-center rounded-sm px-1 text-micro ${
  modSubTab === 'installed' ? 'bg-primary-foreground/20' : 'bg-surface-2'
@@ -774,6 +815,7 @@ export default function ServerModManagerTab({
 
  {/* Provider */}
  <select
+ aria-label={t('tabs.mods.providerLabel')}
  className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={selectedModProvider?.key ?? ''}
  onChange={(e) => setModProviderKey(e.target.value)}
@@ -788,10 +830,12 @@ export default function ServerModManagerTab({
  {/* Loader */}
  {supportsModLoaderFilter ? (
  <select
+ aria-label={t('tabs.mods.loaderLabel')}
  className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={modLoader}
  onChange={(e) => setModLoader(e.target.value)}
  >
+ <option value="">{t('tabs.mods.loaderAny')}</option>
  <option value="forge">Forge</option>
  <option value="neoforge">NeoForge</option>
  <option value="fabric">Fabric</option>
@@ -801,6 +845,7 @@ export default function ServerModManagerTab({
 
  {/* Target */}
  <select
+ aria-label={t('tabs.mods.targetLabel')}
  className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
  value={modTarget}
  onChange={(e) =>
@@ -823,7 +868,12 @@ export default function ServerModManagerTab({
  <Input
  value={modGameVersion}
  onChange={(e) => setModGameVersion(e.target.value)}
- placeholder={serverGameVersion || t('tabs.mods.gameVersionPlaceholder')}
+ placeholder={
+ detectedGameVersion
+ ? t('tabs.mods.gameVersionDetected', { version: detectedGameVersion })
+ : t('tabs.mods.gameVersionPlaceholder')
+ }
+ title={t('tabs.mods.gameVersionHint')}
  className="w-40"
  list="mod-game-version-tags"
  />
@@ -836,6 +886,38 @@ export default function ServerModManagerTab({
  </datalist>
  )}
  </div>
+
+ {/* Sort */}
+ <select
+ aria-label={t('tabs.mods.sortLabel')}
+ className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
+ value={modSort}
+ onChange={(e) => setModSort(e.target.value as ModManagerSort)}
+ >
+ <option value="">{t('tabs.mods.sortOption.default')}</option>
+ <option value="downloads">{t('tabs.mods.sortOption.downloads')}</option>
+ <option value="follows">{t('tabs.mods.sortOption.follows')}</option>
+ <option value="newest">{t('tabs.mods.sortOption.newest')}</option>
+ <option value="updated">{t('tabs.mods.sortOption.updated')}</option>
+ <option value="relevance">{t('tabs.mods.sortOption.relevance')}</option>
+ </select>
+
+ {/* Categories (Modrinth publishes the taxonomy; other providers return none) */}
+ {modCategoryOptions.length > 0 && (
+ <select
+ aria-label={t('tabs.mods.categoryLabel')}
+ className="h-7 max-w-44 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
+ value={modCategories[0] ?? ''}
+ onChange={(e) => setModCategories(e.target.value ? [e.target.value] : [])}
+ >
+ <option value="">{t('tabs.mods.categoryAny')}</option>
+ {modCategoryOptions.map((category) => (
+ <option key={category.name} value={category.name}>
+ {category.name}
+ </option>
+ ))}
+ </select>
+ )}
 
  {/* Search button */}
  <Button
@@ -1121,6 +1203,23 @@ export default function ServerModManagerTab({
  )}
  </>
  )}
+ </div>
+
+ {/* ═══════════════════════════════════════════════════════════════ */}
+ {/* MODPACK TAB */}
+ {/* ═══════════════════════════════════════════════════════════════ */}
+ <div
+ style={{ display: modSubTab === 'modpack' ? 'contents' : 'none' }}
+ className="space-y-3"
+ >
+ <ServerTabCard>
+ <ModpackInstallPanel
+ serverId={serverId!}
+ onInstalled={() => {
+ queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', 'mods') });
+ }}
+ />
+ </ServerTabCard>
  </div>
 
  {/* ═══════════════════════════════════════════════════════════════ */}

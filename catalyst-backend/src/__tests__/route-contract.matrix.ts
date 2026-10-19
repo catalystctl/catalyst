@@ -360,10 +360,17 @@ export const CONTRACT_ROWS: readonly ContractRow[] = [
   { op: 'GET /api/servers/{serverId}/mod-manager/installed', method: 'GET', path: '/api/servers/{serverId}/mod-manager/installed', klass: 'read', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: '-' },
   { op: 'GET /api/servers/{serverId}/mod-manager/search', method: 'GET', path: '/api/servers/{serverId}/mod-manager/search', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
     query: {"provider": "modrinth"},},
+  { op: 'GET /api/servers/{serverId}/mod-manager/categories', method: 'GET', path: '/api/servers/{serverId}/mod-manager/categories', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
+    query: {"provider": "modrinth"},},
   { op: 'POST /api/servers/{serverId}/mod-manager/uninstall', method: 'POST', path: '/api/servers/{serverId}/mod-manager/uninstall', klass: 'write', ar: 'deny', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
     payload: {"filename": "x.jar"},},
   { op: 'POST /api/servers/{serverId}/mod-manager/update', method: 'POST', path: '/api/servers/{serverId}/mod-manager/update', klass: 'write', ar: 'deny', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
     payload: {"filenames": ["x.jar"]},},
+  { op: 'POST /api/servers/{serverId}/modpack-manager/install', method: 'POST', path: '/api/servers/{serverId}/modpack-manager/install', klass: 'write', ar: 'deny', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
+    // Empty body: the gate opens, then validation rejects it (400), so an
+    // allow-side run never stages or downloads a real archive.
+    payload: {},},
+  { op: 'GET /api/servers/{serverId}/modpack-manager/jobs/{jobId}', method: 'GET', path: '/api/servers/{serverId}/modpack-manager/jobs/{jobId}', klass: 'read', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: '-' },
   { op: 'GET /api/servers/{serverId}/mod-manager/versions', method: 'GET', path: '/api/servers/{serverId}/mod-manager/versions', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-',
     query: {"provider": "modrinth", "projectId": "none"},},
   { op: 'GET /api/servers/{serverId}/permissions', method: 'GET', path: '/api/servers/{serverId}/permissions', klass: 'read', ar: 'allow', aw: 'allow', pu: 'deny', star: 'allow', tier: 'T1', keyScope: '-' },

@@ -4,6 +4,8 @@ import { createAuditLog } from '../../middleware/audit.js';
 import { ModManagerTarget, buildProviderHeaders, ensureModManagerEnabled, ensurePluginManagerEnabled, ensureServerAccess, extractGameVersion, fileRateLimitMax, fileRateLimitWindowMs, getModManagerSettings, getProviderTargets, loadPluginProviderConfig, loadProviderConfig, normalizeTargetValue, path, resolveCurseforgeClassId, validateAndNormalizePath, resolveCurseforgeGameId, resolveCurseforgeLoaderType, resolveModManagerProvider, resolveModrinthGameVersion, resolvePaperDownload, resolveSpigotDownload, resolveTemplatePath, sanitizeFilename } from './_helpers.js';
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
+import { buildModrinthSearchParams, CURSEFORGE_SORT_FIELDS, normalizeModSort, parseCategoryList } from "../../lib/mod-manager-search.js";
+import { fetchModrinthCategories } from "../../services/modrinth-categories.js";
 
 // ── Plugin-manager search sort presets ──────────────────────────────────
 // Cross-provider sort options, mapped to each provider's native query params.
@@ -117,7 +119,7 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { provider, game, query, page, gameVersion, loader } = request.query as {
+      const { provider, game, query, page, gameVersion, loader, sort, categories } = request.query as {
         provider?: string;
         game?: string;
         query?: string;
@@ -125,6 +127,8 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         gameVersion?: string;
         page?: string | number;
         loader?: string;
+        sort?: string;
+        categories?: string;
       };
       const userId = request.user.userId;
 
@@ -173,36 +177,32 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
       const pageValue = typeof page === "string" ? Number(page) : page ?? 1;
       const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
       const searchQuery = typeof query === "string" ? query.trim() : "";
-      const rawGameVersion = gameVersion?.trim() || extractGameVersion(server.environment);
       const isTrending = !searchQuery;
+      const requestedSort = normalizeModSort(sort);
+      if (sort !== undefined && !requestedSort) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid sort");
+      }
+      const requestedCategories = parseCategoryList(categories);
+      // Only an explicit game version filters results. Falling back to the
+      // server's own version silently hid almost every modpack (they lag far
+      // behind the newest MC release), so "latest" on the server turned every
+      // search into a near-empty list.
+      const rawGameVersion = gameVersion?.trim() || "";
       let url = "";
       if (providerId === "modrinth") {
         // Resolve game version (handles "latest", partial versions like "1.21")
         const resolvedGameVersion = rawGameVersion
           ? await resolveModrinthGameVersion(rawGameVersion, baseUrl, headers)
           : "";
-        const facets: string[][] = [];
-        facets.push([
-          `project_type:${
-            targetValue === "mods" ? "mod" : targetValue === "datapacks" ? "datapack" : "modpack"
-          }`,
-        ]);
-        if (providerEntry.game) {
-          facets.push([`categories:${providerEntry.game}`]);
-        }
-        if (resolvedGameVersion) {
-          facets.push([`versions:${resolvedGameVersion}`]);
-        }
-        const loaderValue = typeof loader === "string" ? loader.trim().toLowerCase() : "";
-        if (loaderValue) {
-          facets.push([`categories:${loaderValue}`]);
-        }
-        const params = new URLSearchParams({
+        const params = buildModrinthSearchParams({
+          target: targetValue,
           query: searchQuery,
-          limit: "20",
-          ...(facets.length ? { facets: JSON.stringify(facets) } : {}),
-          offset: String(Math.max(0, (Number(pageValue) - 1) * 20)),
-          ...(isTrending ? { index: "downloads" } : {}),
+          gameVersion: resolvedGameVersion,
+          loader: typeof loader === "string" ? loader : undefined,
+          categories: requestedCategories,
+          gameTag: providerEntry.game,
+          sort: requestedSort ?? undefined,
+          page: Number(pageValue),
         });
         url = `${baseUrl}${providerConfig.endpoints.search}?${params.toString()}`;
       } else {
@@ -229,13 +229,18 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         const modLoaderType = loaderValue
           ? resolveCurseforgeLoaderType(providerEntry, gameId, loaderValue)
           : undefined;
+        // CurseForge sorts by a numeric field id; `relevance` means "leave it
+        // to CurseForge", and an empty query keeps falling back to popularity.
+        const sortField =
+          (requestedSort && CURSEFORGE_SORT_FIELDS[requestedSort]) ??
+          (isTrending ? "2" : undefined);
         const params = new URLSearchParams({
           gameId,
           pageSize: "20",
           index: String(Math.max(0, (Number(pageValue) - 1) * 20)),
           ...(searchQuery ? { searchFilter: searchQuery } : {}),
           ...(rawGameVersion ? { gameVersion: rawGameVersion } : {}),
-          ...(isTrending ? { sortField: "2", sortOrder: "desc" } : {}),
+          ...(sortField ? { sortField, sortOrder: "desc" } : {}),
           ...(classId ? { classId } : {}),
           ...(modLoaderType ? { modLoaderType } : {}),
         });
@@ -252,6 +257,61 @@ export async function serverModpluginsRoutes(app: FastifyInstance) {
         return reply.send({ success: true, data: payload.result });
       }
       return reply.send({ success: true, data: payload });
+    }
+  );
+
+  app.get(
+    "/:serverId/mod-manager/categories",
+    { schema: { summary: "List filter categories", description: "List the provider categories available for a search target (Modrinth only).", tags: ["Mod Plugins"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
+      onRequest: [app.authenticate],
+      config: { requiredPermission: "server.read" },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const { provider, game, target } = request.query as { provider?: string; game?: string; target?: string };
+      const userId = request.user.userId;
+
+      if (!provider) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "provider is required");
+      }
+
+      const server = await ensureServerAccess(serverId, userId, "server.read", reply, request.user);
+      if (!server) return;
+      const modManager = ensureModManagerEnabled(server, reply);
+      if (!modManager) return;
+      const providerEntry = resolveModManagerProvider(modManager, provider, game);
+      if (!providerEntry) {
+        return apiError(reply, 400, ErrorCodes.MOD_PROVIDER_NOT_ENABLED, "Provider or game not enabled for this template");
+      }
+
+      const requestedTarget = normalizeTargetValue(target);
+      const allowedTargets = getProviderTargets(modManager, providerEntry);
+      const targetValue = requestedTarget ?? allowedTargets[0] ?? "mods";
+      if (requestedTarget && !allowedTargets.includes(requestedTarget)) {
+        return apiError(reply, 400, ErrorCodes.MOD_TARGET_NOT_ENABLED, "Target not enabled for this provider");
+      }
+
+      // Only Modrinth publishes a category taxonomy; other providers return an
+      // empty list so the UI simply hides the filter.
+      if (providerEntry.id !== "modrinth") {
+        return reply.send({ success: true, data: [] });
+      }
+
+      const providerConfig = await loadProviderConfig(providerEntry.id);
+      if (!providerConfig) {
+        return apiError(reply, 404, ErrorCodes.MOD_PROVIDER_NOT_FOUND, "Provider not found");
+      }
+      let headers: Record<string, string>;
+      try {
+        const settings = await getModManagerSettings();
+        headers = buildProviderHeaders(providerConfig, settings);
+      } catch (error: any) {
+        return apiError(reply, 409, ErrorCodes.MOD_PROVIDER_API_KEY_MISSING, error?.message || "Missing provider API key");
+      }
+
+      const baseUrl = providerConfig.baseUrl.replace(/\/$/, "");
+      const categories = await fetchModrinthCategories(baseUrl, headers, targetValue);
+      return reply.send({ success: true, data: categories });
     }
   );
 

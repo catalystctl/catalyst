@@ -11967,7 +11967,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:622",
+          "source": "src/routes/plugins.ts:651",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -12028,7 +12028,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:674",
+          "source": "src/routes/plugins.ts:720",
           "errorCodes": [
             "PLUGIN_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -12099,7 +12099,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:975",
+          "source": "src/routes/plugins.ts:1021",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PLUGIN_NOT_FOUND",
@@ -12173,7 +12173,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:743",
+          "source": "src/routes/plugins.ts:789",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PLUGIN_ENABLE_FAILED",
@@ -12234,7 +12234,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:1032",
+          "source": "src/routes/plugins.ts:1078",
           "errorCodes": [
             "PLUGIN_NOT_FOUND",
             "PLUGIN_NO_FRONTEND",
@@ -12305,7 +12305,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:880",
+          "source": "src/routes/plugins.ts:926",
           "errorCodes": [
             "PLUGIN_INVALID_NAME",
             "VALIDATION_ERROR",
@@ -12366,7 +12366,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:834",
+          "source": "src/routes/plugins.ts:880",
           "errorCodes": [
             "PLUGIN_INVALID_NAME",
             "PLUGIN_RELOAD_FAILED",
@@ -12437,7 +12437,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:492",
+          "source": "src/routes/plugins.ts:497",
           "errorCodes": [
             "PLUGIN_INVALID_NAME",
             "VALIDATION_ERROR",
@@ -12498,7 +12498,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/plugins.ts:428",
+          "source": "src/routes/plugins.ts:433",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PLUGIN_INSTALL_FAILED",
@@ -12962,7 +12962,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:278",
+          "source": "src/routes/roles.ts:293",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -13012,7 +13012,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:424",
+          "source": "src/routes/roles.ts:439",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PERMISSION_DENIED",
@@ -13071,7 +13071,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:311",
+          "source": "src/routes/roles.ts:326",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -13128,7 +13128,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:525",
+          "source": "src/routes/roles.ts:540",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -13185,7 +13185,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:656",
+          "source": "src/routes/roles.ts:671",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "ROLE_IN_USE",
@@ -13244,7 +13244,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1215",
+          "source": "src/routes/roles.ts:1234",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -13303,7 +13303,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:722",
+          "source": "src/routes/roles.ts:737",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PERMISSION_DENIED",
@@ -13363,7 +13363,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:813",
+          "source": "src/routes/roles.ts:828",
           "errorCodes": [
             "VALIDATION_ERROR",
             "ROLE_NOT_FOUND",
@@ -13430,7 +13430,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:915",
+          "source": "src/routes/roles.ts:930",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "ADMIN_USER_NOT_FOUND",
@@ -13495,7 +13495,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1042",
+          "source": "src/routes/roles.ts:1057",
           "errorCodes": [
             "ROLE_NOT_FOUND",
             "ROLE_NOT_ASSIGNED",
@@ -13545,7 +13545,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1178",
+          "source": "src/routes/roles.ts:1193",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -13597,7 +13597,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1198",
+          "source": "src/routes/roles.ts:1217",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -13656,7 +13656,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1320",
+          "source": "src/routes/roles.ts:1339",
           "errorCodes": [
             "ADMIN_USER_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -13715,7 +13715,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/roles.ts:1128",
+          "source": "src/routes/roles.ts:1143",
           "errorCodes": [
             "ADMIN_USER_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -19003,6 +19003,83 @@
         }
       }
     },
+    "/api/servers/{serverId}/mod-manager/categories": {
+      "get": {
+        "operationId": "get_api_servers_by_serverId_mod_manager_categories",
+        "summary": "List filter categories",
+        "description": "List the provider categories available for a search target (Modrinth only).",
+        "tags": [
+          "Mod Plugins"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/servers/mod-plugins.ts:282",
+          "errorCodes": [
+            "VALIDATION_ERROR",
+            "MOD_PROVIDER_NOT_ENABLED",
+            "MOD_TARGET_NOT_ENABLED",
+            "MOD_PROVIDER_NOT_FOUND",
+            "MOD_PROVIDER_API_KEY_MISSING",
+            "MOD_METADATA_RESOLVE_FAILED",
+            "MOD_GAME_METADATA_UNRESOLVED",
+            "MOD_PROVIDER_ERROR",
+            "MOD_DOWNLOAD_ASSET_UNRESOLVED",
+            "MOD_INSTALL_FAILED",
+            "MOD_PROVIDER_UNSUPPORTED",
+            "MOD_UNINSTALL_FAILED",
+            "HOST_NETWORK_DISABLED",
+            "SERVER_NOT_FOUND",
+            "PERMISSION_DENIED",
+            "SERVER_MOD_MANAGER_NOT_ENABLED",
+            "SERVER_CS2_FRAMEWORK_NOT_ENABLED",
+            "SERVER_PLUGIN_MANAGER_NOT_ENABLED",
+            "SERVER_SUSPENDED"
+          ]
+        }
+      }
+    },
     "/api/servers/{serverId}/mod-manager/check-updates": {
       "post": {
         "operationId": "post_api_servers_by_serverId_mod_manager_check_updates",
@@ -19055,7 +19132,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1150",
+          "source": "src/routes/servers/mod-plugins.ts:1229",
           "errorCodes": [
             "MOD_PROVIDER_API_KEY_MISSING",
             "VALIDATION_ERROR",
@@ -19132,7 +19209,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:50",
+          "source": "src/routes/servers/mod-plugins.ts:52",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19209,7 +19286,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:320",
+          "source": "src/routes/servers/mod-plugins.ts:399",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19286,7 +19363,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:924",
+          "source": "src/routes/servers/mod-plugins.ts:1003",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19363,7 +19440,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:112",
+          "source": "src/routes/servers/mod-plugins.ts:114",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19440,7 +19517,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1023",
+          "source": "src/routes/servers/mod-plugins.ts:1102",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_UNINSTALL_FAILED",
@@ -19517,7 +19594,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1374",
+          "source": "src/routes/servers/mod-plugins.ts:1453",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_API_KEY_MISSING",
@@ -19594,7 +19671,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:258",
+          "source": "src/routes/servers/mod-plugins.ts:337",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19608,6 +19685,163 @@
             "MOD_INSTALL_FAILED",
             "MOD_PROVIDER_UNSUPPORTED",
             "MOD_UNINSTALL_FAILED",
+            "HOST_NETWORK_DISABLED",
+            "SERVER_NOT_FOUND",
+            "PERMISSION_DENIED",
+            "SERVER_MOD_MANAGER_NOT_ENABLED",
+            "SERVER_CS2_FRAMEWORK_NOT_ENABLED",
+            "SERVER_PLUGIN_MANAGER_NOT_ENABLED",
+            "SERVER_SUSPENDED"
+          ]
+        }
+      }
+    },
+    "/api/servers/{serverId}/modpack-manager/install": {
+      "post": {
+        "operationId": "post_api_servers_by_serverId_modpack_manager_install",
+        "summary": "Install a modpack archive",
+        "description": "Install a .zip, .mrpack/.mr, .tar, .tar.gz or .tar.xz modpack from an uploaded file or a URL. Returns a job to poll.",
+        "tags": [
+          "Mod Plugins"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "HTTP 202 response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/servers/modpacks.ts:285",
+          "errorCodes": [
+            "VALIDATION_ERROR",
+            "FILE_TOO_LARGE",
+            "MODPACK_FORMAT_UNSUPPORTED",
+            "MODPACK_INSTALL_FAILED",
+            "MOD_TARGET_NOT_ENABLED",
+            "NOT_FOUND",
+            "HOST_NETWORK_DISABLED",
+            "SERVER_NOT_FOUND",
+            "PERMISSION_DENIED",
+            "SERVER_MOD_MANAGER_NOT_ENABLED",
+            "SERVER_CS2_FRAMEWORK_NOT_ENABLED",
+            "SERVER_PLUGIN_MANAGER_NOT_ENABLED",
+            "SERVER_SUSPENDED"
+          ]
+        }
+      }
+    },
+    "/api/servers/{serverId}/modpack-manager/jobs/{jobId}": {
+      "get": {
+        "operationId": "get_api_servers_by_serverId_modpack_manager_jobs_by_jobId",
+        "summary": "Get a modpack install job",
+        "description": "Poll the status of a modpack install started by POST /modpack-manager/install.",
+        "tags": [
+          "Mod Plugins"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/servers/modpacks.ts:445",
+          "errorCodes": [
+            "NOT_FOUND",
+            "MODPACK_INSTALL_FAILED",
+            "MODPACK_FORMAT_UNSUPPORTED",
+            "MOD_TARGET_NOT_ENABLED",
+            "VALIDATION_ERROR",
+            "FILE_TOO_LARGE",
             "HOST_NETWORK_DISABLED",
             "SERVER_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -19752,7 +19986,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1267",
+          "source": "src/routes/servers/mod-plugins.ts:1346",
           "errorCodes": [
             "MOD_PROVIDER_API_KEY_MISSING",
             "VALIDATION_ERROR",
@@ -19829,7 +20063,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:481",
+          "source": "src/routes/servers/mod-plugins.ts:560",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_FOUND",
@@ -19906,7 +20140,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:725",
+          "source": "src/routes/servers/mod-plugins.ts:804",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19983,7 +20217,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:974",
+          "source": "src/routes/servers/mod-plugins.ts:1053",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20060,7 +20294,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:538",
+          "source": "src/routes/servers/mod-plugins.ts:617",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20137,7 +20371,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1088",
+          "source": "src/routes/servers/mod-plugins.ts:1167",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_UNINSTALL_FAILED",
@@ -20214,7 +20448,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1515",
+          "source": "src/routes/servers/mod-plugins.ts:1594",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_API_KEY_MISSING",
@@ -20291,7 +20525,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:663",
+          "source": "src/routes/servers/mod-plugins.ts:742",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -24983,6 +25217,8 @@
           "MIGRATION_STEP_NOT_RETRYABLE",
           "MIGRATION_TARGET_NODES_NOT_FOUND",
           "MIGRATION_TARGET_NODES_OFFLINE",
+          "MODPACK_FORMAT_UNSUPPORTED",
+          "MODPACK_INSTALL_FAILED",
           "MOD_DOWNLOAD_ASSET_UNRESOLVED",
           "MOD_GAME_METADATA_UNRESOLVED",
           "MOD_INSTALL_FAILED",
@@ -25162,6 +25398,8 @@
                   "MIGRATION_STEP_NOT_RETRYABLE",
                   "MIGRATION_TARGET_NODES_NOT_FOUND",
                   "MIGRATION_TARGET_NODES_OFFLINE",
+                  "MODPACK_FORMAT_UNSUPPORTED",
+                  "MODPACK_INSTALL_FAILED",
                   "MOD_INSTALL_FAILED",
                   "MOD_PROVIDER_ERROR",
                   "MOD_PROVIDER_NOT_ENABLED",
@@ -25208,7 +25446,7 @@
             }
           }
         ],
-        "description": "ADMIN_EMAIL_ALREADY_VERIFIED: Admin Email Already Verified; ADMIN_LAST_AUTH_METHOD: Admin Last Auth Method; ADMIN_PASSWORD_UPDATE_FAILED: Admin Password Update Failed; ADMIN_TRANSFER_TARGET_INVALID: Admin Transfer Target Invalid; ADMIN_TWO_FACTOR_NOT_SET_UP: Admin Two Factor Not Set Up; ADMIN_USER_BANNED: Admin User Banned; ADMIN_USER_CREATE_FAILED: Admin User Create Failed; ADMIN_USER_NOT_BANNED: Admin User Not Banned; AGENT_CONFIG_REJECTED: Agent Config Rejected; AGENT_TIMEOUT: Agent Timeout; ALLOCATION_PRIMARY_IMMUTABLE: Allocation Primary Immutable; AUTH_ACCOUNT_OWNS_SERVERS: Auth Account Owns Servers; AUTH_INVALID_RESET_TOKEN: Auth Invalid Reset Token; AUTH_INVALID_USERNAME: Auth Invalid Username; AUTH_REGISTRATION_FAILED: Auth Registration Failed; BACKUP_CREATE_FAILED: Backup Create Failed; BACKUP_ENCRYPTION_KEY_MISSING: Backup Encryption Key Missing; CLONE_DATABASE_PROVISION_FAILED: Clone Database Provision Failed; CLONE_FILE_COPY_FAILED: Clone File Copy Failed; CLONE_INSUFFICIENT_DISK: Clone Insufficient Disk; CLONE_INTERRUPTED: Clone Interrupted; CLONE_MISSING_TEMPLATE_VARIABLES: Clone Missing Template Variables; CLONE_NETWORK_MODE_UNSUPPORTED: Clone Network Mode Unsupported; CLONE_NO_ALLOCATION_AVAILABLE: Clone No Allocation Available; CLONE_SOURCE_SUSPENDED: Clone Source Suspended; CLONE_SOURCE_TRANSITIONAL: Clone Source Transitional; CLONE_TARGET_NODE_INACCESSIBLE: Clone Target Node Inaccessible; CLONE_TEMPLATE_IMAGE_UNRESOLVED: Clone Template Image Unresolved; CLONE_TEMPLATE_MISSING: Clone Template Missing; CLONE_WARNINGS_UNACKNOWLEDGED: Clone Warnings Unacknowledged; CONTAINER_ERROR: Container Error; CREDENTIAL_ENCRYPTION_KEY_MISSING: Credential Encryption Key Missing; DATABASE_NAME_INVALID: Database Name Invalid; FILE_INVALID_PATH: File Invalid Path; FILE_OPERATION_FAILED: File Operation Failed; FILE_TUNNEL_BUSY: File Tunnel Busy; FRAMEWORK_MISSING_DEPENDENCIES: Framework Missing Dependencies; IMPORT_CONVERSION_FAILED: Import Conversion Failed; IMPORT_INVALID_FORMAT: Import Invalid Format; IMPORT_PARTIAL_FAILURE: Import Partial Failure; INSUFFICIENT_RESOURCES: Insufficient Resources; INVITE_NOT_VALID_FOR_ACCOUNT: Invite Not Valid For Account; MIGRATION_IN_PROGRESS: Migration In Progress; MIGRATION_STEP_NOT_RETRYABLE: Migration Step Not Retryable; MIGRATION_TARGET_NODES_NOT_FOUND: Migration Target Nodes Not Found; MIGRATION_TARGET_NODES_OFFLINE: Migration Target Nodes Offline; MOD_INSTALL_FAILED: Mod Install Failed; MOD_PROVIDER_ERROR: Mod Provider Error; MOD_PROVIDER_NOT_ENABLED: Mod Provider Not Enabled; MOD_PROVIDER_UNSUPPORTED: Mod Provider Unsupported; MOD_TARGET_NOT_ENABLED: Mod Target Not Enabled; MOD_UNINSTALL_FAILED: Mod Uninstall Failed; NETWORK_ERROR: Network Error; NODE_API_KEY_EXISTS: Node Api Key Exists; NODE_ASSIGNMENT_EXISTS: Node Assignment Exists; NODE_HAS_SERVERS: Node Has Servers; NODE_NAME_TAKEN: Node Name Taken; PLUGIN_CONFIG_UPDATE_FAILED: Plugin Config Update Failed; PLUGIN_ENABLE_FAILED: Plugin Enable Failed; PLUGIN_INSTALL_FAILED: Plugin Install Failed; PLUGIN_INVALID_NAME: Plugin Invalid Name; PLUGIN_MARKETPLACE_ALREADY_CONFIGURED: Plugin Marketplace Already Configured; PLUGIN_MARKETPLACE_SOURCE_INVALID: Plugin Marketplace Source Invalid; PLUGIN_MARKETPLACE_SOURCE_MANAGED: Plugin Marketplace Source Managed; PLUGIN_NO_FRONTEND: Plugin No Frontend; PLUGIN_RELOAD_FAILED: Plugin Reload Failed; PLUGIN_UNINSTALL_FAILED: Plugin Uninstall Failed; PORT_ALREADY_IN_USE: Port Already In Use; REGISTRATION_FAILED: Registration Failed; SERVER_ALREADY_ON_NODE: Server Already On Node; SERVER_ALREADY_RUNNING: Server Already Running; SERVER_CLONE_FAILED: Server Clone Failed; SERVER_IMAGE_VARIANT_INVALID: Server Image Variant Invalid; SERVER_MISSING_TEMPLATE_VARIABLES: Server Missing Template Variables; SERVER_NETWORK_IP_INVALID: Server Network Ip Invalid; SERVER_NETWORK_MODE_INVALID: Server Network Mode Invalid; SERVER_TEMPLATE_IMAGE_REQUIRED: Server Template Image Required; SERVER_TEMPLATE_MINIMUM_DISK: Server Template Minimum Disk; SERVER_TRANSFER_FAILED: Server Transfer Failed; SERVER_TRANSFER_STATE_CHANGED: Server Transfer State Changed; SERVER_VARIABLE_INVALID: Server Variable Invalid; SERVER_VARIABLE_PATTERN_INVALID: Server Variable Pattern Invalid; SERVER_VARIABLE_VALIDATION_TIMEOUT: Server Variable Validation Timeout; TASK_INVALID_ACTION: Task Invalid Action; TASK_INVALID_CRON: Task Invalid Cron; UPDATE_FAILED: Update Failed; VALIDATION_ERROR: Validation Error"
+        "description": "ADMIN_EMAIL_ALREADY_VERIFIED: Admin Email Already Verified; ADMIN_LAST_AUTH_METHOD: Admin Last Auth Method; ADMIN_PASSWORD_UPDATE_FAILED: Admin Password Update Failed; ADMIN_TRANSFER_TARGET_INVALID: Admin Transfer Target Invalid; ADMIN_TWO_FACTOR_NOT_SET_UP: Admin Two Factor Not Set Up; ADMIN_USER_BANNED: Admin User Banned; ADMIN_USER_CREATE_FAILED: Admin User Create Failed; ADMIN_USER_NOT_BANNED: Admin User Not Banned; AGENT_CONFIG_REJECTED: Agent Config Rejected; AGENT_TIMEOUT: Agent Timeout; ALLOCATION_PRIMARY_IMMUTABLE: Allocation Primary Immutable; AUTH_ACCOUNT_OWNS_SERVERS: Auth Account Owns Servers; AUTH_INVALID_RESET_TOKEN: Auth Invalid Reset Token; AUTH_INVALID_USERNAME: Auth Invalid Username; AUTH_REGISTRATION_FAILED: Auth Registration Failed; BACKUP_CREATE_FAILED: Backup Create Failed; BACKUP_ENCRYPTION_KEY_MISSING: Backup Encryption Key Missing; CLONE_DATABASE_PROVISION_FAILED: Clone Database Provision Failed; CLONE_FILE_COPY_FAILED: Clone File Copy Failed; CLONE_INSUFFICIENT_DISK: Clone Insufficient Disk; CLONE_INTERRUPTED: Clone Interrupted; CLONE_MISSING_TEMPLATE_VARIABLES: Clone Missing Template Variables; CLONE_NETWORK_MODE_UNSUPPORTED: Clone Network Mode Unsupported; CLONE_NO_ALLOCATION_AVAILABLE: Clone No Allocation Available; CLONE_SOURCE_SUSPENDED: Clone Source Suspended; CLONE_SOURCE_TRANSITIONAL: Clone Source Transitional; CLONE_TARGET_NODE_INACCESSIBLE: Clone Target Node Inaccessible; CLONE_TEMPLATE_IMAGE_UNRESOLVED: Clone Template Image Unresolved; CLONE_TEMPLATE_MISSING: Clone Template Missing; CLONE_WARNINGS_UNACKNOWLEDGED: Clone Warnings Unacknowledged; CONTAINER_ERROR: Container Error; CREDENTIAL_ENCRYPTION_KEY_MISSING: Credential Encryption Key Missing; DATABASE_NAME_INVALID: Database Name Invalid; FILE_INVALID_PATH: File Invalid Path; FILE_OPERATION_FAILED: File Operation Failed; FILE_TUNNEL_BUSY: File Tunnel Busy; FRAMEWORK_MISSING_DEPENDENCIES: Framework Missing Dependencies; IMPORT_CONVERSION_FAILED: Import Conversion Failed; IMPORT_INVALID_FORMAT: Import Invalid Format; IMPORT_PARTIAL_FAILURE: Import Partial Failure; INSUFFICIENT_RESOURCES: Insufficient Resources; INVITE_NOT_VALID_FOR_ACCOUNT: Invite Not Valid For Account; MIGRATION_IN_PROGRESS: Migration In Progress; MIGRATION_STEP_NOT_RETRYABLE: Migration Step Not Retryable; MIGRATION_TARGET_NODES_NOT_FOUND: Migration Target Nodes Not Found; MIGRATION_TARGET_NODES_OFFLINE: Migration Target Nodes Offline; MODPACK_FORMAT_UNSUPPORTED: Modpack Format Unsupported; MODPACK_INSTALL_FAILED: Modpack Install Failed; MOD_INSTALL_FAILED: Mod Install Failed; MOD_PROVIDER_ERROR: Mod Provider Error; MOD_PROVIDER_NOT_ENABLED: Mod Provider Not Enabled; MOD_PROVIDER_UNSUPPORTED: Mod Provider Unsupported; MOD_TARGET_NOT_ENABLED: Mod Target Not Enabled; MOD_UNINSTALL_FAILED: Mod Uninstall Failed; NETWORK_ERROR: Network Error; NODE_API_KEY_EXISTS: Node Api Key Exists; NODE_ASSIGNMENT_EXISTS: Node Assignment Exists; NODE_HAS_SERVERS: Node Has Servers; NODE_NAME_TAKEN: Node Name Taken; PLUGIN_CONFIG_UPDATE_FAILED: Plugin Config Update Failed; PLUGIN_ENABLE_FAILED: Plugin Enable Failed; PLUGIN_INSTALL_FAILED: Plugin Install Failed; PLUGIN_INVALID_NAME: Plugin Invalid Name; PLUGIN_MARKETPLACE_ALREADY_CONFIGURED: Plugin Marketplace Already Configured; PLUGIN_MARKETPLACE_SOURCE_INVALID: Plugin Marketplace Source Invalid; PLUGIN_MARKETPLACE_SOURCE_MANAGED: Plugin Marketplace Source Managed; PLUGIN_NO_FRONTEND: Plugin No Frontend; PLUGIN_RELOAD_FAILED: Plugin Reload Failed; PLUGIN_UNINSTALL_FAILED: Plugin Uninstall Failed; PORT_ALREADY_IN_USE: Port Already In Use; REGISTRATION_FAILED: Registration Failed; SERVER_ALREADY_ON_NODE: Server Already On Node; SERVER_ALREADY_RUNNING: Server Already Running; SERVER_CLONE_FAILED: Server Clone Failed; SERVER_IMAGE_VARIANT_INVALID: Server Image Variant Invalid; SERVER_MISSING_TEMPLATE_VARIABLES: Server Missing Template Variables; SERVER_NETWORK_IP_INVALID: Server Network Ip Invalid; SERVER_NETWORK_MODE_INVALID: Server Network Mode Invalid; SERVER_TEMPLATE_IMAGE_REQUIRED: Server Template Image Required; SERVER_TEMPLATE_MINIMUM_DISK: Server Template Minimum Disk; SERVER_TRANSFER_FAILED: Server Transfer Failed; SERVER_TRANSFER_STATE_CHANGED: Server Transfer State Changed; SERVER_VARIABLE_INVALID: Server Variable Invalid; SERVER_VARIABLE_PATTERN_INVALID: Server Variable Pattern Invalid; SERVER_VARIABLE_VALIDATION_TIMEOUT: Server Variable Validation Timeout; TASK_INVALID_ACTION: Task Invalid Action; TASK_INVALID_CRON: Task Invalid Cron; UPDATE_FAILED: Update Failed; VALIDATION_ERROR: Validation Error"
       },
       "Error401": {
         "allOf": [
