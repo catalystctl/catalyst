@@ -39,6 +39,9 @@ CNI_PLUGINS_SHA256_ARM64="2596ef56329dd1269026f46b8df262f09ba43c92dbfb940e1e69fb
 # Docker's official release key fingerprint (verified 2026-09-10 via gpg --show-keys).
 DOCKER_GPG_FINGERPRINT="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 AGENT_RELEASE_REPO="${AGENT_RELEASE_REPO:-catalystctl/catalyst}"
+# Installed agent binary path. Referenced by the install, config and
+# verification steps; keep it in one place so diagnostics cannot drift.
+AGENT_BINARY_PATH="/opt/catalyst-agent/catalyst-agent"
 # Optional pin from the panel one-liner (`AGENT_VERSION=1.18.8`). Empty means
 # "ask the panel". Never default to GitHub /latest — that can install a newer
 # agent than the running panel understands.
@@ -647,6 +650,21 @@ resolve_agent_version() {
     return 1
 }
 
+# Restore the SELinux label on the installed agent binary.
+#
+# install(1) already creates the file with the path-derived label, so this is
+# belt-and-braces for nodes whose /opt/catalyst-agent directory carries a stale
+# custom label from an earlier install. Silent no-op on hosts without SELinux.
+relabel_agent_binary() {
+    command -v selinuxenabled >/dev/null 2>&1 || return 0
+    selinuxenabled 2>/dev/null || return 0
+    if command -v restorecon >/dev/null 2>&1; then
+        restorecon -F /opt/catalyst-agent/catalyst-agent >/dev/null 2>&1 \
+            || warn "Could not restorecon /opt/catalyst-agent/catalyst-agent (check the SELinux label by hand)"
+    fi
+    return 0
+}
+
 verify_and_install_binary() {
     local tmp_binary="$1"
     local source_label="$2"
@@ -698,8 +716,16 @@ verify_and_install_binary() {
     fi
     log "Binary checksum verified (${source_label})."
 
-    mv -f "$tmp_binary" /opt/catalyst-agent/catalyst-agent
-    chmod 0755 /opt/catalyst-agent/catalyst-agent
+    # Install with install(1), never `mv` from /tmp. A rename keeps the source
+    # inode and therefore its SELinux label: a file created under /tmp is
+    # user_tmp_t, and init_t may not execute that label, so systemd fails at
+    # ExecStart with 203/EXEC "Permission denied" even though the binary is a
+    # valid 0755 ELF. install(1) creates a fresh inode in /opt/catalyst-agent,
+    # which the policy labels from its path (usr_t), and applies the mode in
+    # one step. Applies to every SELinux-enforcing host (Fedora/RHEL/CentOS).
+    install -m 0755 "$tmp_binary" /opt/catalyst-agent/catalyst-agent
+    rm -f "$tmp_binary"
+    relabel_agent_binary
     log "Agent binary installed from ${source_label}."
     return 0
 }
@@ -753,8 +779,8 @@ install_agent_binary() {
     # ── Priority 3: local cargo build (dev machines only) ──
     if [ -f "$(pwd)/target/release/catalyst-agent" ]; then
         log "Using local build from $(pwd)/target/release/catalyst-agent"
-        cp "$(pwd)/target/release/catalyst-agent" /opt/catalyst-agent/catalyst-agent
-        chmod 0755 /opt/catalyst-agent/catalyst-agent
+        install -m 0755 "$(pwd)/target/release/catalyst-agent" /opt/catalyst-agent/catalyst-agent
+        relabel_agent_binary
         return 0
     fi
 
@@ -852,6 +878,10 @@ Description=Catalyst Agent - Game Server Management
 After=network-online.target containerd.service
 Wants=network-online.target
 Requires=containerd.service
+# Crash-loop bound (see the Restart= comment below). StartLimit* are [Unit]
+# settings; putting StartLimitIntervalSec in [Service] makes systemd ignore it.
+StartLimitIntervalSec=60
+StartLimitBurst=10
 
 [Service]
 Type=simple
@@ -861,6 +891,12 @@ WorkingDirectory=/opt/catalyst-agent
 ExecStart=/opt/catalyst-agent/catalyst-agent --config /opt/catalyst-agent/config.toml
 Restart=always
 RestartSec=5
+# Bound the crash loop. Without a start limit a unit that can never start
+# (stale ReadWritePaths, wrong SELinux label, missing binary) restarts forever:
+# one reported node reached a restart counter of 2,527,851, which buries the
+# real error and wedges the journal. 10 starts / 60s still rides out a
+# transient failure but gives up and reports "start request repeated too
+# quickly" instead of looping silently.
 LimitNOFILE=65536
 
 # Neutral service weights; do not boost housekeeping above sibling services.
@@ -964,6 +1000,16 @@ EOF
                 log "Disabling RestrictSUIDSGID in ${override_file} (Fedora 44 openat2 compatibility)"
                 sed -i 's|^[[:space:]]*RestrictSUIDSGID=.*|RestrictSUIDSGID=no|' "${override_file}"
             fi
+            # ReadWritePaths is a list setting that ACCUMULATES across drop-ins,
+            # so a stale /tmp path re-adds itself even after the main unit is
+            # rewritten, and systemd then fails unit start with 226/NAMESPACE
+            # before ExecStart. Drop the whole line: the main unit already lists
+            # every path the agent needs.
+            if grep -qE '^[[:space:]]*ReadWritePaths=.*(/tmp/|/mnt/catalyst)' "${override_file}"; then
+                log "Removing stale /tmp ReadWritePaths from ${override_file} (226/NAMESPACE)"
+                sed -i '/^[[:space:]]*ReadWritePaths=.*\/tmp\//d' "${override_file}"
+                sed -i '/^[[:space:]]*ReadWritePaths=.*\/mnt\/catalyst/d' "${override_file}"
+            fi
         done
     fi
 }
@@ -972,6 +1018,10 @@ start_services_systemd() {
     systemctl daemon-reload
     systemctl unmask containerd >/dev/null 2>&1 || true
     systemctl reset-failed containerd >/dev/null 2>&1 || true
+    # A node that has been crash-looping (e.g. millions of restarts on a stale
+    # unit) carries that failed state into the new unit; clear it so the start
+    # below is a real attempt rather than a continuation.
+    systemctl reset-failed catalyst-agent >/dev/null 2>&1 || true
     log "Enabling and starting containerd..."
     systemctl enable --now containerd
 
@@ -1010,6 +1060,22 @@ verify_install_systemd() {
     systemctl is-active --quiet catalyst-agent || {
         log "--- catalyst-agent logs (last 50 lines) ---"
         journalctl -u catalyst-agent -n 50 --no-pager >&2 || true
+        # Print the facts that separate the known start failures instead of
+        # leaving the operator with only "failed to start". 226/NAMESPACE is a
+        # stale ReadWritePaths path; 203/EXEC is an exec-permission problem
+        # (mode, noexec mount, or SELinux label).
+        log "--- binary + unit diagnostics ---"
+        ls -l "$AGENT_BINARY_PATH" >&2 2>/dev/null || warn "Agent binary is missing: $AGENT_BINARY_PATH"
+        if command -v ls >/dev/null 2>&1; then
+            ls -ldZ "$(dirname "$AGENT_BINARY_PATH")" >&2 2>/dev/null || true
+            ls -lZ "$AGENT_BINARY_PATH" >&2 2>/dev/null || true
+        fi
+        findmnt -T "$(dirname "$AGENT_BINARY_PATH")" -o TARGET,SOURCE,FSTYPE,OPTIONS >&2 2>/dev/null \
+            || warn "findmnt unavailable: check that /opt is not mounted noexec"
+        systemctl cat catalyst-agent >&2 2>/dev/null || true
+        if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled 2>/dev/null; then
+            warn "SELinux is enforcing. If the log above says 203/EXEC, run: ausearch -m avc -ts recent | grep catalyst"
+        fi
         fail "catalyst-agent failed to start."
     }
     [ -S /run/containerd/containerd.sock ] || fail "containerd socket is missing."

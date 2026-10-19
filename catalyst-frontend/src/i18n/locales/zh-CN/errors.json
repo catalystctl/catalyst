@@ -142,6 +142,8 @@
   "MOD_PROVIDER_UNSUPPORTED": "不支持的提供方。",
   "MOD_TARGET_NOT_ENABLED": "该目标未对所选提供方启用。",
   "MOD_UNINSTALL_FAILED": "卸载模组或插件失败。",
+  "MODPACK_FORMAT_UNSUPPORTED": "不支持的整合包文件类型。请使用 .zip、.mrpack、.mr、.tar、.tar.gz 或 .tar.xz 文件。",
+  "MODPACK_INSTALL_FAILED": "无法安装该整合包。",
   "NEST_NAME_TAKEN": "已存在同名巢。",
   "NEST_NOT_FOUND": "找不到该 Nest。",
   "NETWORK_ERROR": "网络错误，请检查网络连接后重试。",

@@ -146,12 +146,25 @@ export interface ScopedPluginDB {
  *   - 'optional' — a valid session populates request.user; anonymous callers pass
  *   - 'public'   — never authenticated (OAuth redirects/callbacks)
  * Non-required modes require the live `routes.public` permission grant.
+ *
+ * `config.requiredPermissions` (B3-9): when set to a non-empty array and the
+ * route is not `public`, the host dispatcher 403s any authenticated caller
+ * whose panel permissions do not satisfy at least one entry (hasGrant
+ * semantics: `*` / `admin.write` satisfy any concrete permission, and
+ * `admin.read` satisfies read-class permissions). Tokens are normalized
+ * (trimmed, shape-validated, deduped) and capped at 16. A route declaring
+ * nothing keeps the legacy behaviour of admitting any authenticated caller.
  */
 export interface PluginRouteOptions {
   method: string | string[];
   url: string;
   handler: PluginRouteHandler;
-  config?: { auth?: 'required' | 'optional' | 'public'; [key: string]: any };
+  config?: {
+    auth?: 'required' | 'optional' | 'public';
+    /** Optional per-caller authorization gates enforced by the host dispatcher. */
+    requiredPermissions?: string[];
+    [key: string]: any;
+  };
   [key: string]: any;
 }
 

@@ -439,6 +439,66 @@ fn open_parent_beneath(jail: &Path, resolved: &Path) -> AgentResult<(OwnedFd, St
     Ok((fd, dest))
 }
 
+/// Whether a zip-format archive (which `unzip` can read) is named by `path`.
+///
+/// `.mrpack`/`.mr` are the Modrinth modpack containers: a zip with a
+/// `modrinth.index.json` inside. `.jar` is deliberately absent — jars are
+/// installed as files, never unpacked into a server directory.
+fn is_zip_archive_name(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    lower.ends_with(".zip") || lower.ends_with(".mrpack") || lower.ends_with(".mr")
+}
+
+/// Give every extracted entry a usable mode, discarding archive-supplied bits.
+///
+/// `unzip` restores the permission bits recorded in the archive; the tar branch
+/// avoids that with `--no-same-permissions`. Modrinth packs routinely record
+/// entries as mode 000, so without this every extracted file lands unreadable
+/// and the installed pack cannot be opened. Directories keep their execute bit
+/// (a mode-000 directory cannot even be traversed) and setuid/setgid/sticky are
+/// stripped, matching [`resolve_written_file_mode`].
+///
+/// Archive-declared execute bits are preserved so bundled scripts still run.
+async fn normalize_extracted_modes(root: &Path) -> std::io::Result<()> {
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let meta = match fs::symlink_metadata(&current).await {
+            Ok(meta) => meta,
+            Err(_) => continue,
+        };
+        // Symlinks carry no meaningful mode and chmod would follow them.
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+
+        let recorded = meta.permissions().mode() & 0o7777;
+        let mode = if meta.is_dir() {
+            // A mode-000 directory cannot even be traversed, so always grant
+            // owner rwx and let group/other keep at least r-x.
+            let perms = (recorded & 0o777) | 0o700;
+            perms | 0o500
+        } else if recorded & 0o111 != 0 {
+            // Bundled scripts keep their execute bits.
+            0o755
+        } else {
+            DEFAULT_WRITTEN_FILE_MODE
+        } & !FORBIDDEN_MODE_BITS;
+
+        if mode != recorded {
+            let _ = fs::set_permissions(&current, std::fs::Permissions::from_mode(mode)).await;
+        }
+
+        if meta.is_dir() {
+            if let Ok(mut entries) = fs::read_dir(&current).await {
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    stack.push(entry.path());
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Reject one archive member name before extraction (SEC-C-03).
 fn reject_archive_member_name(name: &str) -> AgentResult<()> {
     if name.is_empty() || name.contains('\0') {
@@ -1520,8 +1580,7 @@ impl FileManager {
             .unwrap_or(0);
 
         // Pre-list and reject dangerous members before anything is written.
-        let archive_lower = archive_path.to_lowercase();
-        let is_zip = archive_lower.ends_with(".zip");
+        let is_zip = is_zip_archive_name(archive_path);
         if is_zip {
             prevalidate_zip_archive(&archive_full, compressed_len).await?;
         } else {
@@ -1605,6 +1664,16 @@ impl FileManager {
                 "Failed to hand extracted archive to the container user: {}",
                 e
             );
+        }
+
+        // Never keep archive-supplied permission bits. The tar branch already
+        // passes `--no-same-permissions`, but unzip has no equivalent flag and
+        // restores whatever mode the archive recorded. Real Modrinth packs ship
+        // entries as mode 000, which extracts every file unreadable — the pack
+        // installs "successfully" and then cannot be read back or used by the
+        // container. Re-apply a sane mode instead.
+        if let Err(e) = normalize_extracted_modes(&target_full).await {
+            warn!("Failed to normalize extracted archive modes: {}", e);
         }
 
         info!(
@@ -1774,7 +1843,7 @@ impl FileManager {
         let archive_lower = archive_path.to_lowercase();
         let mut entries = Vec::new();
 
-        if archive_lower.ends_with(".zip") {
+        if is_zip_archive_name(archive_path) {
             let output = tokio::process::Command::new("unzip")
                 .args(["-Z", "-l", &archive_full.to_string_lossy()])
                 .output()
@@ -1813,12 +1882,33 @@ impl FileManager {
                     modified: None,
                 });
             }
-        } else if archive_lower.ends_with(".tar.gz") || archive_lower.ends_with(".tgz") {
+        } else if archive_lower.ends_with(".tar")
+            || archive_lower.ends_with(".tar.gz")
+            || archive_lower.ends_with(".tgz")
+            || archive_lower.ends_with(".tar.xz")
+            || archive_lower.ends_with(".txz")
+            || archive_lower.ends_with(".tar.bz2")
+            || archive_lower.ends_with(".tbz2")
+            || archive_lower.ends_with(".tar.zst")
+            || archive_lower.ends_with(".tzst")
+        {
+            // `-tvf`, not `-tzvf`: GNU tar auto-detects the compression
+            // filter on a seekable archive, so uncompressed `.tar` and
+            // non-gzip containers (`.tar.xz`, `.tar.bz2`) list correctly.
+            // Forcing `-z` failed on them while `decompress_to` (which uses
+            // `-xf`) accepted the same archive.
             let output = tokio::process::Command::new("tar")
-                .args(["-tzvf", &archive_full.to_string_lossy()])
+                .args(["-tvf", &archive_full.to_string_lossy()])
                 .output()
                 .await
                 .map_err(|e| AgentError::FileSystemError(format!("tar -t failed: {}", e)))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(AgentError::FileSystemError(format!(
+                    "Cannot list tar archive: {}",
+                    stderr
+                )));
+            }
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 if let Some(entry) = parse_tar_list_line(line) {
@@ -2156,6 +2246,132 @@ mod tests {
                 || err.to_string().to_lowercase().contains("violation"),
             "{err}"
         );
+    }
+
+    #[tokio::test]
+    async fn mrpack_is_listed_and_extracted_as_zip() {
+        // `.mrpack` is a zip with a modrinth.index.json; it must go through the
+        // zip path, not be handed to tar.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let archive = srv.join("pack.mrpack");
+        let script = format!(
+            "import zipfile; z=zipfile.ZipFile('{}','w'); z.writestr('modrinth.index.json','{{\"formatVersion\":1,\"files\":[]}}'); z.writestr('overrides/config/x.toml','a=1'); z.close()",
+            archive.display()
+        );
+        let status = std::process::Command::new("python3")
+            .args(["-c", &script])
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // python3 unavailable — skip
+        }
+
+        let entries = fm
+            .list_archive_contents("srv1", "pack.mrpack")
+            .await
+            .expect(".mrpack must list through the zip path");
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert!(names.contains(&"modrinth.index.json"), "{names:?}");
+        assert!(names.contains(&"overrides/config/x.toml"), "{names:?}");
+
+        fm.decompress_to("srv1", "pack.mrpack", "out")
+            .await
+            .expect(".mrpack must extract through the zip path");
+        assert_eq!(
+            std::fs::read(srv.join("out/overrides/config/x.toml")).unwrap(),
+            b"a=1"
+        );
+    }
+
+    #[tokio::test]
+    async fn tar_variants_list_and_extract() {
+        // A `.tar` / `.tar.xz` used to list only with `-z`, so listing failed
+        // while `decompress_to` (auto-detecting `-xf`) succeeded. Both must work
+        // for every container the panel advertises.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        std::fs::write(srv.join("a.txt"), b"hello").unwrap();
+
+        for (flag, ext) in [("-cf", "tar"), ("-cJf", "tar.xz"), ("-cjf", "tar.bz2")] {
+            let name = format!("pack.{ext}");
+            let status = std::process::Command::new("tar")
+                .current_dir(&srv)
+                .arg(flag)
+                .arg(&name)
+                .arg("a.txt")
+                .status();
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                continue; // this tar build cannot produce the filter — skip
+            }
+
+            let entries = fm
+                .list_archive_contents("srv1", &name)
+                .await
+                .unwrap_or_else(|e| panic!("{name} must list: {e}"));
+            assert!(
+                entries.iter().any(|entry| entry.name == "a.txt"),
+                "{name}: {entries:?}"
+            );
+
+            let out = format!("out-{ext}");
+            std::fs::create_dir_all(srv.join(&out)).unwrap();
+            fm.decompress_to("srv1", &name, &out)
+                .await
+                .unwrap_or_else(|e| panic!("{name} must extract: {e}"));
+            assert_eq!(
+                std::fs::read(srv.join(&out).join("a.txt")).unwrap(),
+                b"hello"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn zip_entries_stored_mode_zero_are_extracted_readable() {
+        // Real Modrinth packs record entries as mode 000. unzip restores that,
+        // which made every extracted file unreadable: the pack "installed" and
+        // then could not be read back by the agent or the container.
+        let fm = make_fm();
+        let srv = fm.data_dir.join("srv1");
+        std::fs::create_dir_all(&srv).unwrap();
+        let archive = srv.join("zero.mrpack");
+        let script = format!(
+            "import zipfile; z=zipfile.ZipFile('{}','w'); \
+             i=zipfile.ZipInfo('modrinth.index.json'); i.external_attr=0; \
+             z.writestr(i,'{{\"formatVersion\":1,\"files\":[]}}'); \
+             d=zipfile.ZipInfo('overrides/'); d.external_attr=0x10; \
+             z.writestr(d,''); \
+             f=zipfile.ZipInfo('overrides/config.toml'); f.external_attr=0; \
+             z.writestr(f,'a=1'); \
+             z.close()",
+            archive.display()
+        );
+        let status = std::process::Command::new("python3")
+            .args(["-c", &script])
+            .status();
+        if !status.map(|s| s.success()).unwrap_or(false) {
+            return; // python3 unavailable — skip
+        }
+
+        std::fs::create_dir_all(srv.join("out")).unwrap();
+        fm.decompress_to("srv1", "zero.mrpack", "out")
+            .await
+            .expect("mode-000 archive must still extract");
+
+        use std::os::unix::fs::PermissionsExt;
+        for relative in ["out/modrinth.index.json", "out/overrides/config.toml"] {
+            let path = srv.join(relative);
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+            assert!(
+                mode & 0o400 != 0,
+                "{relative} must be readable by its owner, got {mode:o}"
+            );
+        }
+        // The manifest must be readable through the agent's own path resolution.
+        let body = std::fs::read_to_string(srv.join("out/modrinth.index.json"))
+            .expect("extracted manifest must be readable");
+        assert!(body.contains("formatVersion"));
     }
 
     #[tokio::test]

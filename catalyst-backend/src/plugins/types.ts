@@ -1,6 +1,5 @@
 import type { FastifyRequest, FastifyReply, RouteOptions } from 'fastify';
 import type { Logger } from 'pino';
-import type { WebSocketGateway } from '../websocket/gateway';
 
 /**
  * Scoped database interface describing what plugins actually receive.
@@ -234,6 +233,31 @@ export type PluginWebSocketHandler = (data: any, clientId?: string) => Promise<v
 export type PluginTaskHandler = () => Promise<void> | void;
 
 /**
+ * Scoped WebSocket host surface exposed to plugins (B3-2). Replaces the raw
+ * `WebSocketGateway` so a plugin cannot reach host internals such as the
+ * `clients`/`agents` connection maps. Only the methods plugins legitimately
+ * need are exposed; `sendToAgent` is gated on the plugin's live effective
+ * grants (console.write / server.write) by the facade built in
+ * `capabilities.ts`.
+ */
+export interface PluginWebSocketHost {
+  /** Send a frame to a node agent. Gated on console.write / server.write. */
+  sendToAgent(nodeId: string, message: unknown): Promise<boolean>;
+  /** Broadcast a message to every authenticated browser client. */
+  broadcastToAuthenticated(message: unknown): void;
+  /** Send to one authenticated browser client; returns whether it was sent. */
+  sendToClient(clientId: string, message: unknown): boolean;
+  /** Register a prefixed plugin WS message handler for dispatch. */
+  registerPluginWsHandler(
+    type: string,
+    handler: (data: any, clientId?: string, userId?: string) => Promise<void> | void,
+    pluginName: string,
+  ): void;
+  /** Unregister every WS handler owned by a plugin (called on disable/unload). */
+  unregisterPluginWsHandlers(pluginName: string): void;
+}
+
+/**
  * Awaited file-operation RPC against a node's server directory, backed by the
  * panel's file tunnel (agent long-poll + HTTP staging). Requests are
  * permission-checked, capped per node, and time out after 60s (longer for
@@ -267,7 +291,7 @@ export interface PluginBackendContext {
   // Core services
   db: ScopedPluginDB;
   logger: Logger;
-  wsGateway: WebSocketGateway;
+  wsGateway: PluginWebSocketHost;
 
   // Route registration
   registerRoute(options: RouteOptions): void;
@@ -444,6 +468,8 @@ export interface LoadedPlugin {
   enabledRef?: { value: boolean };
   /** Worker thread host for isolated runtime */
   workerHost?: any;
+  /** Resolved on-disk path; lets enablePlugin activate a plugin that loaded inert. */
+  resolvedPath?: string;
 }
 
 /**

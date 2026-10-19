@@ -39,13 +39,26 @@ export const modManagerApi = {
       loader?: string;
       gameVersion?: string;
       page?: number;
+      sort?: 'relevance' | 'downloads' | 'follows' | 'newest' | 'updated';
+      categories?: string[];
     },
   ) => {
+    const { categories, ...rest } = params;
     const data = await apiClient.get<{ success: boolean; data?: ModManagerSearchResponse }>(
       `/api/servers/${serverId}/mod-manager/search`,
-      { params },
+      { params: { ...rest, categories: categories?.length ? categories.join(',') : undefined } },
     );
     return data.data;
+  },
+  categories: async (
+    serverId: string,
+    params: { provider: string; game?: string; target?: 'mods' | 'datapacks' | 'modpacks' },
+  ) => {
+    const data = await apiClient.get<{ success: boolean; data?: Array<{ name: string; header?: string }> }>(
+      `/api/servers/${serverId}/mod-manager/categories`,
+      { params },
+    );
+    return Array.isArray(data.data) ? data.data : [];
   },
   versions: async (
     serverId: string,

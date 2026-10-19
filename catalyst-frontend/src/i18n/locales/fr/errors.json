@@ -142,6 +142,8 @@
   "MOD_PROVIDER_UNSUPPORTED": "Fournisseur non pris en charge.",
   "MOD_TARGET_NOT_ENABLED": "Cette cible n’est pas activée pour le fournisseur sélectionné.",
   "MOD_UNINSTALL_FAILED": "Échec de la désinstallation du mod ou du plugin.",
+  "MODPACK_FORMAT_UNSUPPORTED": "Type d'archive de modpack non pris en charge. Utilisez un fichier .zip, .mrpack, .mr, .tar, .tar.gz ou .tar.xz.",
+  "MODPACK_INSTALL_FAILED": "Le modpack n'a pas pu être installé.",
   "NEST_NAME_TAKEN": "Un nid portant ce nom existe déjà.",
   "NEST_NOT_FOUND": "Nid introuvable.",
   "NETWORK_ERROR": "Une erreur réseau est survenue. Vérifiez votre connexion et réessayez.",

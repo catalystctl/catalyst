@@ -5,6 +5,7 @@ import type {
   HTTPMethods,
   RouteOptions,
 } from 'fastify';
+import { hasGrant } from '../lib/permissions.js';
 
 /**
  * Runtime plugin HTTP routes. Fastify cannot `route()` after listen(), so
@@ -98,6 +99,8 @@ export type PluginRouteAuthMode = 'required' | 'optional' | 'public';
 declare module 'fastify' {
   interface FastifyContextConfig {
     auth?: PluginRouteAuthMode | string;
+    /** Host-enforced per-caller permission gates (B3-9). */
+    requiredPermissions?: string[];
   }
 }
 
@@ -178,6 +181,26 @@ export function registerPluginRouteDispatcher(
         const user = await resolveUser(request);
         if (user) {
           (request as any).user = user;
+        }
+      }
+
+      // B3-9: host-enforced per-caller authorization. If the matched route
+      // declares a non-empty requiredPermissions list AND the route is not
+      // public, the caller must hold at least one of them (hasGrant
+      // semantics: `*` / admin.write / admin.read-for-read-perms satisfy).
+      // Routes declaring nothing keep today's behaviour (backward compatible).
+      const requiredPermissions = (
+        matched.route.config as { requiredPermissions?: string[] } | undefined
+      )?.requiredPermissions;
+      if (authMode !== 'public' && Array.isArray(requiredPermissions) && requiredPermissions.length > 0) {
+        const userPerms: string[] = (request as any).user?.permissions ?? [];
+        const allowed = requiredPermissions.some((p) => hasGrant(userPerms, p));
+        if (!allowed) {
+          return reply.status(403).send({
+            success: false,
+            code: 'PLUGIN_ROUTE_FORBIDDEN',
+            error: 'Permission denied',
+          });
         }
       }
 

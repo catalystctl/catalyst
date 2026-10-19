@@ -462,6 +462,17 @@ export class PluginMarketplaceService {
   ) {}
 
   async installFromUrl(downloadUrl: string, expectedSha256?: string): Promise<InstalledPluginResult> {
+    // Fail closed: an unverified package is refused. The parameter stays
+    // optional in the type for source compatibility, but a valid 64-hex
+    // checksum is required at runtime — downloaded bytes are only accepted
+    // when they match a marketplace-pinned digest. Checked BEFORE any network
+    // or DB work so a missing checksum performs no download.
+    if (!expectedSha256 || !/^[0-9a-fA-F]{64}$/.test(expectedSha256)) {
+      throw new PackagingError(
+        'CHECKSUM_REQUIRED',
+        'A pinned 64-hex sha256 checksum is required to install a plugin package',
+      );
+    }
     // LAN/air-gapped indexes: the download host matches a configured index
     // host, so it is already admin-trusted (see getTrustedMarketplaceHosts).
     let allowLocal = this.opts.allowLocalDownloads ?? false;
@@ -474,7 +485,7 @@ export class PluginMarketplaceService {
       }
     }
     const { tmpPath, sha256 } = await downloadPackage(downloadUrl, {
-      expectedSha256: expectedSha256 ?? null,
+      expectedSha256,
       allowLocal,
     });
 

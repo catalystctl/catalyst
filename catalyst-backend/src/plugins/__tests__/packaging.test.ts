@@ -253,6 +253,23 @@ describe('assertInstallableUrl', () => {
     await expect(assertInstallableUrl('https://8.8.8.8/pkg.zip')).resolves.toBeInstanceOf(URL);
   });
 
+  it('rejects plaintext http for untrusted hosts (https-only)', async () => {
+    // Public host without allowLocal is blocked by the protocol guard before
+    // any DNS lookup, so these assertions need no network access.
+    await expect(assertInstallableUrl('http://example.com/x.zip')).rejects.toMatchObject({
+      code: 'INSECURE_PROTOCOL',
+    });
+    await expect(assertInstallableUrl('http://8.8.8.8/x.zip')).rejects.toMatchObject({
+      code: 'INSECURE_PROTOCOL',
+    });
+  });
+
+  it('allowLocal also permits plaintext http for public hosts', async () => {
+    await expect(
+      assertInstallableUrl('http://example.com/x.zip', true),
+    ).resolves.toBeInstanceOf(URL);
+  });
+
   it('allowLocal opt-in permits loopback for dev tooling', async () => {
     await expect(
       assertInstallableUrl('http://127.0.0.1:9000/pkg.zip', true),

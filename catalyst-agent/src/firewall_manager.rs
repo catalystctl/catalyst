@@ -580,30 +580,70 @@ impl FirewallManager {
 
     // -----------------------------------------------------------------------
     // firewalld implementation
+    //
+    // firewalld distinguishes RUNTIME (in-memory) from PERMANENT (on-disk)
+    // config. `--permanent --add-port` alone does nothing until the daemon is
+    // reloaded, and `--reload` re-reads the whole permanent config — it briefly
+    // drops runtime state and, with several ports opening at once, produced one
+    // full daemon reload per port per protocol. Apply the change to BOTH: the
+    // runtime form takes effect immediately and the permanent form survives a
+    // reboot, with no reload in the hot path.
     // -----------------------------------------------------------------------
+
+    /// The exact `firewall-cmd` invocations needed to allow a port.
+    ///
+    /// Split out from the async path so the command sequence is unit-testable
+    /// without a live firewalld daemon.
+    pub(crate) fn firewalld_allow_args(port: u16, protocol: &str) -> Vec<Vec<String>> {
+        let spec = format!("{}/{}", port, protocol);
+        vec![
+            vec!["--add-port".to_string(), spec.clone()],
+            vec!["--permanent".to_string(), "--add-port".to_string(), spec],
+        ]
+    }
+
+    /// The exact `firewall-cmd` invocations needed to remove a port.
+    pub(crate) fn firewalld_remove_args(port: u16, protocol: &str) -> Vec<Vec<String>> {
+        let spec = format!("{}/{}", port, protocol);
+        vec![
+            vec!["--remove-port".to_string(), spec.clone()],
+            vec!["--permanent".to_string(), "--remove-port".to_string(), spec],
+        ]
+    }
 
     async fn allow_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
         info!("Configuring firewalld to allow port {}/{}", port, protocol);
 
-        let output = run_firewall_command(
-            "firewall-cmd",
-            &[
-                "--permanent",
-                "--add-port",
-                &format!("{}/{}", port, protocol),
-            ],
-        )
-        .await?;
-
-        if !output.status.success() {
+        // Runtime first so the port is reachable immediately, then the
+        // permanent form so it survives a reboot. No `--reload`: it re-reads
+        // the whole permanent config and briefly drops runtime state.
+        for (idx, args) in Self::firewalld_allow_args(port, protocol)
+            .iter()
+            .enumerate()
+        {
+            let borrowed: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let output = run_firewall_command("firewall-cmd", &borrowed).await?;
+            if output.status.success() {
+                continue;
+            }
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(AgentError::FirewallError(format!(
-                "firewalld add failed: {}",
-                stderr
-            )));
+            if idx == 0 {
+                // The runtime rule is what makes the port reachable at all.
+                return Err(AgentError::FirewallError(format!(
+                    "firewalld runtime add failed for {}/{}: {}",
+                    port, protocol, stderr
+                )));
+            }
+            // The permanent half failing still leaves a working runtime rule,
+            // so warn instead of tearing it down; the rule is simply lost on
+            // the next reboot.
+            warn!(
+                "firewalld could not persist port {}/{} (runtime rule is active but will be lost on reboot): {}",
+                port,
+                protocol,
+                stderr.trim()
+            );
         }
-
-        Self::reload_firewalld().await?;
 
         info!("✓ firewalld configured to allow port {}/{}", port, protocol);
         Ok(())
@@ -612,28 +652,31 @@ impl FirewallManager {
     async fn remove_port_firewalld(port: u16, protocol: &str) -> AgentResult<()> {
         info!("Removing firewalld rule for port {}/{}", port, protocol);
 
-        let output = run_firewall_command(
-            "firewall-cmd",
-            &[
-                "--permanent",
-                "--remove-port",
-                &format!("{}/{}", port, protocol),
-            ],
-        )
-        .await?;
-
-        if !output.status.success() {
-            warn!(
-                "Failed to remove firewalld rule for port {}/{} (may not exist)",
-                port, protocol
-            );
-            // Don't return error — try reload anyway.
+        // Either half may legitimately be absent (e.g. the permanent add
+        // failed earlier), so a non-zero exit is not an error here.
+        for args in Self::firewalld_remove_args(port, protocol) {
+            let borrowed: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            match run_firewall_command("firewall-cmd", &borrowed).await {
+                Ok(out) if !out.status.success() => warn!(
+                    "firewalld could not remove {}/{} (may not exist): {}",
+                    port,
+                    protocol,
+                    String::from_utf8_lossy(&out.stderr).trim()
+                ),
+                Ok(_) => {}
+                Err(e) => warn!("firewalld remove failed for {}/{}: {}", port, protocol, e),
+            }
         }
 
-        Self::reload_firewalld().await?;
         Ok(())
     }
 
+    /// Reload firewalld from its permanent configuration.
+    ///
+    /// Not used by the per-port path any more (that applies runtime+permanent
+    /// directly). Kept for callers that need to re-read an externally edited
+    /// configuration.
+    #[allow(dead_code)]
     async fn reload_firewalld() -> AgentResult<()> {
         let output = run_firewall_command("firewall-cmd", &["--reload"]).await?;
         if !output.status.success() {
@@ -1311,5 +1354,59 @@ mod tests {
             );
         }
         assert_eq!(rules.len(), 5);
+    }
+
+    // ------------------------------------------------------------------
+    // firewalld command sequence
+    // ------------------------------------------------------------------
+
+    /// Allowing a port must apply the RUNTIME rule and the PERMANENT rule, and
+    /// must not reload the daemon. `--reload` re-reads the whole permanent
+    /// config (dropping runtime state) and used to run once per protocol, so
+    /// opening one game port on tcp+udp cost two full daemon reloads.
+    #[test]
+    fn firewalld_allow_uses_runtime_and_permanent_without_reload() {
+        let cmds = FirewallManager::firewalld_allow_args(25565, "tcp");
+
+        assert_eq!(
+            cmds.len(),
+            2,
+            "expected runtime + permanent, got {:?}",
+            cmds
+        );
+        assert_eq!(cmds[0], vec!["--add-port", "25565/tcp"]);
+        assert_eq!(cmds[1], vec!["--permanent", "--add-port", "25565/tcp"]);
+
+        for cmd in &cmds {
+            assert!(
+                !cmd.iter().any(|a| a == "--reload"),
+                "firewalld allow must not reload the daemon: {:?}",
+                cmd
+            );
+        }
+    }
+
+    #[test]
+    fn firewalld_allow_carries_the_protocol() {
+        let udp = FirewallManager::firewalld_allow_args(19132, "udp");
+        assert_eq!(udp[0], vec!["--add-port", "19132/udp"]);
+        assert_eq!(udp[1], vec!["--permanent", "--add-port", "19132/udp"]);
+    }
+
+    #[test]
+    fn firewalld_remove_clears_both_runtime_and_permanent() {
+        let cmds = FirewallManager::firewalld_remove_args(25565, "udp");
+
+        assert_eq!(
+            cmds.len(),
+            2,
+            "expected runtime + permanent, got {:?}",
+            cmds
+        );
+        assert_eq!(cmds[0], vec!["--remove-port", "25565/udp"]);
+        assert_eq!(cmds[1], vec!["--permanent", "--remove-port", "25565/udp"]);
+        for cmd in &cmds {
+            assert!(!cmd.iter().any(|a| a == "--reload"));
+        }
     }
 }

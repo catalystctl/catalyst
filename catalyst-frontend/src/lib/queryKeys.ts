@@ -130,8 +130,35 @@ export const qk = {
   // ── Mod Manager (per-server) ─────────────────────────────────────────
   modManagerGameVersions: (serverId: string, provider: string, game: string) =>
     ['servers', serverId, 'mod-manager', 'game-versions', provider, game] as const,
-  modManagerSearch: (serverId: string, provider: string, query: string, game: string, page: number) =>
-    ['servers', serverId, 'mod-manager', 'search', provider, query, game, page] as const,
+  /**
+   * Every input that changes the search response belongs in the key. Omitting
+   * `target`/`loader` made switching between Mods and Modpacks reuse the cached
+   * Mods results, so the new filter appeared to do nothing.
+   */
+  modManagerSearch: (
+    serverId: string,
+    provider: string,
+    query: string,
+    game: string,
+    page: number,
+    filters: { target?: string; loader?: string; sort?: string; categories?: string[] } = {},
+  ) =>
+    [
+      'servers',
+      serverId,
+      'mod-manager',
+      'search',
+      provider,
+      query,
+      game,
+      page,
+      filters.target ?? 'mods',
+      filters.loader ?? '',
+      filters.sort ?? '',
+      (filters.categories ?? []).join(','),
+    ] as const,
+  modManagerCategories: (serverId: string, provider: string, game: string, target: string) =>
+    ['servers', serverId, 'mod-manager', 'categories', provider, game, target] as const,
   modManagerVersions: (serverId: string, provider: string, game: string, query: string, page: number) =>
     ['servers', serverId, 'mod-manager', 'versions', provider, game, query, page] as const,
   modManagerInstalled: (serverId: string, target?: string) =>

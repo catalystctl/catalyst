@@ -505,9 +505,17 @@ sudo dnf remove -y docker docker-client docker-client-latest docker-common \
     docker-latest docker-latest-logrotate docker-logrotate docker-engine \
     podman-docker runc 2>/dev/null || true
 
-# Add Docker repository
-sudo dnf install -y dnf-plugins-core
-sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+# Add Docker repository.
+# RHEL 10 / CentOS Stream 10 ship dnf5, which removed `config-manager
+# --add-repo` and the dnf-plugins-core package. RHEL 8/9 still use dnf4.
+REPO_URL=https://download.docker.com/linux/centos/docker-ce.repo
+if dnf --version 2>/dev/null | grep -qE '^dnf5|version 5\.|^5\.'; then
+    sudo dnf install -y dnf5-plugins
+    sudo dnf config-manager addrepo --from-repofile="$REPO_URL"
+else
+    sudo dnf install -y dnf-plugins-core
+    sudo dnf config-manager --add-repo "$REPO_URL"
+fi
 
 # Install Docker Engine + Compose plugin
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -527,9 +535,19 @@ sudo dnf remove -y docker docker-client docker-client-latest docker-common \
     docker-latest docker-latest-logrotate docker-logrotate docker-engine \
     podman-docker runc 2>/dev/null || true
 
-# Add Docker repository
-sudo dnf install -y dnf-plugins-core
-sudo dnf config-manager --add-repo https://download.docker.com/linux/fedora/docker-ce.repo
+# Add Docker repository.
+# dnf5 (Fedora 41+) removed the dnf4 subcommand form: `dnf config-manager
+# --add-repo URL` and the `dnf-plugins-core` package no longer exist there.
+# dnf5 ships config-manager in `dnf5-plugins` and takes `addrepo
+# --from-repofile=`. Detect which dnf is present instead of assuming.
+REPO_URL=https://download.docker.com/linux/fedora/docker-ce.repo
+if dnf --version 2>/dev/null | grep -qE '^dnf5|version 5\.|^5\.'; then
+    sudo dnf install -y dnf5-plugins
+    sudo dnf config-manager addrepo --from-repofile="$REPO_URL"
+else
+    sudo dnf install -y dnf-plugins-core
+    sudo dnf config-manager --add-repo "$REPO_URL"
+fi
 
 # Install Docker Engine + Compose plugin
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
@@ -993,6 +1011,40 @@ phase_preflight() {
         done
     else
         info "ss/netstat not available — skipping port checks"
+    fi
+
+    check_host_firewall
+}
+
+# ── Host firewall advisory ────────────────────────────────────────────────────
+# The panel listens on FRONTEND_PORT (default 8080). Fedora Server, RHEL and
+# CentOS enable firewalld by default, so a correct install still leaves the
+# panel unreachable from another machine. The NODE AGENT opens its own game
+# ports and the SFTP port through firewall_manager.rs — the panel port is the
+# one thing nobody else opens, so advise here rather than silently leaving a
+# firewall in the way. Advisory only: never mutate the host firewall.
+check_host_firewall() {
+    local port
+    port="$(preflight_port FRONTEND_PORT 0.0.0.0:8080)"
+    port="${port##*:}"
+    [[ "$port" =~ ^[0-9]+$ ]] || port=8080
+
+    if command -v firewall-cmd &>/dev/null && firewall-cmd --state &>/dev/null 2>&1; then
+        if firewall-cmd --query-port="${port}/tcp" &>/dev/null 2>&1; then
+            ok "firewalld already allows ${port}/tcp (panel)"
+        else
+            warn "firewalld is running and does not allow ${port}/tcp — the panel will be unreachable remotely"
+            echo -e "       ${CYN}sudo firewall-cmd --permanent --add-port=${port}/tcp && sudo firewall-cmd --reload${RST}"
+        fi
+    elif command -v ufw &>/dev/null && ufw status 2>/dev/null | grep -q "Status: active"; then
+        if ufw status 2>/dev/null | grep -qE "^${port}(/tcp)?[[:space:]]+ALLOW"; then
+            ok "ufw already allows ${port}/tcp (panel)"
+        else
+            warn "ufw is active and does not allow ${port}/tcp — the panel will be unreachable remotely"
+            echo -e "       ${CYN}sudo ufw allow ${port}/tcp${RST}"
+        fi
+    else
+        info "No active host firewall detected — skipping panel port check"
     fi
 }
 

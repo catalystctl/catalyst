@@ -540,6 +540,12 @@ step_lint() {
       overall_exit=1
     fi
 
+    # Typecheck frontend (maps to: cd catalyst-frontend && npx tsc --noEmit in ci.yml lint: job)
+    echo -e "  ${C_BOLD}[pnpm] Typechecking frontend...${C_RESET}"
+    if ! run_step "${step_name}_typecheck_frontend" bash -c "cd catalyst-frontend && npx tsc --noEmit"; then
+      overall_exit=1
+    fi
+
     # Translation gates (maps to: pnpm i18n:check + i18n:verify + i18n:hardcoded in ci.yml lint: job)
     echo -e "  ${C_BOLD}[pnpm] Checking translation catalogs...${C_RESET}"
     if ! run_step "${step_name}_i18n_check" bash -c "pnpm i18n:check"; then
@@ -625,6 +631,12 @@ step_test() {
     echo -e "  ${C_BOLD}[pnpm] Running Vitest across workspace...${C_RESET}"
     local test_cmd="${TEST_CMD:-pnpm --filter catalyst-backend run test}"
     if ! run_step "${step_name}_vitest" bash -c "$test_cmd"; then
+      overall_exit=1
+    fi
+
+    # Frontend Vitest (maps to: pnpm --filter catalyst-frontend exec vitest run in ci.yml test: job)
+    echo -e "  ${C_BOLD}[pnpm] Running frontend Vitest...${C_RESET}"
+    if ! run_step "${step_name}_vitest_frontend" bash -c "pnpm --filter catalyst-frontend exec vitest run"; then
       overall_exit=1
     fi
   fi

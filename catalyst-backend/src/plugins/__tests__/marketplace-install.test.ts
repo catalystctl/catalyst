@@ -51,7 +51,10 @@ describe('PluginMarketplaceService.installFromUrl', () => {
     try {
       // Mirrors PLUGINS_DIR=./plugins in .env.example.
       const svc = new PluginMarketplaceService('./plugins', mockPrisma(), logger, async () => {});
-      const result = await svc.installFromUrl('https://example.com/demo-plugin-2.0.0.catpkg.zip');
+      const result = await svc.installFromUrl(
+        'https://example.com/demo-plugin-2.0.0.catpkg.zip',
+        'a'.repeat(64),
+      );
 
       expect(result).toMatchObject({ name: 'demo-plugin', version: '2.0.0', upgraded: false });
       expect(extractPackage).toHaveBeenCalledTimes(1);
@@ -60,5 +63,26 @@ describe('PluginMarketplaceService.installFromUrl', () => {
     } finally {
       process.chdir(previousCwd);
     }
+  });
+
+  it('throws CHECKSUM_REQUIRED and performs no download when sha256 is missing', async () => {
+    const pluginsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'plugins-nocksum-'));
+    created.push(pluginsDir);
+    const svc = new PluginMarketplaceService(pluginsDir, mockPrisma(), logger, async () => {});
+    await expect(
+      svc.installFromUrl('https://example.com/demo-plugin-2.0.0.catpkg.zip'),
+    ).rejects.toMatchObject({ code: 'CHECKSUM_REQUIRED' });
+    // No checksum → no network. downloadPackage must never be reached.
+    expect(downloadPackage).not.toHaveBeenCalled();
+  });
+
+  it('throws CHECKSUM_REQUIRED for a malformed (non-64-hex) sha256', async () => {
+    const pluginsDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'plugins-badcksum-'));
+    created.push(pluginsDir);
+    const svc = new PluginMarketplaceService(pluginsDir, mockPrisma(), logger, async () => {});
+    await expect(
+      svc.installFromUrl('https://example.com/demo-plugin-2.0.0.catpkg.zip', 'not-a-hash'),
+    ).rejects.toMatchObject({ code: 'CHECKSUM_REQUIRED' });
+    expect(downloadPackage).not.toHaveBeenCalled();
   });
 });

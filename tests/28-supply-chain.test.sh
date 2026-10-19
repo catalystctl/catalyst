@@ -95,6 +95,42 @@ else
     fail "install.sh missing fingerprint-mismatch abort"
 fi
 
+# --- agent binary must be installed with install(1), not mv from /tmp --------
+# A rename keeps the source inode, so a binary staged under /tmp keeps its
+# user_tmp_t SELinux label. init_t may not execute that label, and systemd then
+# fails at ExecStart with 203/EXEC "Permission denied" on Fedora/RHEL. install(1)
+# creates a fresh inode in /opt/catalyst-agent, which the policy labels by path.
+if awk '/^verify_and_install_binary\(\)/,/^}/' "$REPO_ROOT/scripts/deploy-agent.sh" \
+    | grep -qE '^[[:space:]]*mv .*catalyst-agent/catalyst-agent'; then
+    fail "verify_and_install_binary moves the binary from /tmp (keeps the /tmp SELinux label -> 203/EXEC)"
+else
+    pass "verify_and_install_binary does not mv the binary out of /tmp"
+fi
+if awk '/^verify_and_install_binary\(\)/,/^}/' "$REPO_ROOT/scripts/deploy-agent.sh" \
+    | grep -q 'install -m 0755 "$tmp_binary"'; then
+    pass "verify_and_install_binary installs the binary with install -m 0755"
+else
+    fail "verify_and_install_binary does not use install -m 0755"
+fi
+if grep -q '^relabel_agent_binary()' "$REPO_ROOT/scripts/deploy-agent.sh"; then
+    pass "deploy-agent.sh relabels the installed binary when SELinux is enforcing"
+else
+    fail "deploy-agent.sh has no SELinux relabel step"
+fi
+
+# --- crash-loop and stale-drop-in guards -------------------------------------
+if grep -q '^StartLimitBurst=' "$REPO_ROOT/scripts/deploy-agent.sh"; then
+    pass "agent unit bounds the restart loop (StartLimitBurst)"
+else
+    fail "agent unit has no StartLimitBurst: a unit that cannot start loops forever"
+fi
+if awk '/^write_systemd_unit\(\)/,/^}/' "$REPO_ROOT/scripts/deploy-agent.sh" \
+    | grep -q 'Removing stale /tmp ReadWritePaths'; then
+    pass "write_systemd_unit strips a stale /tmp ReadWritePaths from drop-ins"
+else
+    fail "write_systemd_unit does not strip stale /tmp ReadWritePaths (226/NAMESPACE)"
+fi
+
 # --- corrupt-tarball fixture: tar itself must reject it ------------------------
 if tar -tzf "$FIXTURE_DIR/corrupt.tgz" >/dev/null 2>&1; then
     fail "corrupt fixture unexpectedly extracts"
@@ -132,6 +168,74 @@ if grep -q 'TasksMax=infinity' "$REPO_ROOT/systemd/catalyst-agent.service.d/limi
     fail "TasksMax=infinity still present"
 else
     pass "TasksMax bounded everywhere"
+fi
+
+# --- Fedora 41+ / RHEL 10 ship dnf5: the dnf4 repo commands are gone ----------
+# dnf5 removed `dnf config-manager --add-repo` and the dnf-plugins-core package;
+# it ships config-manager in dnf5-plugins and uses `addrepo --from-repofile=`.
+# Fedora Server enables firewalld, and without a repo the install cannot even
+# reach the Docker packages, so both forms must be present behind a version check.
+if grep -qE '^[[:space:]]*sudo dnf config-manager --add-repo' "$REPO_ROOT/install.sh" \
+    && ! grep -q 'dnf5-plugins' "$REPO_ROOT/install.sh"; then
+    fail "install.sh uses only the dnf4 config-manager form (breaks on Fedora 41+ / RHEL 10)"
+else
+    pass "install.sh handles dnf5 (addrepo --from-repofile) as well as dnf4"
+fi
+if grep -q 'dnf config-manager addrepo --from-repofile' "$REPO_ROOT/install.sh"; then
+    pass "install.sh uses the dnf5 addrepo syntax"
+else
+    fail "install.sh is missing the dnf5 addrepo syntax"
+fi
+if grep -q 'dnf-plugins-core' "$REPO_ROOT/install.sh" \
+    && grep -q 'dnf5-plugins' "$REPO_ROOT/install.sh"; then
+    pass "install.sh installs the right config-manager package for each dnf"
+else
+    fail "install.sh does not cover both dnf-plugins-core (dnf4) and dnf5-plugins (dnf5)"
+fi
+
+# --- The panel port must be reachable on hosts that run a firewall ------------
+# Fedora Server, RHEL and CentOS enable firewalld by default; the agent opens
+# game/SFTP ports itself but nothing opens the panel port, so a correct install
+# left the panel unreachable from another machine.
+if grep -q '^check_host_firewall()' "$REPO_ROOT/install.sh"; then
+    pass "install.sh advises on the host firewall for the panel port"
+else
+    fail "install.sh never checks the host firewall (panel unreachable on Fedora/RHEL)"
+fi
+# The definition is useless if nothing calls it.
+if awk '/^phase_preflight\(\)/,/^}/' "$REPO_ROOT/install.sh" | grep -q '^[[:space:]]*check_host_firewall$'; then
+    pass "phase_preflight actually calls check_host_firewall"
+else
+    fail "check_host_firewall is defined but never called (dead code)"
+fi
+if grep -q 'firewall-cmd --permanent --add-port' "$REPO_ROOT/install.sh"; then
+    pass "install.sh prints the firewalld command to open the panel port"
+else
+    fail "install.sh does not print a firewalld command for the panel port"
+fi
+if awk '/^check_host_firewall\(\)/,/^}/' "$REPO_ROOT/install.sh" | grep -q 'ufw allow'; then
+    pass "install.sh prints the ufw command to open the panel port"
+else
+    fail "install.sh does not print a ufw command for the panel port"
+fi
+
+# --- The agent must not reload firewalld once per port/protocol ----------------
+# allow_port applies tcp and udp; a `--reload` in that path reloaded the whole
+# daemon twice per game port and briefly dropped runtime state.
+if grep -q 'firewalld_allow_args' "$REPO_ROOT/catalyst-agent/src/firewall_manager.rs"; then
+    pass "agent builds the firewalld command sequence in one testable place"
+else
+    fail "agent has no testable firewalld command builder"
+fi
+
+# --- The install scripts must not assume SELinux-free hosts for exec bits -----
+# mv keeps the source inode (and its /tmp SELinux label); install(1) creates a
+# fresh inode labelled by path. init_t cannot exec a user_tmp_t binary -> 203/EXEC.
+if awk '/^verify_and_install_binary\(\)/,/^}/' "$REPO_ROOT/scripts/deploy-agent.sh" \
+    | grep -q 'install -m 0755 "$tmp_binary"'; then
+    pass "agent binary is installed with install -m 0755 (correct SELinux label)"
+else
+    fail "agent binary install does not use install -m 0755"
 fi
 
 echo ""

@@ -46,20 +46,108 @@ export class PackagingError extends Error {
 
 // ── SSRF guard ───────────────────────────────────────────────────────────────
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    if (a === 10 || a === 127 || a === 0) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 169 && b === 254) return true; // link-local / cloud metadata
-    return false;
+/**
+ * Expand an IPv6 literal into its eight 16-bit groups, or null if unparseable.
+ * Handles `::` compression and a trailing dotted-quad (`::ffff:127.0.0.1`).
+ */
+function expandIpv6(ip: string): number[] | null {
+  let text = ip.toLowerCase();
+  // Strip a zone id (`fe80::1%eth0`).
+  const pct = text.indexOf('%');
+  if (pct !== -1) text = text.slice(0, pct);
+
+  let tail: number[] = [];
+  const lastColon = text.lastIndexOf(':');
+  const maybeV4 = text.slice(lastColon + 1);
+  if (net.isIPv4(maybeV4)) {
+    const [a, b, c, d] = maybeV4.split('.').map(Number);
+    tail = [(a << 8) | b, (c << 8) | d];
+    text = text.slice(0, lastColon + 1);
+    // `::ffff:1.2.3.4` leaves a trailing ':' we must drop before splitting.
+    if (text.endsWith(':') && !text.endsWith('::')) text = text.slice(0, -1);
   }
+
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+
+  const parse = (part: string): number[] | null => {
+    if (part === '') return [];
+    const out: number[] = [];
+    for (const group of part.split(':')) {
+      if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+      out.push(parseInt(group, 16));
+    }
+    return out;
+  };
+
+  const head = parse(halves[0]);
+  if (!head) return null;
+  const rest = halves.length === 2 ? parse(halves[1]) : [];
+  if (!rest) return null;
+
+  // Order matters: `head` then `rest` then the dotted-quad `tail`.
+  const explicit = [...head, ...rest, ...tail];
+  if (halves.length === 2) {
+    const missing = 8 - explicit.length;
+    if (missing < 0) return null;
+    return [...head, new Array(missing).fill(0), ...rest, ...tail].flat();
+  }
+  return explicit.length === 8 ? explicit : null;
+}
+
+/** True for an IPv4 address string in a private/loopback/link-local range. */
+function isPrivateIpv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return true; // unparseable → unsafe
+  }
+  const [a, b] = parts;
+  if (a === 10 || a === 127 || a === 0) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true; // link-local / cloud metadata
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+  if (a >= 224) return true; // multicast + reserved
+  return false;
+}
+
+export function isPrivateIp(ip: string): boolean {
+  if (net.isIPv4(ip)) return isPrivateIpv4(ip);
   if (net.isIPv6(ip)) {
-    const lower = ip.toLowerCase();
-    if (lower === '::1' || lower === '::') return true;
-    if (lower.startsWith('fc') || lower.startsWith('fd')) return true; // ULA
-    if (lower.startsWith('fe80')) return true; // link-local
+    const g = expandIpv6(ip);
+    if (!g) return true; // unparseable → unsafe
+
+    // :: and ::1
+    if (g.every((x) => x === 0)) return true;
+    if (g.slice(0, 7).every((x) => x === 0) && g[7] === 1) return true;
+
+    // IPv4-mapped (::ffff:a.b.c.d) and IPv4-compatible (::a.b.c.d).
+    // This is the form that bypassed the previous prefix check: an AAAA record
+    // of ::ffff:169.254.169.254 reached the cloud metadata service.
+    if (g.slice(0, 5).every((x) => x === 0) && (g[5] === 0xffff || g[5] === 0)) {
+      const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+      if (isPrivateIpv4(v4)) return true;
+    }
+
+    // 6to4 (2002::/16) embeds an IPv4 address in groups 1-2.
+    if (g[0] === 0x2002) {
+      const v4 = `${g[1] >> 8}.${g[1] & 0xff}.${g[2] >> 8}.${g[2] & 0xff}`;
+      if (isPrivateIpv4(v4)) return true;
+    }
+
+    // NAT64 (64:ff9b::/96) embeds an IPv4 address in the last 32 bits.
+    if (g[0] === 0x0064 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) {
+      const v4 = `${g[6] >> 8}.${g[6] & 0xff}.${g[7] >> 8}.${g[7] & 0xff}`;
+      if (isPrivateIpv4(v4)) return true;
+    }
+
+    // fc00::/7 unique-local, fe80::/10 link-local, fec0::/10 site-local,
+    // ff00::/8 multicast.
+    if ((g[0] & 0xfe00) === 0xfc00) return true;
+    if ((g[0] & 0xffc0) === 0xfe80) return true;
+    if ((g[0] & 0xffc0) === 0xfec0) return true;
+    if ((g[0] & 0xff00) === 0xff00) return true;
+
     return false;
   }
   return true; // unparseable → treat as unsafe
@@ -80,6 +168,15 @@ export async function assertInstallableUrl(rawUrl: string, allowLocal = false): 
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     throw new PackagingError('INVALID_URL', 'Download URL must be http(s)');
+  }
+  // Plaintext http is only permitted for explicitly trusted local/dev hosts
+  // (allowLocal). Public and untrusted hosts must use https so the transport
+  // cannot be silently downgraded or MITM'd before the SSRF check runs.
+  if (url.protocol === 'http:' && !allowLocal) {
+    throw new PackagingError(
+      'INSECURE_PROTOCOL',
+      'Download URL must use https; plaintext http is only allowed for trusted local hosts',
+    );
   }
   const host = url.hostname.toLowerCase();
   const isLiteralLocal =
@@ -106,6 +203,68 @@ export async function assertInstallableUrl(rawUrl: string, allowLocal = false): 
 
 // ── Download ────────────────────────────────────────────────────────────────
 
+/**
+ * Minimal fetch surface the downloader needs. Structural on purpose: the
+ * global `fetch` in this project resolves to node-fetch's `Response`, which is
+ * not assignable to the DOM/undici `Response` type, and tests inject fakes.
+ */
+export interface PackageFetchResponse {
+  status: number;
+  ok: boolean;
+  headers: { get(name: string): string | null };
+  body: unknown;
+}
+
+export type PackageFetch = (
+  url: string,
+  init: { redirect: 'manual'; signal: AbortSignal },
+) => Promise<PackageFetchResponse>;
+
+/**
+ * Fetch a URL, following redirects MANUALLY so every hop is re-validated
+ * against the same SSRF + protocol allowlist as the original URL.
+ *
+ * Why not `redirect: 'error'`: legitimate package hosts redirect (GitHub
+ * Releases 302s to objects.githubusercontent.com, S3 presigned URLs redirect),
+ * so refusing all redirects would break third-party marketplaces. Why not
+ * `redirect: 'follow'`: undici follows 302s transparently, so a first-hop
+ * public host could point at a private/metadata address that the allowlist
+ * never saw.
+ */
+export async function fetchFollowingValidatedRedirects(
+  startUrl: URL,
+  opts: {
+    allowLocal: boolean;
+    signal: AbortSignal;
+    maxHops?: number;
+    /** Injectable for tests; defaults to the global fetch. */
+    fetchImpl?: PackageFetch;
+  },
+): Promise<PackageFetchResponse> {
+  const maxHops = opts.maxHops ?? 5;
+  const doFetch: PackageFetch = opts.fetchImpl ?? ((u, init) => fetch(u, init));
+  let current = startUrl;
+  for (let hop = 0; ; hop++) {
+    const res = await doFetch(current.href, { redirect: 'manual', signal: opts.signal });
+    const isRedirect = res.status >= 300 && res.status < 400;
+    if (!isRedirect) return res;
+
+    const location = res.headers.get('location');
+    // Drain the redirect body so the socket can be reused.
+    const body = res.body as { cancel?: () => Promise<void> } | null | undefined;
+    await body?.cancel?.().catch(() => {});
+    if (!location) {
+      throw new PackagingError('DOWNLOAD_FAILED', `Redirect ${res.status} without a Location header`);
+    }
+    if (hop >= maxHops) {
+      throw new PackagingError('TOO_MANY_REDIRECTS', `Package download exceeded ${maxHops} redirects`);
+    }
+    // Re-validate the next hop: https-only (unless allowLocal) and not a
+    // private/loopback/link-local address.
+    current = await assertInstallableUrl(new URL(location, current).href, opts.allowLocal);
+  }
+}
+
 export interface DownloadResult {
   tmpPath: string;
   sha256: string;
@@ -122,25 +281,35 @@ export async function downloadPackage(
     expectedSha256?: string | null;
     allowLocal?: boolean;
     timeoutMs?: number;
+    /** Injectable for tests; defaults to the global fetch. */
+    fetchImpl?: PackageFetch;
   } = {},
 ): Promise<DownloadResult> {
   const url = await assertInstallableUrl(rawUrl, opts.allowLocal ?? false);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 60_000);
 
-  const tmpPath = path.join(
-    await fsp.realpath(await fsp.mkdtemp(path.join(os.tmpdir(), 'catpkg-'))),
-    'package.zip',
-  );
+  const tmpDir = await fsp.realpath(await fsp.mkdtemp(path.join(os.tmpdir(), 'catpkg-')));
+  const tmpPath = path.join(tmpDir, 'package.zip');
 
   try {
-    const res = await fetch(url.href, { signal: controller.signal });
+    // Redirects are followed hop-by-hop with the SSRF/protocol allowlist
+    // re-applied to every Location, so a 302 cannot re-point the fetch at a
+    // private/metadata address after the first URL was validated.
+    const res = await fetchFollowingValidatedRedirects(url, {
+      allowLocal: opts.allowLocal ?? false,
+      signal: controller.signal,
+      fetchImpl: opts.fetchImpl,
+    });
     if (!res.ok || !res.body) {
+      // Drain so the socket is released on these early-failure paths too.
+      await (res.body as { cancel?: () => Promise<void> } | null | undefined)?.cancel?.().catch(() => {});
       throw new PackagingError('DOWNLOAD_FAILED', `Download failed: HTTP ${res.status}`);
     }
 
     const declaredLength = Number(res.headers.get('content-length') ?? NaN);
     if (Number.isFinite(declaredLength) && declaredLength > MAX_PACKAGE_BYTES) {
+      await (res.body as { cancel?: () => Promise<void> }).cancel?.().catch(() => {});
       throw new PackagingError('TOO_LARGE', `Package exceeds ${MAX_PACKAGE_BYTES} byte limit`);
     }
 
@@ -171,7 +340,7 @@ export async function downloadPackage(
     }
     return { tmpPath, sha256, bytes };
   } catch (err) {
-    await fsp.rm(tmpPath, { force: true }).catch(() => {});
+    await fsp.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
     throw err;
   } finally {
     clearTimeout(timer);
