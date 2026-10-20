@@ -19,10 +19,6 @@
 		"i18n:status": "i18next-cli status",
 		"i18n:verify": "i18next-cli extract --ci --dry-run --quiet",
 		"i18n:lint": "i18next-cli lint",
-		"test:screenshots": "playwright test screenshot-crawl",
-		"test:screenshots:headed": "playwright test screenshot-crawl --headed",
-		"screenshots:crawl": "node scripts/screenshots/capture-all.mjs",
-		"screenshots:crawl:headed": "node scripts/screenshots/capture-all.mjs --headed",
 		"build:analyze": "vite build --mode analyze"
 	},
 	"dependencies": {

@@ -108,7 +108,6 @@ npm run test:e2e         # Playwright integration tests
 - `npm run lint` - Run ESLint on all .ts/.tsx files
 - `npm run lint -- --fix` - Auto-fix linting issues
 - `npm run format` - Format with Prettier
-- `npm run test:screenshots` - Run Playwright screenshot tests
 
 ### Agent Setup
 ```bash

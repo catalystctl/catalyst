@@ -1,4 +1,4 @@
-# Screenshot test artifacts (generated to docs/screenshots/ which IS committed)
+# Playwright failure artifacts (screenshots/ + report)
 catalyst-frontend/screenshots/
 catalyst-frontend/playwright-report/
 docs.md

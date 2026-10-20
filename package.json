@@ -50,9 +50,6 @@
 		"i18n:hardcoded": "node scripts/i18n-hardcoded-check.mjs",
 		"i18n:extract": "pnpm --filter catalyst-frontend run i18n:extract",
 		"i18n:status": "pnpm --filter catalyst-frontend run i18n:status",
-		"test:screenshots": "pnpm --filter catalyst-frontend run test:screenshots",
-		"test:screenshots:headed": "pnpm --filter catalyst-frontend run test:screenshots:headed",
-		"screenshots:crawl": "pnpm --filter catalyst-frontend run screenshots:crawl",
 		"clean": "rm -rf catalyst-backend/dist catalyst-backend/node_modules catalyst-frontend/dist catalyst-frontend/node_modules node_modules",
 		"prepare": "husky"
 	},
