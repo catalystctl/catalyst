@@ -81,19 +81,28 @@ let updateState: UpdateState = {
 	logs: [],
 };
 
-/** P1-31: event vocabulary for the admin `panel_update_state` stream. */
+/**
+ * P1-31: event vocabulary for the admin `panel_update_state` stream.
+ *
+ * These are the frontend modal's PHASE names (UpdateProgressModal maps
+ * `phase` against `idle/pulling/restarting/failed`) — not free-form labels.
+ * `completed` is only emitted once the panel is verifiably back up; the
+ * historical mapping (`restarting→installing`) plus a premature `completed`
+ * right after spawning `compose up -d` left the modal in unknown states and
+ * the "update available" flyout stale until a manual page refresh.
+ */
 type PanelUpdateEventState =
-	| "checking"
-	| "downloading"
-	| "installing"
-	| "completed"
-	| "failed";
+	| "idle"
+	| "pulling"
+	| "restarting"
+	| "failed"
+	| "completed";
 
 /** Maps the internal UpdateState onto panel_update_state event states. */
 const UPDATE_STATE_EVENT: Record<UpdateState["state"], PanelUpdateEventState | null> = {
-	idle: null,
-	pulling: "downloading",
-	restarting: "installing",
+	idle: "idle",
+	pulling: "pulling",
+	restarting: "restarting",
 	failed: "failed",
 };
 
@@ -124,6 +133,40 @@ function emitPanelUpdateAvailable(currentVersion: string, latestVersion: string 
 	}
 }
 
+/**
+ * Marker written when a docker update enters the `restarting` phase. The
+ * sibling `docker compose up -d` helper recreates this very container, so the
+ * dying process cannot report completion — the NEW process reads this file at
+ * boot and, once it is genuinely serving, announces `completed` to admin SSE
+ * subscribers. Without it the progress modal never learned the update had
+ * finished and the "update available" flyout stayed stale until a manual
+ * page refresh.
+ */
+const UPDATE_IN_FLIGHT_MARKER = "/tmp/catalyst-update-in-flight";
+
+function markUpdateInFlight(): void {
+	try {
+		fs.writeFileSync(UPDATE_IN_FLIGHT_MARKER, new Date().toISOString());
+	} catch {
+		/* best-effort */
+	}
+}
+
+/**
+ * Called once the new process is up (after listen). If the previous process
+ * died mid-update (marker present), emit the terminal `completed` event and
+ * clear the marker. Best-effort throughout — never blocks or breaks boot.
+ */
+export function emitUpdateCompletedFromBoot(): void {
+	try {
+		if (!fs.existsSync(UPDATE_IN_FLIGHT_MARKER)) return;
+		fs.rmSync(UPDATE_IN_FLIGHT_MARKER, { force: true });
+		emitPanelUpdateState("completed", "Panel update complete.");
+	} catch {
+		/* best-effort */
+	}
+}
+
 function setUpdateState(state: UpdateState["state"], message?: string | null) {
 	if (state === "pulling") {
 		clearUpdateLogs();
@@ -139,6 +182,9 @@ function setUpdateState(state: UpdateState["state"], message?: string | null) {
 		logs: [...updateLogs],
 	};
 	// P1-31: mirror every lifecycle transition to admin SSE subscribers.
+	// `restarting` also writes the in-flight marker the NEXT process reads at
+	// boot to announce `completed` (this process is about to be killed).
+	if (state === "restarting") markUpdateInFlight();
 	const event = UPDATE_STATE_EVENT[state];
 	if (event) emitPanelUpdateState(event, message ?? null);
 }
@@ -184,7 +230,6 @@ export async function checkForUpdate(logger?: any): Promise<UpdateStatus> {
 	const currentVersion = getCurrentVersion();
 	const isDockerEnv = isDocker();
 	const settings = await getAutoUpdateSettings();
-	emitPanelUpdateState("checking");
 
 	try {
 		const response = await fetch(
@@ -545,10 +590,14 @@ export async function performUpdate(logger?: {
 				logger?.error?.({ err }, "failed to start compose apply helper");
 			});
 
-			// P1-31: this process has done all it can — the sibling helper
-			// recreates the containers (this panel goes down briefly).
+			// P1-31: mirror the state stream while this process is still alive.
+			// NO `completed` event here: the compose helper is about to recreate
+			// this very container, so completion can only be reported by the
+			// NEXT process (see emitUpdateCompletedFromBoot below). Emitting it
+			// early made the frontend close/abandon the progress modal while
+			// the update was still in flight.
 			emitPanelUpdateState(
-				"completed",
+				"restarting",
 				"Update initiated: images pulled and containers restarting. The panel may be briefly unavailable.",
 			);
 

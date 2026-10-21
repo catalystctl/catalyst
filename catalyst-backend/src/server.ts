@@ -1859,8 +1859,12 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 			// Skipped entirely in benchmark fair mode to eliminate external
 			// GitHub polling that steals network/CPU from throughput tests.
 			if (!fairMode) {
-				const { applyAutoUpdateScheme } = await import("./services/auto-updater");
+				const { applyAutoUpdateScheme, emitUpdateCompletedFromBoot } = await import("./services/auto-updater");
 				await applyAutoUpdateScheme(logger);
+				// The previous process may have died mid-panel-update (compose
+				// recreated this container). Now that this one is serving, close
+				// out the state stream so the admin UI can auto-reload.
+				emitUpdateCompletedFromBoot();
 			} else {
 				logger.info("Benchmark fair mode: auto-update polling disabled");
 			}

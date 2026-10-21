@@ -54,11 +54,20 @@ export function consumePostUpdateReloadToast(): boolean {
  * Instead, once `restarting` has held for RESTART_GRACE_MS, probe the
  * public /health endpoint until the panel answers;
  * the first response means the new version is up. Reload shortly after.
+ *
+ * The watch is STICKY: the new backend boots with in-memory state `idle`, so
+ * the modal's 2s poll can flip `restarting → idle` before the grace period
+ * ends. Deactivating on that flip used to cancel the probe entirely and the
+ * page never reloaded (the popup stayed until a manual refresh). Once
+ * `restarting` is seen, watching continues regardless of later phase flips.
  */
 function usePanelRestartWatch(active: boolean) {
   const [panelBack, setPanelBack] = useState(false);
+  const everActiveRef = useRef(false);
+  if (active) everActiveRef.current = true;
+  const watching = active || everActiveRef.current;
   useEffect(() => {
-    if (!active) return;
+    if (!watching) return;
     let probeTimer: number | undefined;
     let cancelled = false;
     const graceTimeout = window.setTimeout(() => {
@@ -82,7 +91,8 @@ function usePanelRestartWatch(active: boolean) {
       window.clearTimeout(graceTimeout);
       if (probeTimer) window.clearTimeout(probeTimer);
     };
-  }, [active]);
+    // `watching` (not `active`) is intentional: see the stickiness note above.
+  }, [watching]);
   return panelBack;
 }
 
@@ -215,8 +225,11 @@ export default function UpdateProgressModal({
 
   const phase = state?.state ?? 'idle';
   const restarting = phase === 'restarting';
-  const panelBack = usePanelRestartWatch(open && restarting);
-
+  const healthPanelBack = usePanelRestartWatch(open && restarting);
+  // The new backend announces completion at boot (emitUpdateCompletedFromBoot
+  // → SSE panel_update_state 'completed' → this cache patch). Either signal
+  // — the /health probe or the explicit event — counts as "panel back".
+  const panelBack = healthPanelBack || phase === 'completed';
   const reloadScheduledRef = useRef(false);
   const prevPhaseRef = useRef<string | undefined>(undefined);
 
@@ -273,6 +286,7 @@ export default function UpdateProgressModal({
   const restartingStatus =
     phase === 'restarting' ? 'active' : phase === 'failed' ? 'pending' : 'pending';
 
+  // `completed` means the new backend is up — the update is no longer running.
   const starting = phase === 'idle' && !panelBack;
   const running = phase === 'pulling' || phase === 'restarting' || starting;
   const closeBlocked = running && !panelBack;

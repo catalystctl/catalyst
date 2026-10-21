@@ -180,6 +180,17 @@ export async function setupRoutes(app: FastifyInstance) {
 			if (userCount > 0) {
 				// Installs older than the flag row never had it written. Backfill
 				// now so a later account deletion cannot re-arm the wizard.
+				_request.log.warn(
+					"Setup flag missing on an installed panel — backfilling setup:completed",
+				);
+				// Loud, not silent: see the hasInstallEvidence branch below.
+				captureSystemError({
+					level: "warn",
+					component: "Setup",
+					message:
+						"Setup completion flag missing on an installed panel — setup wizard re-armed and backfilled. If theme/branding reverted to defaults, re-apply it in Admin → Theme.",
+					metadata: { context: "setup_flag_backfill" },
+				}).catch(() => {});
 				await markSetupCompleted().catch(() => {});
 				// The count itself is definitive — remember even if the
 				// backfill write failed.
@@ -199,6 +210,19 @@ export async function setupRoutes(app: FastifyInstance) {
 				_request.log.warn(
 					"Setup flag missing on an installed panel — backfilling setup:completed",
 				);
+				// Loud, not silent: a re-armed wizard on an installed panel is
+				// an integrity signal (interrupted upgrade, out-of-band DB
+				// surgery, restore) and completing it re-upserts ThemeSettings
+				// with wizard defaults — which has visibly reset admins' custom
+				// themes. Surface it in the System Errors page so it is
+				// discoverable without reading container logs.
+				captureSystemError({
+					level: "warn",
+					component: "Setup",
+					message:
+						"Setup completion flag missing on an installed panel — setup wizard re-armed and backfilled. If theme/branding reverted to defaults, re-apply it in Admin → Theme.",
+					metadata: { context: "setup_flag_backfill" },
+				}).catch(() => {});
 				await markSetupCompleted().catch(() => {});
 				rememberSetupInstalled();
 				return reply.send({ setupRequired: false });

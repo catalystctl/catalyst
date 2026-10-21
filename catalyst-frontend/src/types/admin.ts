@@ -428,7 +428,7 @@ export interface UpdateSettingsResponse {
 }
 
 export interface UpdateStateResponse {
-  state: 'idle' | 'pulling' | 'restarting' | 'failed';
+  state: 'idle' | 'pulling' | 'restarting' | 'failed' | 'completed';
   message: string | null;
   startedAt: string | null;
   updatedAt: string | null;

@@ -733,6 +733,15 @@ export function useSseAdminEvents() {
             };
           });
           invalidateOnce(q, { queryKey: qk.adminUpdateState() });
+          // A terminal state changes the update-check answer itself
+          // (completed → new version live; failed → still available). The
+          // always-mounted "update available" flyout reads the update-check
+          // cache (5-minute staleTime, no polling) — without this it stayed
+          // visible after the update finished until a manual page refresh.
+          if (nextState === 'completed' || nextState === 'failed') {
+            invalidateOnce(q, { queryKey: qk.updateCheck() });
+            invalidateOnce(q, { queryKey: qk.adminUpdateStatus() });
+          }
         }
 
         // ── Mod Manager Events ───────────────────────────────────────
