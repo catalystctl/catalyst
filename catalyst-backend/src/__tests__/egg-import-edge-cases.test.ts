@@ -626,3 +626,53 @@ describe('importPterodactylEggSafe — invalid variable default_value type', () 
 		expect(err!.field).toBe('variables[0].default_value');
 	});
 });
+
+// ============================================================================
+// 18. Shell-variable references in the startup command
+// ============================================================================
+
+describe('importPterodactylEggSafe — shell variables assigned in startup', () => {
+	it('restores $VAR references for vars assigned as VAR=$! (ENS_PID pattern)', () => {
+		// Regression: the enshrouded-style tail-follower startup. The $ENS_PID
+		// reference is a shell variable, not an egg variable — convertStartupCommand
+		// brackets it into {{ENS_PID}}, and sanitizeStartupCommand must restore it.
+		const egg = {
+			...VALID_EGG,
+			startup:
+				'./server & ENS_PID=$! ; sleep 3; tail -c0 -F ./logs/server.log --pid=$ENS_PID',
+		};
+		const result = importPterodactylEggSafe(egg);
+		expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+		expect(result.result!.startup).toBe(
+			'./server & ENS_PID=$! ; sleep 3; tail -c0 -F ./logs/server.log --pid=$ENS_PID',
+		);
+	});
+
+	it('restores $VAR references for vars assigned as VAR=$(…)', () => {
+		const egg = {
+			...VALID_EGG,
+			startup: 'DIR=$(pwd); cd $DIR && ./server --port {{SERVER_PORT}}',
+		};
+		const result = importPterodactylEggSafe(egg);
+		expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+		expect(result.result!.startup).toBe(
+			'DIR=$(pwd); cd $DIR && ./server --port {{SERVER_PORT}}',
+		);
+	});
+
+	it('leaves egg-variable placeholders untouched', () => {
+		const result = importPterodactylEggSafe(VALID_EGG);
+		expect(result.result!.startup).toContain('{{SERVER_PORT}}');
+	});
+
+	it('imports the Enshrouded Catalyst startup verbatim (lower-case shell vars only)', () => {
+		// The egg deliberately uses lower-case shell variables (ens_pid/wait_n):
+		// convertStartupCommand only brackets $UPPER_CASE names, so this startup
+		// must round-trip byte-for-byte with no placeholders introduced.
+		const startup =
+			'mkdir -p ./logs; ./proton-ge/proton run ./enshrouded_server.exe & ens_pid=$!; wait_n=0; until [ -f ./logs/enshrouded_server.log ] || ! kill -0 $ens_pid 2>/dev/null || [ $wait_n -ge 300 ]; do sleep 1; wait_n=$((wait_n+1)); done; tail -c0 -F ./logs/enshrouded_server.log --pid=$ens_pid';
+		const result = importPterodactylEggSafe({ ...VALID_EGG, startup });
+		expect(result.errors.filter((e) => e.severity === 'error')).toHaveLength(0);
+		expect(result.result!.startup).toBe(startup);
+	});
+});

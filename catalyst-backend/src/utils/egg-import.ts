@@ -10,7 +10,9 @@
  *   - Tests (__tests__/pterodactyl-egg-import.test.ts)
  *
  * DESIGN DECISIONS:
- *   - Startup commands: Convert $VAR / ${VAR} → {{VAR}} syntax (Catalyst native)
+ *   - Startup commands: Convert $VAR / ${VAR} → {{VAR}} syntax (Catalyst native),
+ *     then restore shell variables the conversion wrongly bracketed
+ *     (assignments like VAR=$! / VAR=$(…) — see sanitize-startup.ts)
  *   - Install scripts: Convert /mnt/server → {{SERVER_DIR}}, fix shebangs,
  *     add pre-flight packages, convert bashisms to POSIX
  *   - Variables: Preserve user_viewable, user_editable; parse select options
@@ -20,6 +22,7 @@
 
 import { describeError } from './describe-error.js';
 import { deriveTemplatePort } from './egg-port.js';
+import { sanitizeStartupCommand } from './sanitize-startup.js';
 
 // ============================================================================
 // Types
@@ -484,9 +487,12 @@ export function importPterodactylEgg(
 	let mappedVariables = rawVars.map(mapVariable);
 
 	// ── Startup Command ───────────────────────────────────────────────
-	// Convert $VAR / ${VAR} → {{VAR}} for Catalyst native syntax
+	// Convert $VAR / ${VAR} → {{VAR}} for Catalyst native syntax, then restore
+	// shell-variable references (VAR=$! / VAR=$(…) pattern) that the conversion
+	// bracketed into placeholders — they are not egg variables and must stay
+	// literal so the runtime shell can expand them.
 	const startup = egg.startup
-		? convertStartupCommand(egg.startup)
+		? sanitizeStartupCommand(convertStartupCommand(egg.startup))
 		: "";
 
 	// ── Install Script ─────────────────────────────────────────────────
