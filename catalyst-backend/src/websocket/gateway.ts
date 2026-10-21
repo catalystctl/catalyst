@@ -13,7 +13,6 @@ import {
 } from "../shared-types";
 import { hasGrant, hasPermission, hasNodeAccess } from "../lib/permissions";
 import { ALL_SERVER_PERMISSIONS } from "../lib/permissions-catalog";
-import { sanitizeInput } from "../lib/validation";
 import { ServerStateMachine } from "../services/state-machine";
 import { normalizeHostIp } from "../utils/ipam";
 import { captureSystemError } from "../services/error-logger";
@@ -2560,8 +2559,11 @@ export class WebSocketGateway {
           message.data = (message.data as string).slice(0, MAX_CONSOLE_MESSAGE_BYTES);
         }
         if (message.serverId && message.data) {
-          // Sanitize console output to prevent XSS attacks
-          const sanitizedData = sanitizeInput(message.data);
+          // Persist console output verbatim. The frontend renders it as terminal
+          // text (xterm.js / React text nodes), which cannot execute HTML, and
+          // stripping < > here corrupted real output (e.g. `2>&1` became `2&1`,
+          // shell redirects vanished from the startup echo customers debug from).
+          const logData = message.data as string;
           // Persisted row id is forwarded as logId so the frontend can
           // match live SSE lines against later history fetches by stable
           // identity instead of content (identical log lines repeat).
@@ -2570,7 +2572,7 @@ export class WebSocketGateway {
               data: {
                 serverId: message.serverId,
                 stream: message.stream || "stdout",
-                data: sanitizedData,
+                data: logData,
               },
             });
             const createdId = (created as { id?: unknown } | undefined)?.id;
@@ -2590,12 +2592,9 @@ export class WebSocketGateway {
           await this.maybeWarnConsoleThrottle(message.serverId);
           return;
         }
-        // Sanitize console output data before sending to clients to prevent XSS
-        const sanitizedMessage = {
-          ...message,
-          data: typeof message.data === 'string' ? sanitizeInput(message.data) : message.data,
-        };
-        await this.routeConsoleToSubscribers(message.serverId, sanitizedMessage);
+        // Relay console output to subscribers verbatim — see the persistence
+        // note above: the terminal renderer treats it as text, not HTML.
+        await this.routeConsoleToSubscribers(message.serverId, message);
       } else if (message.type === "eula_required") {
         // Forward EULA requirement to subscribed browser clients so the
         // frontend can display an acceptance modal.
@@ -4074,14 +4073,9 @@ export class WebSocketGateway {
     // subscribe and emit still drops the event.
 
 
-    // Sanitize console data before relaying to prevent XSS
-    let messageToSend = message;
-    if (message.type === 'console_output' && typeof message.data === 'string') {
-      messageToSend = {
-        ...message,
-        data: sanitizeInput(message.data),
-      };
-    }
+    // Console data is relayed verbatim: the terminal renderer (xterm.js /
+    // React text nodes) treats it as text, never HTML.
+    const messageToSend = message;
 
     // Serialize once — the same payload goes to every WS client and SSE
     // subscriber below. Per-client JSON.stringify in this loop was the
@@ -4485,15 +4479,12 @@ export class WebSocketGateway {
       return;
     }
 
-    // Sanitize console data before relaying to clients to prevent XSS
-    const sanitizedMessage = {
-      ...message,
-      data: typeof message.data === 'string' ? sanitizeInput(message.data) : message.data,
-    };
-
+    // Relay console data verbatim — xterm.js / React render it as text, so
+    // stripping < > only corrupted output (mangled redirects, eaten arrows).
+    // Authorization happens above; message size limits at ingestion.
     // One serialization for all clients — per-client stringify was O(N)
     // allocations per console line on the hottest path.
-    const wire = JSON.stringify(sanitizedMessage);
+    const wire = JSON.stringify(message);
 
     for (const [, client] of this.clients) {
       if (!client.subscriptions.has(serverId)) {
@@ -4537,7 +4528,7 @@ export class WebSocketGateway {
     const payload = {
       serverId: message.serverId,
       stream: message.stream ?? 'stdout',
-      data: (sanitizedMessage as any).data ?? '',
+      data: (message as any).data ?? '',
       timestamp: message.timestamp ?? new Date().toISOString(),
       type: message.type,
       logId: message.logId ?? message.id ?? undefined,

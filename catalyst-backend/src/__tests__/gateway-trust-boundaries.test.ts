@@ -416,3 +416,90 @@ describe("agent message trust boundaries", () => {
     gw.destroy();
   });
 });
+
+// ============================================================================
+// Console output fidelity (regression: angle-bracket stripping)
+// ============================================================================
+
+describe("console output is relayed verbatim", () => {
+  const OWNED_SERVER = {
+    id: "s1",
+    nodeId: "owner-node",
+    ownerId: "u1",
+    access: [],
+    node: { id: "owner-node", nodeAssignments: [] },
+  };
+
+  it("persists console data with angle brackets and trailing newline intact", async () => {
+    const persisted: any[] = [];
+    const gw: any = new WebSocketGateway(
+      {
+        ...prismaStub,
+        server: {
+          findUnique: async () => OWNED_SERVER,
+          findMany: async () => [],
+        },
+        serverLog: { create: async (args: any) => { persisted.push(args.data); return { id: 1 }; } },
+      },
+      loggerStub,
+    );
+    const socket = makeFakeSocket();
+    seedAgent(gw, "owner-node", socket);
+
+    const raw = "Xvfb :99 -screen 0 1024x768x24 >/dev/null 2>&1 &\n";
+    await gw.handleAgentMessage(
+      "owner-node",
+      socket,
+      JSON.stringify({ type: "console_output", serverId: "s1", data: raw }),
+      false,
+    );
+
+    // Old behavior stripped every < and > and trimmed the chunk, turning
+    // `2>&1` into `2&1` and eating newlines — corrupting what customers see
+    // and copy out of the console (this exact line misled an Enshrouded
+    // crash-loop investigation).
+    expect(persisted.length).toBe(1);
+    expect(persisted[0].data).toBe(raw);
+    gw.destroy();
+  });
+
+  it("relays verbatim data to subscribed console clients", async () => {
+    const gw: any = new WebSocketGateway(
+      {
+        ...prismaStub,
+        server: {
+          findUnique: async () => OWNED_SERVER,
+          findMany: async () => [],
+        },
+        serverLog: { create: async () => ({ id: 1 }) },
+      },
+      loggerStub,
+    );
+    const agentSocket = makeFakeSocket();
+    seedAgent(gw, "owner-node", agentSocket);
+
+    // Browser client owned by the server owner, subscribed to the console.
+    const browserSocket = makeFakeSocket();
+    gw.clients.set("c1", {
+      userId: "u1",
+      socket: browserSocket,
+      subscriptions: new Set(["s1"]),
+      consoleSubscriptions: new Set(["s1"]),
+    });
+
+    const raw = "server started with args <extra> >/dev/null 2>&1\n";
+    await gw.handleAgentMessage(
+      "owner-node",
+      agentSocket,
+      JSON.stringify({ type: "console_output", serverId: "s1", data: raw }),
+      false,
+    );
+
+    const consoleMessages = browserSocket.sent
+      .map((r: string) => JSON.parse(r))
+      .filter((m: any) => m.type === "console_output");
+    expect(consoleMessages.length).toBe(1);
+    expect(consoleMessages[0].data).toBe(raw);
+    gw.destroy();
+  });
+});
