@@ -66,9 +66,21 @@ describe('injectPterodactylCompatibilityVars', () => {
 			},
 			baseServer,
 		);
-		expect(withOptional.SERVER_NAME).toBe('My Server');
+		expect(withOptional.SERVER_NAME).toBe('old');
 		expect(withOptional.SERVER_TOTAL_MEMORY).toBe('4096');
 		expect(withOptional.SERVER_DESCRIPTION).toBe('My Server');
+	});
+
+	it('keeps a user-set SERVER_NAME and only falls back for an empty one (#314)', () => {
+		// Valheim and friends use SERVER_NAME as the in-game name.
+		const named = injectPterodactylCompatibilityVars({ SERVER_NAME: 'Pangea' }, baseServer);
+		expect(named.SERVER_NAME).toBe('Pangea');
+
+		const blank = injectPterodactylCompatibilityVars({ SERVER_NAME: '' }, baseServer);
+		expect(blank.SERVER_NAME).toBe('My Server');
+
+		const spaces = injectPterodactylCompatibilityVars({ SERVER_NAME: '   ' }, baseServer);
+		expect(spaces.SERVER_NAME).toBe('My Server');
 	});
 
 	it('defaults SERVER_IP to 0.0.0.0 when primaryIp is null', () => {

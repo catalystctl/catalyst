@@ -5086,7 +5086,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1234",
+          "source": "src/server.ts:1242",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -5173,7 +5173,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1106",
+          "source": "src/server.ts:1114",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -5259,7 +5259,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1188",
+          "source": "src/server.ts:1196",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -5419,7 +5419,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1356",
+          "source": "src/server.ts:1364",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -5481,7 +5481,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1086",
+          "source": "src/server.ts:1094",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -6511,7 +6511,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1588",
+          "source": "src/server.ts:1596",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -7277,7 +7277,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1676",
+          "source": "src/server.ts:1684",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -7509,7 +7509,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1263",
+          "source": "src/server.ts:1271",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -7532,7 +7532,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:878",
+          "source": "src/server.ts:886",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -11929,7 +11929,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1493",
+          "source": "src/server.ts:1501",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -14220,7 +14220,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/admin-ops.ts:376",
+          "source": "src/routes/servers/admin-ops.ts:394",
           "errorCodes": [
             "VALIDATION_ERROR",
             "SERVER_NOT_FOUND",
@@ -14510,7 +14510,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/core.ts:2453",
+          "source": "src/routes/servers/core.ts:2485",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_SUSPENDED",
@@ -15160,7 +15160,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/admin-ops.ts:878",
+          "source": "src/routes/servers/admin-ops.ts:896",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_ALREADY_ARCHIVED",
@@ -19055,7 +19055,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:282",
+          "source": "src/routes/servers/mod-plugins.ts:263",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19132,7 +19132,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1229",
+          "source": "src/routes/servers/mod-plugins.ts:1210",
           "errorCodes": [
             "MOD_PROVIDER_API_KEY_MISSING",
             "VALIDATION_ERROR",
@@ -19286,7 +19286,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:399",
+          "source": "src/routes/servers/mod-plugins.ts:380",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19363,7 +19363,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1003",
+          "source": "src/routes/servers/mod-plugins.ts:984",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19517,7 +19517,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1102",
+          "source": "src/routes/servers/mod-plugins.ts:1083",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_UNINSTALL_FAILED",
@@ -19594,7 +19594,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1453",
+          "source": "src/routes/servers/mod-plugins.ts:1434",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_API_KEY_MISSING",
@@ -19671,7 +19671,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:337",
+          "source": "src/routes/servers/mod-plugins.ts:318",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -19986,7 +19986,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1346",
+          "source": "src/routes/servers/mod-plugins.ts:1327",
           "errorCodes": [
             "MOD_PROVIDER_API_KEY_MISSING",
             "VALIDATION_ERROR",
@@ -20063,7 +20063,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:560",
+          "source": "src/routes/servers/mod-plugins.ts:541",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_FOUND",
@@ -20140,7 +20140,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:804",
+          "source": "src/routes/servers/mod-plugins.ts:785",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20217,7 +20217,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1053",
+          "source": "src/routes/servers/mod-plugins.ts:1034",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20294,7 +20294,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:617",
+          "source": "src/routes/servers/mod-plugins.ts:598",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20371,7 +20371,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1167",
+          "source": "src/routes/servers/mod-plugins.ts:1148",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_UNINSTALL_FAILED",
@@ -20448,7 +20448,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:1594",
+          "source": "src/routes/servers/mod-plugins.ts:1575",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_API_KEY_MISSING",
@@ -20525,7 +20525,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/mod-plugins.ts:742",
+          "source": "src/routes/servers/mod-plugins.ts:723",
           "errorCodes": [
             "VALIDATION_ERROR",
             "MOD_PROVIDER_NOT_ENABLED",
@@ -20854,7 +20854,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/admin-ops.ts:948",
+          "source": "src/routes/servers/admin-ops.ts:966",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_NOT_ARCHIVED",
@@ -21227,7 +21227,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/core.ts:2296",
+          "source": "src/routes/servers/core.ts:2328",
           "errorCodes": [
             "VALIDATION_ERROR",
             "SERVER_NOT_FOUND",
@@ -21875,7 +21875,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/admin-ops.ts:707",
+          "source": "src/routes/servers/admin-ops.ts:725",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "VALIDATION_ERROR",
@@ -21954,7 +21954,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/admin-ops.ts:761",
+          "source": "src/routes/servers/admin-ops.ts:779",
           "errorCodes": [
             "VALIDATION_ERROR",
             "SERVER_NOT_FOUND",
@@ -22110,7 +22110,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/variables.ts:10",
+          "source": "src/routes/servers/variables.ts:12",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -22178,7 +22178,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/variables.ts:72",
+          "source": "src/routes/servers/variables.ts:78",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "PERMISSION_DENIED",
@@ -22843,7 +22843,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/setup.ts:371",
+          "source": "src/routes/setup.ts:395",
           "errorCodes": [
             "SETUP_ALREADY_COMPLETED",
             "VALIDATION_ERROR",
@@ -22887,7 +22887,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/routes/setup.ts:213",
+          "source": "src/routes/setup.ts:237",
           "errorCodes": [
             "INTERNAL_ERROR",
             "SETUP_ALREADY_COMPLETED",
@@ -23346,7 +23346,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1601",
+          "source": "src/server.ts:1609",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -23866,7 +23866,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:1533",
+          "source": "src/server.ts:1541",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -23929,7 +23929,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/server.ts:1506",
+          "source": "src/server.ts:1514",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -23969,7 +23969,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/server.ts:877",
+          "source": "src/server.ts:885",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]

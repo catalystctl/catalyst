@@ -428,6 +428,8 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
       userViewable: v.user_viewable ?? true,
       userEditable: v.user_editable ?? true,
       input: inputType as 'text' | 'number' | 'select' | 'checkbox' | 'password',
+      // Pterodactyl booleans are 1/0 and yolk entrypoints test for "1".
+      ...(inputType === 'checkbox' ? { trueValue: '1', falseValue: '0' } : {}),
       ...(selectOptions?.length ? { options: selectOptions } : {}),
       ...(rules.length ? { rules } : {}),
     };

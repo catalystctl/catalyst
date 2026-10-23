@@ -97,6 +97,9 @@ export interface MappedVariable {
 	input: "text" | "number" | "select" | "checkbox" | "password";
 	options?: string[];
 	rules: string[];
+	/** Checkbox pair; only set for boolean variables (issue #313). */
+	trueValue?: string;
+	falseValue?: string;
 }
 
 export interface MappedImage {
@@ -255,6 +258,12 @@ function mapVariable(v: PteroEggVariable): MappedVariable {
 	const isRequired = rules.includes("required");
 	const input = inferInputType(v.field_type, rules);
 	const options = input === "select" ? parseSelectOptions(rules) : undefined;
+	// Pterodactyl eggs spell booleans as 1/0 and the yolk entrypoints test for
+	// "1"; pin the pair so saving the variable keeps that format.
+	const checkbox =
+		input === "checkbox"
+			? { trueValue: "1", falseValue: "0" }
+			: {};
 
 	return {
 		name: v.env_variable || v.name,
@@ -266,6 +275,7 @@ function mapVariable(v: PteroEggVariable): MappedVariable {
 		input,
 		options,
 		rules: convertRules(rules),
+		...checkbox,
 	};
 }
 

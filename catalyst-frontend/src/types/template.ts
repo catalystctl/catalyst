@@ -8,6 +8,9 @@ export interface TemplateVariable {
   input?: 'text' | 'number' | 'password' | 'checkbox' | 'select' | 'textarea';
   options?: string[];  // Parsed from "in:" rule for select fields
   rules?: string[];
+  /** Value written when a checkbox is on/off; `1`/`0` for imported eggs. */
+  trueValue?: string;
+  falseValue?: string;
 }
 
 export interface TemplateImageOption {

@@ -52,6 +52,8 @@ export enum Permission {
   SERVER_TRANSFER = "server.transfer",
   SERVER_SCHEDULE = "server.schedule",
   SERVER_UPDATE = "server.update",
+  SERVER_STARTUP = "server.startup",
+  SERVER_RESOURCES = "server.resources",
   SERVER_INSTALL = "server.install",
   SERVER_REINSTALL = "server.reinstall",
   SERVER_REBUILD = "server.rebuild",
@@ -143,6 +145,9 @@ export interface EnvironmentVariable {
   required: boolean;
   input?: "text" | "number" | "select" | "checkbox";
   rules?: string[];
+  /** Value written when a checkbox is on/off; `1`/`0` for imported eggs. */
+  trueValue?: string;
+  falseValue?: string;
 }
 
 export interface TemplateImageOption {

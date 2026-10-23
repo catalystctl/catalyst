@@ -64,7 +64,10 @@ export function injectPterodactylCompatibilityVars(
 	}
 
 	// ── Optional keys (only when already present / egg-defined) ──────────
-	if ("SERVER_NAME" in env) {
+	// SERVER_NAME is a *user* setting in many eggs (Valheim `-name`, ARK
+	// session name, …), so an explicit value wins. The panel name is only a
+	// fallback for eggs that declare the variable without a value.
+	if ("SERVER_NAME" in env && !String(env.SERVER_NAME ?? "").trim()) {
 		env.SERVER_NAME = server.name;
 	}
 

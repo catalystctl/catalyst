@@ -179,14 +179,19 @@ export default function ServerStartupVariablesSection({
  : 'border-border/40 focus:border-primary');
 
  if (variable.input === 'checkbox') {
- const checked = value === 'true' || value === '1' || value === 'on';
+ // The backend resolves the pair so an imported egg keeps its 1/0 format
+ // (#313); panel-authored templates fall back to true/false.
+ const trueValue = variable.trueValue ?? 'true';
+ const falseValue = variable.falseValue ?? 'false';
+ const checked =
+ value === trueValue || value === 'true' || value === '1' || value === 'on';
  return (
  <label className="relative inline-flex cursor-pointer items-center">
  <input
  type="checkbox"
  className="sr-only peer"
  checked={checked}
- onChange={(e) => handleChange(variable.name, e.target.checked ? 'true' : 'false')}
+ onChange={(e) => handleChange(variable.name, e.target.checked ? trueValue : falseValue)}
  disabled={disabled}
  />
  <div className="h-5 w-10 rounded-full bg-surface-3 transition peer-checked:bg-primary dark:bg-surface-2" />

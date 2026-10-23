@@ -488,4 +488,7 @@ export interface ServerStartupVariable {
   input: 'text' | 'number' | 'select' | 'checkbox';
   rules: string[];
   value: string;
+  /** Checkbox pair resolved by the backend (`1`/`0` for imported eggs). */
+  trueValue?: string;
+  falseValue?: string;
 }

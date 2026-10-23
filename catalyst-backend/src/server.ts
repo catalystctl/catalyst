@@ -29,6 +29,7 @@ import { applyRemoteCacheInvalidate, onCacheInvalidate } from "./lib/cache-bus";
 import { subscribeCacheInvalidations } from "./lib/event-bus";
 import { cachedConfig } from "./lib/config-cache";
 import { createAuthenticate, enforceRouteKeyScope } from "./middleware/authenticate";
+import { guardDuplicateUndefinedSend } from "./lib/reply-send-guard";
 import { hasGrant } from "./lib/permissions";
 import { closeRedis, getRedis, getRedisStats } from "./lib/redis";
 import { authRoutes } from "./routes/auth";
@@ -517,6 +518,13 @@ const authenticate = createAuthenticate({ logger });
 // checks are idempotent.
 app.addHook("preHandler", async (request: FastifyRequest, reply: FastifyReply) => {
 	enforceRouteKeyScope(request, reply);
+});
+// An async handler that calls reply.send() itself makes Fastify send again with
+// `undefined` once the handler resolves. For stream payloads (compressed JSON,
+// file downloads) that second send wins and empties the body — see
+// lib/reply-send-guard.ts and issue #317.
+app.addHook("onRequest", async (_request: FastifyRequest, reply: FastifyReply) => {
+	guardDuplicateUndefinedSend(reply);
 });
 (app as any).wsGateway = wsGateway;
 (app as any).fileTunnel = fileTunnel;

@@ -238,6 +238,24 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       );
       if (!canUpdate) return;
 
+      // SECURITY: the backup space allocation is a server resource, gated by
+      // server.update in PUT /servers/:id. Without the same check here a
+      // subuser holding only backup.create could raise their own quota to the
+      // 1 TB ceiling and fill the node's disk (issue #318).
+      if (
+        backupAllocationMb !== undefined &&
+        backupAllocationMb !== server.backupAllocationMb
+      ) {
+        const canChangeAllocation = await ensureServerAccess(
+          id,
+          request.user.userId,
+          "server.update",
+          reply,
+          request.user,
+        );
+        if (!canChangeAllocation) return;
+      }
+
       // The panel shows masked secrets ("********") and sends them back on the
       // next save. Treat the mask as "keep the stored value": storing it would
       // replace the real S3/SFTP credentials, and sending it unchanged must not
