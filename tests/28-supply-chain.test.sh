@@ -238,6 +238,50 @@ else
     fail "agent binary install does not use install -m 0755"
 fi
 
+# --- Pinned installs must use the v-stripped tag archive root (#315) ----------
+# GitHub names the top-level folder of a tag archive after the tag *without*
+# the leading "v" (v1.85.2 -> catalyst-1.85.2/), so using the tag verbatim made
+# every `INSTALL_VERSION=vX.Y.Z` install fail with "Not found in archive".
+if grep -Fq 'archive_dir="${REPO#*/}-${ref_name#v}"' "$REPO_ROOT/install.sh"; then
+    pass "install.sh strips the leading v from the tag archive root"
+else
+    fail "install.sh uses the tag name verbatim as the archive root"
+fi
+# Functional check of the assumption + the fallback: build a GitHub-shaped tag
+# archive and extract catalyst-docker from it the way phase_download does.
+ARCHIVE_DIR_FIXTURE="$FIXTURE_DIR/archive"
+mkdir -p "$ARCHIVE_DIR_FIXTURE/build/catalyst-1.85.2/catalyst-docker"
+echo 'services: {}' > "$ARCHIVE_DIR_FIXTURE/build/catalyst-1.85.2/catalyst-docker/docker-compose.yml"
+tar -czf "$ARCHIVE_DIR_FIXTURE/catalyst.tar.gz" -C "$ARCHIVE_DIR_FIXTURE/build" catalyst-1.85.2
+archive_root=$(tar -tzf "$ARCHIVE_DIR_FIXTURE/catalyst.tar.gz" | sed -n '1s|/.*||p')
+if [[ "$archive_root" == "catalyst-1.85.2" ]]; then
+    pass "tag archive root drops the leading v (catalyst-1.85.2)"
+else
+    fail "unexpected tag archive root: $archive_root"
+fi
+mkdir -p "$ARCHIVE_DIR_FIXTURE/out"
+if tar -xzf "$ARCHIVE_DIR_FIXTURE/catalyst.tar.gz" -C "$ARCHIVE_DIR_FIXTURE/out" \
+    --strip-components=1 "catalyst-1.85.2/catalyst-docker/" 2>/dev/null \
+    && [[ -f "$ARCHIVE_DIR_FIXTURE/out/catalyst-docker/docker-compose.yml" ]]; then
+    pass "pinned archive extracts catalyst-docker from the v-stripped root"
+else
+    fail "pinned archive extraction failed for the v-stripped root"
+fi
+
+# --- Compose defaults must pass backend config validation (#316) --------------
+# The backend accepts block|allow; the compose default was `keep`, so a fresh
+# install never became healthy.
+if grep -rq 'SUSPENSION_DELETE_POLICY:-keep' "$REPO_ROOT/catalyst-docker/" "$REPO_ROOT/tests/lib/docker-env.sh" 2>/dev/null; then
+    fail "a shipped default sets SUSPENSION_DELETE_POLICY=keep (backend rejects it)"
+else
+    pass "shipped SUSPENSION_DELETE_POLICY defaults are valid"
+fi
+if grep -q 'SUSPENSION_DELETE_POLICY: ${SUSPENSION_DELETE_POLICY:-block}' "$REPO_ROOT/catalyst-docker/docker-compose.yml"; then
+    pass "compose defaults SUSPENSION_DELETE_POLICY to block"
+else
+    fail "compose does not default SUSPENSION_DELETE_POLICY to block"
+fi
+
 echo ""
 echo "supply-chain: $PASS passed, $FAIL failed"
 exit $FAIL

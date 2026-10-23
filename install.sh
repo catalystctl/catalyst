@@ -1081,7 +1081,18 @@ phase_download() {
     ok "Download complete"
 
     info "Extracting..."
-    tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${REPO#*/}-${ref_name}/${TARGET_DIR}/"
+    # GitHub strips the leading "v" from the top-level folder of a tag archive
+    # (v1.85.2 → catalyst-1.85.2/), so a pinned install must not use ref_name
+    # verbatim (issue #315). Branch archives keep the branch name.
+    local archive_dir="${REPO#*/}-${ref_name#v}"
+    if ! tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${archive_dir}/${TARGET_DIR}/" 2>/dev/null; then
+        # Fall back to whatever top-level folder the archive actually has.
+        archive_dir=$(tar -tzf "${WORK_DIR}/catalyst.tar.gz" 2>/dev/null | sed -n '1{s|/.*||;p;q}' || true)
+        if [[ -n "$archive_dir" ]]; then
+            info "Archive root is '${archive_dir}' — retrying extraction"
+            tar -xzf "${WORK_DIR}/catalyst.tar.gz" -C "$WORK_DIR" --strip-components=1 "${archive_dir}/${TARGET_DIR}/" 2>/dev/null || true
+        fi
+    fi
 
     if [[ ! -d "${WORK_DIR}/${TARGET_DIR}" ]]; then
         err "Extraction failed — '${TARGET_DIR}' not found in archive"

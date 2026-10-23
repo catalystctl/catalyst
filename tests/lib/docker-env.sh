@@ -150,7 +150,7 @@ MAX_DISK_MB=1048576
 # --- Suspension --------------------------------------------------------------
 SUSPENSION_ENFORCED=true
 SUSPENSION_DELETE_BLOCKED=false
-SUSPENSION_DELETE_POLICY=keep
+SUSPENSION_DELETE_POLICY=block
 
 # --- OAuth (disabled in tests) -----------------------------------------------
 # WHMCS_OIDC_CLIENT_ID=

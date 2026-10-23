@@ -215,7 +215,9 @@ services:
       # Suspension (optional)
       SUSPENSION_ENFORCED: ${SUSPENSION_ENFORCED:-true}
       SUSPENSION_DELETE_BLOCKED: ${SUSPENSION_DELETE_BLOCKED:-false}
-      SUSPENSION_DELETE_POLICY: ${SUSPENSION_DELETE_POLICY:-keep}
+      # Backend accepts block|allow only; `keep` is not a valid value and made
+      # the backend fail config validation on a fresh install (issue #316).
+      SUSPENSION_DELETE_POLICY: ${SUSPENSION_DELETE_POLICY:-block}
 
       # Plugins
       PLUGINS_DIR: /var/lib/catalyst/plugins
