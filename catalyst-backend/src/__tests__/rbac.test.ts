@@ -526,7 +526,8 @@ describe('RBAC - Permission Categories and Presets', () => {
     expect(serverCat?.permissions.map((p) => p.value)).toEqual([
       'server.read', 'server.create', 'server.start', 'server.stop',
       'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
-      'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
+      'server.update', 'server.startup', 'server.resources',
+      'server.install', 'server.reinstall', 'server.rebuild',
       'server.clone', 'server.kill', 'server.network', 'server.storage',
       'server.archive', 'server.migrate',
     ]);
@@ -708,7 +709,8 @@ describe('RBAC - Full Permission Coverage', () => {
     // Server
     'server.read', 'server.create', 'server.start', 'server.stop',
     'server.delete', 'server.suspend', 'server.transfer', 'server.schedule',
-    'server.update', 'server.install', 'server.reinstall', 'server.rebuild',
+    'server.update', 'server.startup', 'server.resources',
+    'server.install', 'server.reinstall', 'server.rebuild',
     'server.clone', 'server.kill', 'server.network', 'server.storage',
     'server.archive', 'server.migrate',
     // Node

@@ -33,6 +33,8 @@ export const FALLBACK_PERMISSION_CATEGORIES: CatalogCategory[] = [
       { value: 'server.transfer', label: 'Transfer ownership' },
       { value: 'server.schedule', label: 'Manage schedules/tasks' },
       { value: 'server.update', label: 'Update server settings' },
+      { value: 'server.startup', label: 'Edit startup command and variables' },
+      { value: 'server.resources', label: 'Change memory/CPU/disk and allocations' },
       { value: 'server.install', label: 'Install servers' },
       { value: 'server.reinstall', label: 'Reinstall servers' },
       { value: 'server.rebuild', label: 'Rebuild servers' },

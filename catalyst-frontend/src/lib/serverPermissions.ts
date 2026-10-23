@@ -33,6 +33,8 @@ export const FALLBACK_SERVER_PERMISSIONS: string[] = [
   'server.reinstall',
   'server.rebuild',
   'server.update',
+  'server.startup',
+  'server.resources',
   'server.network',
   'server.storage',
   'server.archive',
@@ -86,6 +88,10 @@ export function serverPermissionLabel(perm: string): string {
       return i18n.t('serverPermissions.rebuild', { ns: 'common' });
     case 'server.update':
       return i18n.t('serverPermissions.update', { ns: 'common' });
+    case 'server.startup':
+      return i18n.t('serverPermissions.startup', { ns: 'common' });
+    case 'server.resources':
+      return i18n.t('serverPermissions.resources', { ns: 'common' });
     case 'server.network':
       return i18n.t('serverPermissions.network', { ns: 'common' });
     case 'server.storage':

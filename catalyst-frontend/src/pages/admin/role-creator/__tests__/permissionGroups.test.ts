@@ -19,6 +19,7 @@ import { FALLBACK_PERMISSION_CATEGORIES } from '../permissionCatalogFallback';
 const SCOPED = [
   'server.read', 'server.start', 'server.stop', 'server.kill',
   'server.install', 'server.reinstall', 'server.rebuild', 'server.update',
+  'server.startup', 'server.resources',
   'server.network', 'server.storage', 'server.archive', 'server.migrate',
   'server.transfer', 'server.delete', 'server.schedule', 'server.clone',
   'console.read', 'console.write',

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, enforceKeyScope, ensureNotSuspended, ensureServerAccess, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo } from './_helpers.js';
+import { allocateIpForServer, ALL_SERVER_PERMISSIONS, canAccessServer, captureSystemError, checkIsAdmin, checkPerm, collectUsedHostPortsByIp, DatabaseProvisioningError, dropDatabase, enforceKeyScope, ensureNotSuspended, ensureServerAccessAll, findPortConflict, getEffectiveServerPermissions, getUserAccessibleNodes, hasNodeAccess, isSuspensionDeleteBlocked, isSuspensionEnforced, normalizeHostIp, normalizePortBindings, OWNER_SERVER_PERMISSIONS, parsePortValue, parseStoredPortBindings, releaseIpForServer, resolveTemplateImage, serialize, serverCloneSchema, serverCreateSchema, serverUpdateSchema, ServerState, shouldUseIpam, uuidv4, validateRequestBody, validateVariableRule, withConnectionInfo } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { minimumDiskMbFromHints } from "../../utils/egg-import.js";
 import { describeError } from "../../utils/describe-error.js";
@@ -1870,9 +1870,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       }
 
       // Name and description are settings too: server.update, not any grant.
-      const canUpdate = await ensureServerAccess(serverId, userId, "server.update", reply, request.user);
-      if (!canUpdate) return;
-
+      // Every field family in the body adds its own required permission, so a
+      // subuser with only server.startup can edit the startup command/variables
+      // without being able to touch resources or ports (issue #319).
       const {
         name,
         description,
@@ -1907,36 +1907,68 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       const hasAllocationUpdate = allocationId !== undefined;
       const normalizedPrimaryIp = typeof primaryIp === "string" ? primaryIp.trim() : null;
 
-      // Sensitive fields flow into container execution or infrastructure.
-      // The base gate (ensureServerAccess above) already demands
-      // server.update; this re-assert is hasGrant-based and is deliberately
-      // REACHABLE where the base gate is not: node managers pass the base
-      // gate via the node_manage branch, but sensitive settings additionally
-      // demand an explicit server.update grant (row or global/scoped role).
-      // It is also the plug point for the server.network / server.storage
-      // field-family split.
-      const touchesSensitiveFields =
-        environment !== undefined ||
-        startupCommand !== undefined ||
-        allocatedMemoryMb !== undefined ||
-        allocatedCpuCores !== undefined ||
-        allocatedDiskMb !== undefined ||
-        backupAllocationMb !== undefined ||
-        databaseAllocation !== undefined ||
-        primaryPort !== undefined ||
-        primaryIp !== undefined ||
-        portBindings !== undefined ||
-        allocationId !== undefined;
-      if (touchesSensitiveFields && server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
+      // Sensitive fields flow into container execution or infrastructure and
+      // are gated per field family (issue #319): startup/variables need
+      // server.startup, memory/CPU/disk/allocation quotas need
+      // server.resources, and ports/IP/allocations need server.network.
+      // server.update stays the umbrella: hasGrant consults LEGACY_ALIASES, so
+      // a stored server.update keeps covering every family.
+      const fieldFamilies: Array<{ permission: string; touched: boolean }> = [
+        {
+          permission: "server.startup",
+          touched: environment !== undefined || startupCommand !== undefined,
+        },
+        {
+          permission: "server.resources",
+          touched:
+            allocatedMemoryMb !== undefined ||
+            allocatedCpuCores !== undefined ||
+            allocatedDiskMb !== undefined ||
+            backupAllocationMb !== undefined ||
+            databaseAllocation !== undefined,
+        },
+        {
+          permission: "server.network",
+          touched:
+            primaryPort !== undefined ||
+            primaryIp !== undefined ||
+            portBindings !== undefined ||
+            allocationId !== undefined,
+        },
+      ];
+      const touchedPermissions = fieldFamilies
+        .filter((family) => family.touched)
+        .map((family) => family.permission);
+      const requiredPermissions = [
+        ...(name !== undefined || description !== undefined ? ["server.update"] : []),
+        ...touchedPermissions,
+      ];
+      const canUpdate = await ensureServerAccessAll(
+        serverId,
+        userId,
+        requiredPermissions,
+        reply,
+        request.user,
+      );
+      if (!canUpdate) return;
+
+      // Deliberately REACHABLE where the gate above is not: node managers pass
+      // via the node_manage branch, but every field family still demands an
+      // explicit grant (row or global/scoped role).
+      if (touchedPermissions.length > 0 && server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
         const sensitiveAccess = await prisma.serverAccess.findFirst({
-          where: { serverId, userId, permissions: { has: "server.update" } },
+          where: { serverId, userId },
+          select: { permissions: true },
         });
-        if (!sensitiveAccess) {
-          const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
-          const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
-          if (!hasGrant(rolePerms, "server.update")) {
-            return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
-          }
+        const rowPerms = (sensitiveAccess?.permissions as string[] | undefined) ?? [];
+        const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+        const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+        const missing = touchedPermissions.filter(
+          (permission) =>
+            !hasGrant(rowPerms, permission) && !hasGrant(rolePerms, permission),
+        );
+        if (missing.length > 0) {
+          return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
         }
       }
 

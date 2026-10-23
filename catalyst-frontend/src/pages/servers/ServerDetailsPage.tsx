@@ -26,6 +26,7 @@ import {
 
 
 import { useServer } from '../../hooks/useServer';
+import { useSeedOnIdentity } from '../../hooks/useSeedOnIdentity';
 import { useServerMetrics } from '../../hooks/useServerMetrics';
 import {
  useServerMetricsHistory,
@@ -378,7 +379,9 @@ function ServerDetailsPage() {
  const [revealedDatabaseCredentials, setRevealedDatabaseCredentials] =
  useState<ServerDatabase | null>(null);
 
-  useEffect(() => {
+  // Seed once per server: live metrics replace the cached `server` object
+  // every 400 ms, which used to reset unsaved settings (issue #320).
+  useSeedOnIdentity(server?.id, () => {
     if (!server) return;
     setServerName(server.name ?? '');
     setRestartPolicy(server.restartPolicy ?? 'on-failure');
@@ -388,7 +391,7 @@ function ServerDetailsPage() {
         : '5',
     );
     setStartupCommand(server.startupCommand ?? server.template?.startup ?? '');
-  }, [server]);
+  });
 
  const [prevPermissionsData, setPrevPermissionsData] = useState(permissionsData?.data);
  if (permissionsData?.data !== prevPermissionsData) {
@@ -1400,7 +1403,7 @@ function ServerDetailsPage() {
  <ServerConfigurationTab
  serverId={serverId}
  isSuspended={isSuspended}
- canEdit={canAdminWrite || hasServerPerm('server.update')}
+ canEdit={canAdminWrite || hasServerPerm('server.update') || hasServerPerm('server.startup')}
  server={server}
  startupCommand={startupCommand}
  onStartupCommandChange={setStartupCommand}

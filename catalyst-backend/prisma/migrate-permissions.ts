@@ -32,7 +32,7 @@ interface StoreReport {
 
 /**
  * New values a stored permission should also grant.
- * 'server.update' → ['server.network', 'server.storage'];
+ * 'server.update' → ['server.startup', 'server.resources', 'server.network', 'server.storage'];
  * 'node.update:node_1' → ['node.server_manage:node_1', 'node.agent_control:node_1'].
  */
 function expansionFor(stored: string): string[] {

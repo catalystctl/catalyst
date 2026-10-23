@@ -135,7 +135,7 @@ describe("expandPermissionAliases — effective-set mapping (wave 1)", () => {
   it("emits the stored value plus its split targets", () => {
     expect(expandPermissionAliases("server.stop")).toEqual(["server.stop", "server.kill"]);
     expect(expandPermissionAliases("server.update")).toEqual([
-      "server.update", "server.network", "server.storage",
+      "server.update", "server.startup", "server.resources", "server.network", "server.storage",
     ]);
     expect(expandPermissionAliases("apikey.manage")).toEqual([
       "apikey.manage", "apikey.read", "apikey.write",

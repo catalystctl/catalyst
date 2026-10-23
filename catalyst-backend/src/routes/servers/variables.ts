@@ -3,8 +3,10 @@ import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { checkIsAdmin, ensureNotSuspended, enforceKeyScope, validateVariableRule } from './_helpers.js';
 import { canManageViaNode } from "../../lib/server-access.js";
+import { hasGrant } from "../../lib/permissions.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
+import { checkboxTokens, normalizeCheckboxValue } from "../../utils/variable-values";
 
 export async function serverVariablesRoutes(app: FastifyInstance) {
   app.get(
@@ -54,6 +56,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
 
       const variables = templateVariables.map((varDef) => {
         const currentValue = environment[varDef.name] ?? varDef.default ?? "";
+        const tokens = checkboxTokens(varDef, environment[varDef.name] ?? varDef.default);
         return {
           name: varDef.name,
           description: varDef.description ?? "",
@@ -62,6 +65,9 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
           input: varDef.input ?? "text",
           rules: varDef.rules ?? [],
           value: String(currentValue),
+          // Checkbox value pair; the client renders with it so an egg's 1/0
+          // format survives the round-trip (issue #313).
+          ...(varDef.input === "checkbox" ? { trueValue: tokens.true, falseValue: tokens.false } : {}),
         };
       });
 
@@ -71,7 +77,7 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
 
   app.patch(
     "/:serverId/variables",
-    { schema: { summary: "Manage server variables", description: "Manage server variables.", tags: ["Variables"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.update" } },
+    { schema: { summary: "Manage server variables", description: "Manage server variables.", tags: ["Variables"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.startup" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
@@ -90,21 +96,20 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
       }
 
       // Key-scope ceiling: environment variables shape container startup, so
-      // a scoped API key must itself hold server.update.
-      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.update")) {
+      // a scoped API key must itself hold server.startup (server.update keeps
+      // satisfying it through LEGACY_ALIASES).
+      if (request.user.apiKeyId && !enforceKeyScope(request.user, "server.startup")) {
         return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "API key scope does not permit this operation");
       }
 
-      // Permission check: owner | ServerAccess with server.update | global
-      // role with server.update/admin | node+node.manage. Environment is a
-      // server setting, so server.rebuild is not the grant for it.
+      // Permission check: owner | ServerAccess with server.startup | global
+      // role with server.startup/server.update/admin | node+node.manage.
+      // Environment is a server setting, so server.rebuild is not the grant
+      // for it, and resources/ports have their own permissions (issue #319).
       if (server.ownerId !== userId) {
         const access = await prisma.serverAccess.findFirst({
-          where: {
-            userId,
-            serverId,
-            permissions: { has: "server.update" },
-          },
+          where: { userId, serverId },
+          select: { permissions: true },
         });
         // Server-scoped role resolution: global roles + RoleServerGrant +
         // RoleNodeGrant rows covering this server (mirrors decideServerAccess's
@@ -114,8 +119,9 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         const roleAllowed =
           rolePerms.includes("*") ||
           rolePerms.includes("admin.write") ||
-          rolePerms.includes("server.update");
-        if (!access && !roleAllowed) {
+          hasGrant(rolePerms, "server.startup");
+        const rowAllowed = hasGrant(access?.permissions ?? [], "server.startup");
+        if (!rowAllowed && !roleAllowed) {
           const { hasNodeAccess } = await import("../../lib/permissions.js");
           // node_manage accepts node.server_manage and legacy node.update.
           const nodeManage = canManageViaNode(
@@ -164,9 +170,10 @@ export async function serverVariablesRoutes(app: FastifyInstance) {
         }
 
         if (varDef.input === "checkbox") {
-          // Normalize checkbox to "true" or "false"
-          const normalized = strValue === "true" || strValue === "1" || strValue === "on" ? "true" : "false";
-          environment[name] = normalized;
+          // Normalize to the pair the template/egg uses (`1`/`0` for imported
+          // eggs, `true`/`false` for panel-authored ones).
+          const tokens = checkboxTokens(varDef, environment[name]);
+          environment[name] = normalizeCheckboxValue(strValue, tokens);
           continue;
         }
 

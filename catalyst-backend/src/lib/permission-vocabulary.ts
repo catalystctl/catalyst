@@ -31,7 +31,10 @@ export const READ_PERMISSIONS: ReadonlySet<string> = new Set([
  */
 export const LEGACY_ALIASES: Readonly<Record<string, readonly string[]>> = {
   'apikey.manage': ['apikey.read', 'apikey.write'],
-  'server.update': ['server.network', 'server.storage'],
+  // server.update is the umbrella settings grant: startup/variables and the
+  // resource allocations were split out of it (issue #319), so a stored
+  // server.update keeps covering them.
+  'server.update': ['server.startup', 'server.resources', 'server.network', 'server.storage'],
   'node.update': ['node.server_manage', 'node.agent_control'],
   'server.suspend': ['server.archive'],
   'server.transfer': ['server.migrate'],

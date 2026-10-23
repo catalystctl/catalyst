@@ -40,6 +40,8 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
       { value: 'server.transfer', label: 'Transfer ownership' },
       { value: 'server.schedule', label: 'Manage schedules/tasks' },
       { value: 'server.update', label: 'Update server settings' },
+      { value: 'server.startup', label: 'Edit startup command and variables' },
+      { value: 'server.resources', label: 'Change memory/CPU/disk and allocations' },
       { value: 'server.install', label: 'Install servers' },
       { value: 'server.reinstall', label: 'Reinstall servers' },
       { value: 'server.rebuild', label: 'Rebuild servers' },
@@ -307,6 +309,7 @@ import { hasGrant } from './permissions';
 export const ALL_SERVER_PERMISSIONS = [
   'server.read', 'server.start', 'server.stop', 'server.kill',
   'server.install', 'server.reinstall', 'server.rebuild', 'server.update',
+  'server.startup', 'server.resources',
   'server.network', 'server.storage', 'server.archive', 'server.migrate',
   'server.transfer', 'server.delete', 'server.schedule', 'server.clone',
   'console.read', 'console.write',

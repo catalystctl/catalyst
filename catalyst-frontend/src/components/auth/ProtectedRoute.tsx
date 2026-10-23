@@ -56,7 +56,7 @@ const ADMIN_PERMISSIONS = [
 // a granted legacy value satisfies its new split values, never the reverse.
 const LEGACY_ALIASES: Record<string, readonly string[]> = {
   'apikey.manage': ['apikey.read', 'apikey.write'],
-  'server.update': ['server.network', 'server.storage'],
+  'server.update': ['server.startup', 'server.resources', 'server.network', 'server.storage'],
   'node.update': ['node.server_manage', 'node.agent_control'],
   'server.suspend': ['server.archive'],
   'server.transfer': ['server.migrate'],

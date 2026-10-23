@@ -28,7 +28,7 @@ realtime, plugins, frontend, key-scope-matrix, compat-inventory, agent-side).
 | split | new values | rationale |
 |---|---|---|
 | `apikey.manage` | `apikey.read` (read: list/view own keys, catalog, own effective perms) + `apikey.write` (write: create/rename/enable/revoke own keys) | one value gated five verbs; cross-user key admin stays admin.write-tier |
-| `server.update` | `server.update` (settings/variables/restart-policy/crash/subuser-grants) + `server.network` (allocations/primary port) + `server.storage` (disk resize) | mega-perm covered unrelated capabilities |
+| `server.update` | `server.update` (settings/restart-policy/crash/subuser-grants) + `server.startup` (startup command + template variables) + `server.resources` (memory/CPU/disk + backup/database allocation) + `server.network` (allocations/primary port) + `server.storage` (disk resize) | mega-perm covered unrelated capabilities; #319 added the startup/resources split so a subuser can edit startup without reaching resources or ports |
 | `node.update` | `node.update` (edit node capacity/addresses/metadata) + `node.server_manage` (full server manage on ASSIGNED nodes — the node_manage path) + `node.agent_control` (restart/update agent, rewrite agent config + host network) | node.update tripled as node editor, server manager, and agent controller |
 | `server.suspend` | `server.suspend` (suspend/unsuspend) + `server.archive` (archive/restore) | one perm silently meant four verbs |
 | `server.transfer` | `server.transfer` (ownership transfer — finally actually enforced) + `server.migrate` (move server between nodes) | transfer was enforced on migration, ignored on ownership transfer |

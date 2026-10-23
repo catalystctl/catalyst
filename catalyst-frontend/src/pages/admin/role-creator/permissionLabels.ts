@@ -24,6 +24,8 @@ export function formatPermission(
     case 'server.transfer': return t('roles.permissionLabels.serverTransfer');
     case 'server.schedule': return t('roles.permissionLabels.serverSchedule');
     case 'server.update': return t('roles.permissionLabels.serverUpdate');
+    case 'server.startup': return t('roles.permissionLabels.serverStartup');
+    case 'server.resources': return t('roles.permissionLabels.serverResources');
     case 'server.install': return t('roles.permissionLabels.serverInstall');
     case 'server.reinstall': return t('roles.permissionLabels.serverReinstall');
     case 'server.rebuild': return t('roles.permissionLabels.serverRebuild');

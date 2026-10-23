@@ -242,6 +242,8 @@ const PRESET_OPERATOR = [
   'server.stop',
   'server.kill',
   'server.update',
+  'server.startup',
+  'server.resources',
   'console.write',
   'file.write',
 ];

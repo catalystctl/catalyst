@@ -594,6 +594,69 @@ export const ensureServerAccess = async (
   return server;
 };
 
+/**
+ * Like {@link ensureServerAccess}, but the caller must hold EVERY permission in
+ * the list (owner and full-admin roles pass unconditionally).
+ *
+ * Used where one request can touch several independently gated field families
+ * (PUT /servers/:id after the server.startup / server.resources / server.network
+ * split), so an operation cannot ride a permission it does not hold. The
+ * node-manage branch is deliberately absent: it reaches the route through its
+ * own checks and per-family grants are re-asserted by the caller.
+ */
+export const ensureServerAccessAll = async (
+  serverId: string,
+  userId: string,
+  permissions: string[],
+  reply: FastifyReply,
+  actor: Actor,
+) => {
+  const server = await prisma.server.findUnique({
+    where: { id: serverId },
+    include: { template: true },
+  });
+  if (!server) {
+    apiError(reply, 404, ErrorCodes.SERVER_NOT_FOUND, "Server not found");
+    return null;
+  }
+  if (!ensureNotSuspended(server, reply)) {
+    return null;
+  }
+
+  const required = permissions.length > 0 ? permissions : ["server.update"];
+  const isOwner = server.ownerId === userId;
+
+  if (!isOwner) {
+    const { resolveServerPermissions } = await import("../../lib/permissions-catalog.js");
+    const rolePerms = await resolveServerPermissions(userId, serverId, server.nodeId);
+    const isFullAdmin =
+      rolePerms.includes("*") || rolePerms.includes("admin.write");
+    if (!isFullAdmin) {
+      const access = await prisma.serverAccess.findFirst({
+        where: { serverId, userId },
+        select: { permissions: true },
+      });
+      const rowPerms = (access?.permissions as string[] | undefined) ?? [];
+      const missing = required.filter(
+        (permission) =>
+          !hasGrant(rowPerms, permission) && !hasGrant(rolePerms, permission),
+      );
+      if (missing.length > 0) {
+        apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+        return null;
+      }
+    }
+  }
+
+  for (const permission of required) {
+    if (!enforceKeyScope(actor, permission)) {
+      apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+      return null;
+    }
+  }
+  return server;
+};
+
 export const loadProviderConfig = async (provider: string) => {
   const configPath = modManagerProviders.get(provider);
   if (!configPath) {
