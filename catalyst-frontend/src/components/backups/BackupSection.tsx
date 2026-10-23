@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQueryClient } from '@/csync';
@@ -20,6 +20,7 @@ import { backupsApi } from '../../services/api/backups';
 import { serversApi } from '../../services/api/servers';
 import type { BackupStorageMode } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
+import { useSeedOnIdentity } from '../../hooks/useSeedOnIdentity';
 import { notifySuccess } from '../../utils/notify';
 import { formatBytes, formatPercent } from '../../utils/formatters';
 import { useBackupDownloadStore } from '../../stores/backupDownloadStore';
@@ -73,7 +74,8 @@ function BackupSection({
   const [sftpPrivateKey, setSftpPrivateKey] = useState('');
   const [sftpPrivateKeyPassphrase, setSftpPrivateKeyPassphrase] = useState('');
   const [sftpBasePath, setSftpBasePath] = useState('');
-  useEffect(() => {
+  // Seed once per server, not on every metrics-driven object churn (#320).
+  useSeedOnIdentity(server?.id, () => {
     if (!server) return;
     setStorageMode(server.backupStorageMode ?? 'local');
     setRetentionCount(
@@ -99,7 +101,7 @@ function BackupSection({
     setSftpPrivateKey(server.backupSftpConfig?.privateKey ?? '');
     setSftpPrivateKeyPassphrase(server.backupSftpConfig?.privateKeyPassphrase ?? '');
     setSftpBasePath(server.backupSftpConfig?.basePath ?? '');
-  }, [server]);
+  });
   const queryClient = useQueryClient();
   const progressByBackup = useBackupDownloadStore((s) => s.progressByBackup);
  const setProgress = useBackupDownloadStore((s) => s.setProgress);

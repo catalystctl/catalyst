@@ -6,6 +6,7 @@ import { queryClient } from '@/lib/queryClient';
 import { serversApi } from '../../services/api/servers';
 import type { UpdateServerPayload } from '../../types/server';
 import { useServer } from '../../hooks/useServer';
+import { useSeedOnIdentity } from '../../hooks/useSeedOnIdentity';
 import { useSseResizeComplete } from '../../hooks/useSseResizeComplete';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import { getLocalizedErrorMessage } from '../../i18n/api-errors';
@@ -178,17 +179,24 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     onError: (error) => notifyError(error),
   });
 
-  useEffect(() => {
-    if (!open || !server) return;
-    setName(server.name ?? '');
-    setMemory(String(server.allocatedMemoryMb ?? 1024));
-    setCpu(String(server.allocatedCpuCores ?? 1));
-    setDisk(String(server.allocatedDiskMb ?? 10240));
-    setDatabaseAllocation(String(server.databaseAllocation ?? 0));
-    setBackupAllocationMb(String(server.backupAllocationMb ?? 0));
-    setBackupRetentionCount(String(server.backupRetentionCount ?? 0));
-    setPrimaryIp(server.primaryIp ?? '');
-  }, [open, server]);
+  // Seed the form once per open/server, never on the metrics-driven object
+  // churn (issue #320): live metrics replace `server` every 400 ms, which used
+  // to overwrite unsaved input.
+  useSeedOnIdentity(
+    server?.id,
+    () => {
+      if (!server) return;
+      setName(server.name ?? '');
+      setMemory(String(server.allocatedMemoryMb ?? 1024));
+      setCpu(String(server.allocatedCpuCores ?? 1));
+      setDisk(String(server.allocatedDiskMb ?? 10240));
+      setDatabaseAllocation(String(server.databaseAllocation ?? 0));
+      setBackupAllocationMb(String(server.backupAllocationMb ?? 0));
+      setBackupRetentionCount(String(server.backupRetentionCount ?? 0));
+      setPrimaryIp(server.primaryIp ?? '');
+    },
+    { active: open },
+  );
 
   const [prevIpDeps, setPrevIpDeps] = useState({
     nodeId: server?.nodeId,
