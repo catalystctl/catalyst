@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pin } from 'lucide-react';
+import { HardDrive, Pin } from 'lucide-react';
 import { useMutation, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -137,6 +137,25 @@ function BackupList({
  <span className="inline-flex shrink-0 items-center gap-1 rounded-sm border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-micro font-medium text-primary">
  <Pin className="h-3 w-3" aria-hidden="true" />
  {t('backups.list.pinned')}
+ </span>
+ ) : null}
+ {typeof backup.metadata?.secondaryPath === 'string' ? (
+ <span
+ className={
+ backup.metadata?.secondaryStatus === 'failed'
+ ? 'inline-flex shrink-0 items-center gap-1 rounded-sm border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-micro font-medium text-warning'
+ : 'inline-flex shrink-0 items-center gap-1 rounded-sm border border-border/60 bg-surface-1/60 px-1.5 py-0.5 text-micro font-medium text-muted-foreground'
+ }
+ title={
+ backup.metadata?.secondaryStatus === 'failed'
+ ? String(backup.metadata?.secondaryError ?? '')
+ : undefined
+ }
+ >
+ <HardDrive className="h-3 w-3" aria-hidden="true" />
+ {backup.metadata?.secondaryStatus === 'failed'
+ ? t('backups.list.secondaryCopyFailed')
+ : t('backups.list.secondaryCopy')}
  </span>
  ) : null}
  </span>

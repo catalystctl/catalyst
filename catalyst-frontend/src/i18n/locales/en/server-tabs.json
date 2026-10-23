@@ -9,6 +9,8 @@
       "nameLabel": "Backup name (optional)",
       "pinHint": "Check to ignore the retention limit and pin this backup.",
       "pinLabel": "Ignore limit",
+      "secondaryDriveHint": "Keeps a second copy on the admin-configured drive. The archive is usable once the copy finishes.",
+      "secondaryDriveLabel": "Copy to the secondary drive",
       "success": "Backup creation started",
       "title": "Create backup"
     },
@@ -36,6 +38,8 @@
       "path": "Path",
       "pinned": "Pinned",
       "restored": "Restored {{date}}",
+      "secondaryCopy": "Secondary drive",
+      "secondaryCopyFailed": "Secondary drive copy failed",
       "size": "Size",
       "storage": "Storage"
     },

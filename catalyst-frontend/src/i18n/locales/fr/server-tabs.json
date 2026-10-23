@@ -9,6 +9,8 @@
       "nameLabel": "Nom de la sauvegarde (facultatif)",
       "pinHint": "Cochez pour ignorer la limite de rétention et épingler cette sauvegarde.",
       "pinLabel": "Ignorer la limite",
+      "secondaryDriveHint": "Conserve une seconde copie sur le disque configuré par l’administrateur. L’archive est utilisable une fois la copie terminée.",
+      "secondaryDriveLabel": "Copier sur le disque secondaire",
       "success": "Création de la sauvegarde démarrée",
       "title": "Créer une sauvegarde"
     },
@@ -36,6 +38,8 @@
       "path": "Chemin",
       "pinned": "Épinglée",
       "restored": "Restaurée le {{date}}",
+      "secondaryCopy": "Disque secondaire",
+      "secondaryCopyFailed": "Échec de la copie sur le disque secondaire",
       "size": "Taille",
       "storage": "Stockage"
     },

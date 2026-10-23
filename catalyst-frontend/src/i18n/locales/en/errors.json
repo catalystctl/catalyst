@@ -51,6 +51,7 @@
   "BACKUP_ENCRYPTION_KEY_MISSING": "This backup is encrypted, but no encryption key is configured.",
   "BACKUP_FILE_NOT_FOUND": "Backup file not found on disk.",
   "BACKUP_NOT_FOUND": "Backup not found.",
+  "BACKUP_SECONDARY_UNAVAILABLE": "The secondary backup drive is not available.",
   "BACKUP_STORAGE_KEY_MISSING": "Missing {{mode}} storage key for this backup.",
   "BAD_REQUEST": "The request could not be processed.",
   "CLONE_DATABASE_PROVISION_FAILED": "Failed to provision a database for the clone.",

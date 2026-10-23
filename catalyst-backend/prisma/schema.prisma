@@ -364,6 +364,12 @@ model SystemSetting {
   autoUpdateEnabled            Boolean?
   autoUpdateAutoTrigger        Boolean?
   autoUpdateIntervalMs         Int?
+  // Secondary ("another drive") backup destination (row id "backup_secondary").
+  // A panel-wide extra directory an admin can enable so a finished backup is
+  // additionally copied there. Only admins set the path; users can only opt a
+  // single backup in or out. NULL means "never configured".
+  backupSecondaryEnabled       Boolean  @default(false)
+  backupSecondaryPath          String?
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }

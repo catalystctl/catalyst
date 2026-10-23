@@ -18,6 +18,10 @@ import { hasGrant, hasNodeAccess } from '../lib/permissions';
 import { Actor, enforceKeyScope } from './servers/_helpers.js';
 import { ServerState } from '../shared-types';
 import { createServerBackup } from '../services/create-backup';
+import {
+  getBackupSecondarySettings,
+  resolveSecondaryBackupFile,
+} from '../services/backup-secondary';
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
 
@@ -137,13 +141,41 @@ export async function backupRoutes(app: FastifyInstance) {
     return hasGrant(rolePerms, "backup.pin");
   };
 
+  // Whether an admin enabled the secondary ("another drive") destination.
+  // Non-admins only learn the toggle, whether their storage mode can use it,
+  // and a directory label — never the configured path.
+  app.get(
+    "/:serverId/backups/secondary-drive",
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Get the secondary backup drive availability", description: "Whether a finished backup can also be copied to the admin-configured secondary drive.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const { serverId } = request.params as { serverId: string };
+      const accessServer = await ensureBackupAccess(serverId, request.user.userId, reply, "backup.read", request.user);
+      if (!accessServer) return;
+
+      const target = await prisma.server.findUnique({
+        where: { id: serverId },
+        select: { backupStorageMode: true },
+      });
+      const settings = await getBackupSecondarySettings();
+      const configured = Boolean(settings.path);
+      const mode = target?.backupStorageMode ?? "local";
+      return reply.send(serialize({
+        // Enabled is the admin toggle; a configured path must also exist.
+        enabled: settings.enabled && configured,
+        // Only modes whose archive lives on the agent/panel host can be copied.
+        supported: mode === "local" || mode === "stream",
+        label: configured && settings.path ? path.posix.basename(settings.path.replace(/\\/g, "/")) : null,
+      }));
+    }
+  );
+
   // Create a backup
   app.post(
     "/:serverId/backups",
-    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, compressed: { type: "boolean" }, pinned: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
+    { onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } }, schema: { summary: "Create a server backup", description: "Start creating a backup for a server.", tags: ["Backups"], params: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } }, body: { type: "object", properties: { name: { type: "string" }, compressed: { type: "boolean" }, pinned: { type: "boolean" }, secondaryDrive: { type: "boolean" } } }, response: { 200: { type: "object", additionalProperties: true } } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { name, compressed, pinned } = request.body as { name?: string; compressed?: boolean; pinned?: boolean };
+      const { name, compressed, pinned, secondaryDrive } = request.body as { name?: string; compressed?: boolean; pinned?: boolean; secondaryDrive?: boolean };
       const userId = request.user.userId;
       const accessServer = await ensureBackupAccess(serverId, userId, reply, "backup.create", request.user);
       if (!accessServer) return;
@@ -176,6 +208,7 @@ export async function backupRoutes(app: FastifyInstance) {
         name,
         compressed,
         pinned: pinned === true,
+        secondaryDrive: secondaryDrive === true,
         sendToAgent: (nodeId, message) => gateway.sendToAgent(nodeId, message),
         onStarted: async ({ serverId: sid, backupId, backupName }) => {
           if (gateway.routeToClients) {
@@ -199,7 +232,7 @@ export async function backupRoutes(app: FastifyInstance) {
             suspensionReason: server.suspensionReason ?? null,
           });
         }
-        return apiError(reply, result.statusCode, ErrorCodes.BACKUP_CREATE_FAILED, result.error);
+        return apiError(reply, result.statusCode, result.code ?? ErrorCodes.BACKUP_CREATE_FAILED, result.error);
       }
 
       reply.send(serialize({
@@ -707,7 +740,22 @@ export async function backupRoutes(app: FastifyInstance) {
       }
 
       // Stream from agent (used for local mode and when backend file is missing)
+      // Local-mode archive on the panel-host secondary drive is a valid source
+      // whenever the agent cannot serve it (node offline, or the agent copy is
+      // gone). Containment is re-verified inside resolveSecondaryBackupFile.
       if (!server || !server.node.isOnline) {
+        const secondary = await resolveSecondaryBackupFile(
+          (backup.metadata as { secondaryPath?: unknown })?.secondaryPath,
+        );
+        if (secondary) {
+          reply.header("Content-Type", archiveContentType);
+          reply.header("Content-Length", secondary.size.toString());
+          reply.header(
+            "Content-Disposition",
+            `attachment; filename="${archiveFilename}"`,
+          );
+          return reply.send(createReadStream(secondary.path));
+        }
         return apiError(reply, 404, ErrorCodes.BACKUP_FILE_NOT_FOUND, "Backup file not found on disk");
       }
 

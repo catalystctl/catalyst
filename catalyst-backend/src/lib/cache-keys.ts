@@ -40,7 +40,8 @@ export type ConfigCacheKind =
   | 'theme_default'
   | 'localization'
   | 'mcp'
-  | 'auto_update';
+  | 'auto_update'
+  | 'backup_secondary';
 
 export const RedisKeys = {
   config: (kind: ConfigCacheKind): string =>

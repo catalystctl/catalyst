@@ -51,6 +51,7 @@
   "BACKUP_ENCRYPTION_KEY_MISSING": "该备份已加密，但未配置加密密钥。",
   "BACKUP_FILE_NOT_FOUND": "磁盘上找不到备份文件。",
   "BACKUP_NOT_FOUND": "找不到该备份。",
+  "BACKUP_SECONDARY_UNAVAILABLE": "备用备份磁盘不可用。",
   "BACKUP_STORAGE_KEY_MISSING": "该备份缺少 {{mode}} 存储密钥。",
   "BAD_REQUEST": "无法处理该请求。",
   "CLONE_DATABASE_PROVISION_FAILED": "无法为克隆创建数据库。",

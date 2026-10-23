@@ -12,7 +12,13 @@ import {
   resolveBackupStorageMode,
   buildBackupPaths,
 } from "./backup-storage";
+import {
+  getBackupSecondarySettings,
+  planSecondaryBackupPath,
+  resolveSecondaryBackupRoot,
+} from "./backup-secondary";
 import { ServerState } from "../shared-types";
+import type { ErrorCode } from "../shared-types";
 import { getWsGateway } from "../websocket/gateway";
 
 export type BackupServer = Server & {
@@ -45,6 +51,13 @@ export interface CreateBackupParams {
    */
   startAfterBackup?: boolean;
   /**
+   * Also copy the finished archive to the admin-configured secondary drive
+   * (services/backup-secondary.ts). The destination path is never supplied by
+   * the caller — only this opt-in flag is. Callers must have verified the
+   * `backup.create` permission.
+   */
+  secondaryDrive?: boolean;
+  /**
    * sendToAgent implementation (usually wsGateway.sendToAgent).
    * Returns false when the agent is unreachable.
    */
@@ -66,11 +79,15 @@ export type CreateBackupResult =
       backupName: string;
       agentPath: string;
       storagePath: string;
+      /** Absolute path on the panel host when the secondary drive was requested. */
+      secondaryPath: string | null;
     }
   | {
       ok: false;
       statusCode: number;
       error: string;
+      /** Stable error code; defaults to BACKUP_CREATE_FAILED in the route. */
+      code?: ErrorCode;
     };
 
 const sanitizeBackupName = (value?: string) => {
@@ -125,6 +142,49 @@ export async function createServerBackup(
     return { ok: false, statusCode: 503, error: "Node is offline" };
   }
 
+  const mode = resolveBackupStorageMode(server);
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const cleanedName = sanitizeBackupName(name);
+  const backupName = cleanedName || `backup-${timestamp}`;
+  const fileName = `${backupName}.${useCompression ? "tar.gz" : "tar"}`;
+
+  // Resolve the secondary destination before taking the server lock: an
+  // unavailable drive (disabled, unmounted, or misconfigured) must fail fast
+  // instead of flipping the server to CREATING_BACKUP and back.
+  let secondaryPath: string | null = null;
+  if (params.secondaryDrive === true) {
+    try {
+      if (mode !== "local" && mode !== "stream") {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "The secondary drive copies local archives only; it is not available for S3 or SFTP storage",
+          code: "BACKUP_SECONDARY_UNAVAILABLE",
+        };
+      }
+      const settings = await getBackupSecondarySettings();
+      const root = settings.enabled && settings.path ? await resolveSecondaryBackupRoot() : null;
+      if (!root) {
+        return {
+          ok: false,
+          statusCode: 400,
+          error: "The secondary backup drive is not enabled",
+          code: "BACKUP_SECONDARY_UNAVAILABLE",
+        };
+      }
+      secondaryPath = planSecondaryBackupPath(root, server.uuid, fileName);
+    } catch (err: any) {
+      logger?.warn({ err: err?.message, serverId }, "secondary backup drive unavailable");
+      return {
+        ok: false,
+        statusCode: 400,
+        error: err?.message || "The secondary backup drive is unavailable",
+        code: "BACKUP_SECONDARY_UNAVAILABLE",
+      };
+    }
+  }
+
   // Atomically transition STOPPED → CREATING_BACKUP (TOCTOU-safe lock).
   const lockResult = await prisma.server.updateMany({
     where: { id: serverId, status: ServerState.STOPPED },
@@ -162,7 +222,6 @@ export async function createServerBackup(
   };
 
   try {
-    const mode = resolveBackupStorageMode(server);
     const allocationMb = server.backupAllocationMb ?? 0;
     const hasExternalStorage = mode === "s3" || mode === "sftp";
     if (allocationMb <= 0 && !hasExternalStorage) {
@@ -191,9 +250,6 @@ export async function createServerBackup(
       }
     }
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const cleanedName = sanitizeBackupName(name);
-    const backupName = cleanedName || `backup-${timestamp}`;
     const { agentPath, storagePath, storageKey } = buildBackupPaths(
       server.uuid,
       backupName,
@@ -227,6 +283,9 @@ export async function createServerBackup(
           agentPath,
           storageKey,
           encrypted: !!encryptionKey,
+          // Absolute path on the panel host; re-validated against the configured
+          // root whenever it is read, written or deleted.
+          ...(secondaryPath ? { secondaryPath } : {}),
           // Durable intent for a scheduled "backup & start": the gateway reads
           // this when the agent's backup_complete arrives and starts the server.
           ...(params.startAfterBackup ? { startAfterBackup: true } : {}),
@@ -275,6 +334,7 @@ export async function createServerBackup(
       backupName,
       agentPath,
       storagePath,
+      secondaryPath,
     };
   } catch (err: any) {
     logger?.error(

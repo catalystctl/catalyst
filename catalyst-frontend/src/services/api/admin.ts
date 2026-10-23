@@ -13,6 +13,7 @@ import type {
   AuditLogsResponse,
   DatabaseHost,
   ModManagerSettings,
+  BackupSecondarySettings,
   SmtpSettings,
   SecuritySettings,
   McpSettings,
@@ -248,6 +249,17 @@ export const adminApi = {
   },
   updateModManagerSettings: async (payload: ModManagerSettings) => {
     const data = await apiClient.put<ApiResponse<void>>('/api/admin/mod-manager', payload);
+    return data;
+  },
+  getBackupSecondarySettings: async () => {
+    const data = await apiClient.get<ApiResponse<BackupSecondarySettings>>('/api/admin/backup-secondary');
+    return data.data;
+  },
+  updateBackupSecondarySettings: async (payload: BackupSecondarySettings) => {
+    const data = await apiClient.put<ApiResponse<BackupSecondarySettings>>(
+      '/api/admin/backup-secondary',
+      payload,
+    );
     return data;
   },
   listAuthLockouts: async (params?: { page?: number; limit?: number; search?: string }) => {

@@ -7,6 +7,7 @@ import { Client as SftpClient } from "ssh2";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import type { WebSocketGateway } from "../websocket/gateway";
 import { decryptBackupConfig } from "./backup-credentials";
+import { deleteSecondaryBackupCopy } from "./backup-secondary";
 
 export type BackupStorageMode = "local" | "s3" | "sftp" | "stream";
 
@@ -501,6 +502,10 @@ export const deleteBackupFromStorage = async (
       // ignore if local path doesn't exist
     }
   }
+
+  // Step 1b: remove the secondary-drive copy, if any. Best-effort by design:
+  // the drive may be unmounted, and the DB row must still be deletable then.
+  await deleteSecondaryBackupCopy((backup.metadata as any)?.secondaryPath);
 
   // Step 2: ALWAYS attempt to delete agent-local copy ( Bugs #3, #4, #7 )
   const agentPath = backup.metadata?.agentPath as string | undefined;

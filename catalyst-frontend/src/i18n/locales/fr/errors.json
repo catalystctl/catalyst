@@ -51,6 +51,7 @@
   "BACKUP_ENCRYPTION_KEY_MISSING": "Cette sauvegarde est chiffrée, mais aucune clé de chiffrement n’est configurée.",
   "BACKUP_FILE_NOT_FOUND": "Fichier de sauvegarde introuvable sur le disque.",
   "BACKUP_NOT_FOUND": "Sauvegarde introuvable.",
+  "BACKUP_SECONDARY_UNAVAILABLE": "Le disque de sauvegarde secondaire n’est pas disponible.",
   "BACKUP_STORAGE_KEY_MISSING": "Clé de stockage {{mode}} manquante pour cette sauvegarde.",
   "BAD_REQUEST": "La requête n’a pas pu être traitée.",
   "CLONE_DATABASE_PROVISION_FAILED": "Échec de la création d’une base de données pour le clone.",

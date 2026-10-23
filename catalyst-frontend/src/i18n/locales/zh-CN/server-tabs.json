@@ -9,6 +9,8 @@
       "nameLabel": "备份名称（可选）",
       "pinHint": "勾选后忽略保留数量限制并固定此备份。",
       "pinLabel": "忽略限制",
+      "secondaryDriveHint": "在管理员配置的磁盘上保留第二份副本。复制完成后即可使用该归档。",
+      "secondaryDriveLabel": "复制到备用磁盘",
       "success": "已开始创建备份",
       "title": "创建备份"
     },
@@ -36,6 +38,8 @@
       "path": "路径",
       "pinned": "已固定",
       "restored": "恢复于 {{date}}",
+      "secondaryCopy": "备用磁盘",
+      "secondaryCopyFailed": "复制到备用磁盘失败",
       "size": "大小",
       "storage": "存储"
     },

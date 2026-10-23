@@ -597,7 +597,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2342",
+          "source": "src/routes/admin.ts:2348",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -664,7 +664,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2436",
+          "source": "src/routes/admin.ts:2442",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -731,7 +731,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4460",
+          "source": "src/routes/admin.ts:4549",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -807,7 +807,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4512",
+          "source": "src/routes/admin.ts:4601",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_LOCKOUT_NOT_FOUND",
@@ -835,6 +835,136 @@
             "ADMIN_DATABASE_HOST_NAME_TAKEN",
             "ADMIN_DATABASE_HOST_NOT_FOUND",
             "ADMIN_DATABASE_HOST_IN_USE"
+          ]
+        }
+      }
+    },
+    "/api/admin/backup-secondary": {
+      "get": {
+        "operationId": "get_api_admin_backup_secondary",
+        "summary": "Secondary (\"another drive\") backup destination: get",
+        "tags": [
+          "Admin"
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/admin.ts:4314",
+          "errorCodes": [
+            "PERMISSION_DENIED",
+            "VALIDATION_ERROR",
+            "ADMIN_USER_EXISTS",
+            "ADMIN_USER_CREATE_FAILED",
+            "ADMIN_SELF_MODIFICATION",
+            "ADMIN_USER_NOT_FOUND",
+            "ADMIN_LAST_ADMIN",
+            "ADMIN_PASSWORD_UPDATE_FAILED",
+            "ADMIN_TRANSFER_TARGET_INVALID",
+            "ADMIN_USER_OWNS_SERVERS",
+            "ADMIN_USER_BANNED",
+            "ADMIN_USER_NOT_BANNED",
+            "ADMIN_TWO_FACTOR_NOT_SET_UP",
+            "ADMIN_ACCOUNT_NOT_FOUND",
+            "ADMIN_LAST_AUTH_METHOD",
+            "ADMIN_EMAIL_ALREADY_VERIFIED",
+            "NOT_FOUND",
+            "INTERNAL_ERROR",
+            "ADMIN_SYSTEM_ERROR_NOT_FOUND",
+            "NODE_NOT_FOUND",
+            "ADMIN_IP_POOL_NOT_FOUND",
+            "ADMIN_IP_POOL_IN_USE",
+            "ADMIN_DATABASE_HOST_NAME_TAKEN",
+            "ADMIN_DATABASE_HOST_NOT_FOUND",
+            "ADMIN_DATABASE_HOST_IN_USE",
+            "ADMIN_LOCKOUT_NOT_FOUND"
+          ]
+        }
+      },
+      "put": {
+        "operationId": "put_api_admin_backup_secondary",
+        "summary": "Secondary (\"another drive\") backup destination: update",
+        "tags": [
+          "Admin"
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/admin.ts:4327",
+          "errorCodes": [
+            "PERMISSION_DENIED",
+            "VALIDATION_ERROR",
+            "ADMIN_USER_EXISTS",
+            "ADMIN_USER_CREATE_FAILED",
+            "ADMIN_SELF_MODIFICATION",
+            "ADMIN_USER_NOT_FOUND",
+            "ADMIN_LAST_ADMIN",
+            "ADMIN_PASSWORD_UPDATE_FAILED",
+            "ADMIN_TRANSFER_TARGET_INVALID",
+            "ADMIN_USER_OWNS_SERVERS",
+            "ADMIN_USER_BANNED",
+            "ADMIN_USER_NOT_BANNED",
+            "ADMIN_TWO_FACTOR_NOT_SET_UP",
+            "ADMIN_ACCOUNT_NOT_FOUND",
+            "ADMIN_LAST_AUTH_METHOD",
+            "ADMIN_EMAIL_ALREADY_VERIFIED",
+            "NOT_FOUND",
+            "INTERNAL_ERROR",
+            "ADMIN_SYSTEM_ERROR_NOT_FOUND",
+            "NODE_NOT_FOUND",
+            "ADMIN_IP_POOL_NOT_FOUND",
+            "ADMIN_IP_POOL_IN_USE",
+            "ADMIN_DATABASE_HOST_NAME_TAKEN",
+            "ADMIN_DATABASE_HOST_NOT_FOUND",
+            "ADMIN_DATABASE_HOST_IN_USE",
+            "ADMIN_LOCKOUT_NOT_FOUND"
           ]
         }
       }
@@ -873,7 +1003,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3710",
+          "source": "src/routes/admin.ts:3716",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -940,7 +1070,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3730",
+          "source": "src/routes/admin.ts:3736",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1016,7 +1146,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3821",
+          "source": "src/routes/admin.ts:3827",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_NOT_FOUND",
@@ -1090,7 +1220,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3925",
+          "source": "src/routes/admin.ts:3931",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_IN_USE",
@@ -1166,7 +1296,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3971",
+          "source": "src/routes/admin.ts:3977",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_NOT_FOUND",
@@ -1232,7 +1362,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4080",
+          "source": "src/routes/admin.ts:4086",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1299,7 +1429,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2716",
+          "source": "src/routes/admin.ts:2722",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1394,7 +1524,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3245",
+          "source": "src/routes/admin.ts:3251",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1460,7 +1590,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3347",
+          "source": "src/routes/admin.ts:3353",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1528,7 +1658,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3418",
+          "source": "src/routes/admin.ts:3424",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1604,7 +1734,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3529",
+          "source": "src/routes/admin.ts:3535",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_IP_POOL_NOT_FOUND",
@@ -1678,7 +1808,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3636",
+          "source": "src/routes/admin.ts:3642",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_IP_POOL_IN_USE",
@@ -1745,7 +1875,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3189",
+          "source": "src/routes/admin.ts:3195",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1809,7 +1939,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3201",
+          "source": "src/routes/admin.ts:3207",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1876,7 +2006,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3134",
+          "source": "src/routes/admin.ts:3140",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1940,7 +2070,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3146",
+          "source": "src/routes/admin.ts:3152",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2577,7 +2707,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4252",
+          "source": "src/routes/admin.ts:4258",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2641,7 +2771,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4266",
+          "source": "src/routes/admin.ts:4272",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2707,7 +2837,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1504",
+          "source": "src/routes/admin.ts:1510",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2773,7 +2903,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4553",
+          "source": "src/routes/admin.ts:4642",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2837,7 +2967,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4590",
+          "source": "src/routes/admin.ts:4679",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2903,7 +3033,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:985",
+          "source": "src/routes/admin.ts:991",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -2969,7 +3099,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2971",
+          "source": "src/routes/admin.ts:2977",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3033,7 +3163,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2985",
+          "source": "src/routes/admin.ts:2991",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3099,7 +3229,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1552",
+          "source": "src/routes/admin.ts:1558",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3165,7 +3295,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1662",
+          "source": "src/routes/admin.ts:1668",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PERMISSION_DENIED",
@@ -3234,7 +3364,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4681",
+          "source": "src/routes/admin.ts:4770",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3300,7 +3430,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4140",
+          "source": "src/routes/admin.ts:4146",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3364,7 +3494,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4159",
+          "source": "src/routes/admin.ts:4165",
           "permissionGuards": [
             "Tls"
           ],
@@ -3433,7 +3563,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:192",
+          "source": "src/routes/admin.ts:198",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3499,7 +3629,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2526",
+          "source": "src/routes/admin.ts:2532",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3575,7 +3705,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2874",
+          "source": "src/routes/admin.ts:2880",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_SYSTEM_ERROR_NOT_FOUND",
@@ -3641,7 +3771,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2603",
+          "source": "src/routes/admin.ts:2609",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3707,7 +3837,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2909",
+          "source": "src/routes/admin.ts:2915",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3773,7 +3903,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4308",
+          "source": "src/routes/admin.ts:4397",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -3837,7 +3967,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4352",
+          "source": "src/routes/admin.ts:4441",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -4176,7 +4306,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:224",
+          "source": "src/routes/admin.ts:230",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -4243,7 +4373,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:349",
+          "source": "src/routes/admin.ts:355",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -4319,7 +4449,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:596",
+          "source": "src/routes/admin.ts:602",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_SELF_MODIFICATION",
@@ -4403,7 +4533,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1411",
+          "source": "src/routes/admin.ts:1417",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -4480,7 +4610,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1174",
+          "source": "src/routes/admin.ts:1180",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_SELF_MODIFICATION",
@@ -4556,7 +4686,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1009",
+          "source": "src/routes/admin.ts:1015",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_SELF_MODIFICATION",
@@ -4632,7 +4762,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1367",
+          "source": "src/routes/admin.ts:1373",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -4709,7 +4839,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1308",
+          "source": "src/routes/admin.ts:1314",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -4785,7 +4915,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:960",
+          "source": "src/routes/admin.ts:966",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -4861,7 +4991,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1337",
+          "source": "src/routes/admin.ts:1343",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -4938,7 +5068,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1251",
+          "source": "src/routes/admin.ts:1257",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -5015,7 +5145,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:1457",
+          "source": "src/routes/admin.ts:1463",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_USER_NOT_FOUND",
@@ -15217,6 +15347,9 @@
                   },
                   "pinned": {
                     "type": "boolean"
+                  },
+                  "secondaryDrive": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -15266,7 +15399,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:141",
+          "source": "src/routes/backups.ts:173",
           "errorCodes": [
             "PERMISSION_DENIED",
             "SERVER_NOT_FOUND",
@@ -15362,7 +15495,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:215",
+          "source": "src/routes/backups.ts:248",
           "errorCodes": [
             "SERVER_SUSPENDED",
             "SERVER_NOT_FOUND",
@@ -15452,7 +15585,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:304",
+          "source": "src/routes/backups.ts:337",
           "errorCodes": [
             "BACKUP_NOT_FOUND",
             "SERVER_SUSPENDED",
@@ -15541,7 +15674,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:507",
+          "source": "src/routes/backups.ts:540",
           "errorCodes": [
             "BACKUP_NOT_FOUND",
             "SERVER_NOT_FOUND",
@@ -15645,7 +15778,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:619",
+          "source": "src/routes/backups.ts:652",
           "errorCodes": [
             "BACKUP_NOT_FOUND",
             "SERVER_NOT_FOUND",
@@ -15751,7 +15884,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:579",
+          "source": "src/routes/backups.ts:612",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PERMISSION_DENIED",
@@ -15841,7 +15974,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/backups.ts:347",
+          "source": "src/routes/backups.ts:380",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_SUSPENDED",
@@ -15856,6 +15989,85 @@
             "AGENT_COMMAND_FAILED",
             "PERMISSION_DENIED",
             "BACKUP_CREATE_FAILED",
+            "VALIDATION_ERROR",
+            "BACKUP_FILE_NOT_FOUND"
+          ]
+        }
+      }
+    },
+    "/api/servers/{serverId}/backups/secondary-drive": {
+      "get": {
+        "operationId": "get_api_servers_by_serverId_backups_secondary_drive",
+        "summary": "Get the secondary backup drive availability",
+        "description": "Whether a finished backup can also be copied to the admin-configured secondary drive.",
+        "tags": [
+          "Backups"
+        ],
+        "parameters": [
+          {
+            "name": "serverId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTTP 200 response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/backups.ts:147",
+          "errorCodes": [
+            "SERVER_NOT_FOUND",
+            "SERVER_SUSPENDED",
+            "PERMISSION_DENIED",
+            "GATEWAY_NOT_AVAILABLE",
+            "BACKUP_CREATE_FAILED",
+            "BACKUP_NOT_FOUND",
+            "RESTORE_ALREADY_IN_PROGRESS",
+            "SERVER_NOT_STOPPED",
+            "NODE_OFFLINE",
+            "BACKUP_STORAGE_KEY_MISSING",
+            "BACKUP_DOWNLOAD_FAILED",
+            "BACKUP_ENCRYPTION_KEY_MISSING",
+            "AGENT_COMMAND_FAILED",
             "VALIDATION_ERROR",
             "BACKUP_FILE_NOT_FOUND"
           ]
@@ -25144,6 +25356,7 @@
           "BACKUP_ENCRYPTION_KEY_MISSING",
           "BACKUP_FILE_NOT_FOUND",
           "BACKUP_NOT_FOUND",
+          "BACKUP_SECONDARY_UNAVAILABLE",
           "BACKUP_STORAGE_KEY_MISSING",
           "CLONE_DATABASE_PROVISION_FAILED",
           "CLONE_FILE_COPY_FAILED",
@@ -25369,6 +25582,7 @@
                   "AUTH_REGISTRATION_FAILED",
                   "BACKUP_CREATE_FAILED",
                   "BACKUP_ENCRYPTION_KEY_MISSING",
+                  "BACKUP_SECONDARY_UNAVAILABLE",
                   "CLONE_DATABASE_PROVISION_FAILED",
                   "CLONE_FILE_COPY_FAILED",
                   "CLONE_INSUFFICIENT_DISK",
@@ -25446,7 +25660,7 @@
             }
           }
         ],
-        "description": "ADMIN_EMAIL_ALREADY_VERIFIED: Admin Email Already Verified; ADMIN_LAST_AUTH_METHOD: Admin Last Auth Method; ADMIN_PASSWORD_UPDATE_FAILED: Admin Password Update Failed; ADMIN_TRANSFER_TARGET_INVALID: Admin Transfer Target Invalid; ADMIN_TWO_FACTOR_NOT_SET_UP: Admin Two Factor Not Set Up; ADMIN_USER_BANNED: Admin User Banned; ADMIN_USER_CREATE_FAILED: Admin User Create Failed; ADMIN_USER_NOT_BANNED: Admin User Not Banned; AGENT_CONFIG_REJECTED: Agent Config Rejected; AGENT_TIMEOUT: Agent Timeout; ALLOCATION_PRIMARY_IMMUTABLE: Allocation Primary Immutable; AUTH_ACCOUNT_OWNS_SERVERS: Auth Account Owns Servers; AUTH_INVALID_RESET_TOKEN: Auth Invalid Reset Token; AUTH_INVALID_USERNAME: Auth Invalid Username; AUTH_REGISTRATION_FAILED: Auth Registration Failed; BACKUP_CREATE_FAILED: Backup Create Failed; BACKUP_ENCRYPTION_KEY_MISSING: Backup Encryption Key Missing; CLONE_DATABASE_PROVISION_FAILED: Clone Database Provision Failed; CLONE_FILE_COPY_FAILED: Clone File Copy Failed; CLONE_INSUFFICIENT_DISK: Clone Insufficient Disk; CLONE_INTERRUPTED: Clone Interrupted; CLONE_MISSING_TEMPLATE_VARIABLES: Clone Missing Template Variables; CLONE_NETWORK_MODE_UNSUPPORTED: Clone Network Mode Unsupported; CLONE_NO_ALLOCATION_AVAILABLE: Clone No Allocation Available; CLONE_SOURCE_SUSPENDED: Clone Source Suspended; CLONE_SOURCE_TRANSITIONAL: Clone Source Transitional; CLONE_TARGET_NODE_INACCESSIBLE: Clone Target Node Inaccessible; CLONE_TEMPLATE_IMAGE_UNRESOLVED: Clone Template Image Unresolved; CLONE_TEMPLATE_MISSING: Clone Template Missing; CLONE_WARNINGS_UNACKNOWLEDGED: Clone Warnings Unacknowledged; CONTAINER_ERROR: Container Error; CREDENTIAL_ENCRYPTION_KEY_MISSING: Credential Encryption Key Missing; DATABASE_NAME_INVALID: Database Name Invalid; FILE_INVALID_PATH: File Invalid Path; FILE_OPERATION_FAILED: File Operation Failed; FILE_TUNNEL_BUSY: File Tunnel Busy; FRAMEWORK_MISSING_DEPENDENCIES: Framework Missing Dependencies; IMPORT_CONVERSION_FAILED: Import Conversion Failed; IMPORT_INVALID_FORMAT: Import Invalid Format; IMPORT_PARTIAL_FAILURE: Import Partial Failure; INSUFFICIENT_RESOURCES: Insufficient Resources; INVITE_NOT_VALID_FOR_ACCOUNT: Invite Not Valid For Account; MIGRATION_IN_PROGRESS: Migration In Progress; MIGRATION_STEP_NOT_RETRYABLE: Migration Step Not Retryable; MIGRATION_TARGET_NODES_NOT_FOUND: Migration Target Nodes Not Found; MIGRATION_TARGET_NODES_OFFLINE: Migration Target Nodes Offline; MODPACK_FORMAT_UNSUPPORTED: Modpack Format Unsupported; MODPACK_INSTALL_FAILED: Modpack Install Failed; MOD_INSTALL_FAILED: Mod Install Failed; MOD_PROVIDER_ERROR: Mod Provider Error; MOD_PROVIDER_NOT_ENABLED: Mod Provider Not Enabled; MOD_PROVIDER_UNSUPPORTED: Mod Provider Unsupported; MOD_TARGET_NOT_ENABLED: Mod Target Not Enabled; MOD_UNINSTALL_FAILED: Mod Uninstall Failed; NETWORK_ERROR: Network Error; NODE_API_KEY_EXISTS: Node Api Key Exists; NODE_ASSIGNMENT_EXISTS: Node Assignment Exists; NODE_HAS_SERVERS: Node Has Servers; NODE_NAME_TAKEN: Node Name Taken; PLUGIN_CONFIG_UPDATE_FAILED: Plugin Config Update Failed; PLUGIN_ENABLE_FAILED: Plugin Enable Failed; PLUGIN_INSTALL_FAILED: Plugin Install Failed; PLUGIN_INVALID_NAME: Plugin Invalid Name; PLUGIN_MARKETPLACE_ALREADY_CONFIGURED: Plugin Marketplace Already Configured; PLUGIN_MARKETPLACE_SOURCE_INVALID: Plugin Marketplace Source Invalid; PLUGIN_MARKETPLACE_SOURCE_MANAGED: Plugin Marketplace Source Managed; PLUGIN_NO_FRONTEND: Plugin No Frontend; PLUGIN_RELOAD_FAILED: Plugin Reload Failed; PLUGIN_UNINSTALL_FAILED: Plugin Uninstall Failed; PORT_ALREADY_IN_USE: Port Already In Use; REGISTRATION_FAILED: Registration Failed; SERVER_ALREADY_ON_NODE: Server Already On Node; SERVER_ALREADY_RUNNING: Server Already Running; SERVER_CLONE_FAILED: Server Clone Failed; SERVER_IMAGE_VARIANT_INVALID: Server Image Variant Invalid; SERVER_MISSING_TEMPLATE_VARIABLES: Server Missing Template Variables; SERVER_NETWORK_IP_INVALID: Server Network Ip Invalid; SERVER_NETWORK_MODE_INVALID: Server Network Mode Invalid; SERVER_TEMPLATE_IMAGE_REQUIRED: Server Template Image Required; SERVER_TEMPLATE_MINIMUM_DISK: Server Template Minimum Disk; SERVER_TRANSFER_FAILED: Server Transfer Failed; SERVER_TRANSFER_STATE_CHANGED: Server Transfer State Changed; SERVER_VARIABLE_INVALID: Server Variable Invalid; SERVER_VARIABLE_PATTERN_INVALID: Server Variable Pattern Invalid; SERVER_VARIABLE_VALIDATION_TIMEOUT: Server Variable Validation Timeout; TASK_INVALID_ACTION: Task Invalid Action; TASK_INVALID_CRON: Task Invalid Cron; UPDATE_FAILED: Update Failed; VALIDATION_ERROR: Validation Error"
+        "description": "ADMIN_EMAIL_ALREADY_VERIFIED: Admin Email Already Verified; ADMIN_LAST_AUTH_METHOD: Admin Last Auth Method; ADMIN_PASSWORD_UPDATE_FAILED: Admin Password Update Failed; ADMIN_TRANSFER_TARGET_INVALID: Admin Transfer Target Invalid; ADMIN_TWO_FACTOR_NOT_SET_UP: Admin Two Factor Not Set Up; ADMIN_USER_BANNED: Admin User Banned; ADMIN_USER_CREATE_FAILED: Admin User Create Failed; ADMIN_USER_NOT_BANNED: Admin User Not Banned; AGENT_CONFIG_REJECTED: Agent Config Rejected; AGENT_TIMEOUT: Agent Timeout; ALLOCATION_PRIMARY_IMMUTABLE: Allocation Primary Immutable; AUTH_ACCOUNT_OWNS_SERVERS: Auth Account Owns Servers; AUTH_INVALID_RESET_TOKEN: Auth Invalid Reset Token; AUTH_INVALID_USERNAME: Auth Invalid Username; AUTH_REGISTRATION_FAILED: Auth Registration Failed; BACKUP_CREATE_FAILED: Backup Create Failed; BACKUP_ENCRYPTION_KEY_MISSING: Backup Encryption Key Missing; BACKUP_SECONDARY_UNAVAILABLE: Backup Secondary Unavailable; CLONE_DATABASE_PROVISION_FAILED: Clone Database Provision Failed; CLONE_FILE_COPY_FAILED: Clone File Copy Failed; CLONE_INSUFFICIENT_DISK: Clone Insufficient Disk; CLONE_INTERRUPTED: Clone Interrupted; CLONE_MISSING_TEMPLATE_VARIABLES: Clone Missing Template Variables; CLONE_NETWORK_MODE_UNSUPPORTED: Clone Network Mode Unsupported; CLONE_NO_ALLOCATION_AVAILABLE: Clone No Allocation Available; CLONE_SOURCE_SUSPENDED: Clone Source Suspended; CLONE_SOURCE_TRANSITIONAL: Clone Source Transitional; CLONE_TARGET_NODE_INACCESSIBLE: Clone Target Node Inaccessible; CLONE_TEMPLATE_IMAGE_UNRESOLVED: Clone Template Image Unresolved; CLONE_TEMPLATE_MISSING: Clone Template Missing; CLONE_WARNINGS_UNACKNOWLEDGED: Clone Warnings Unacknowledged; CONTAINER_ERROR: Container Error; CREDENTIAL_ENCRYPTION_KEY_MISSING: Credential Encryption Key Missing; DATABASE_NAME_INVALID: Database Name Invalid; FILE_INVALID_PATH: File Invalid Path; FILE_OPERATION_FAILED: File Operation Failed; FILE_TUNNEL_BUSY: File Tunnel Busy; FRAMEWORK_MISSING_DEPENDENCIES: Framework Missing Dependencies; IMPORT_CONVERSION_FAILED: Import Conversion Failed; IMPORT_INVALID_FORMAT: Import Invalid Format; IMPORT_PARTIAL_FAILURE: Import Partial Failure; INSUFFICIENT_RESOURCES: Insufficient Resources; INVITE_NOT_VALID_FOR_ACCOUNT: Invite Not Valid For Account; MIGRATION_IN_PROGRESS: Migration In Progress; MIGRATION_STEP_NOT_RETRYABLE: Migration Step Not Retryable; MIGRATION_TARGET_NODES_NOT_FOUND: Migration Target Nodes Not Found; MIGRATION_TARGET_NODES_OFFLINE: Migration Target Nodes Offline; MODPACK_FORMAT_UNSUPPORTED: Modpack Format Unsupported; MODPACK_INSTALL_FAILED: Modpack Install Failed; MOD_INSTALL_FAILED: Mod Install Failed; MOD_PROVIDER_ERROR: Mod Provider Error; MOD_PROVIDER_NOT_ENABLED: Mod Provider Not Enabled; MOD_PROVIDER_UNSUPPORTED: Mod Provider Unsupported; MOD_TARGET_NOT_ENABLED: Mod Target Not Enabled; MOD_UNINSTALL_FAILED: Mod Uninstall Failed; NETWORK_ERROR: Network Error; NODE_API_KEY_EXISTS: Node Api Key Exists; NODE_ASSIGNMENT_EXISTS: Node Assignment Exists; NODE_HAS_SERVERS: Node Has Servers; NODE_NAME_TAKEN: Node Name Taken; PLUGIN_CONFIG_UPDATE_FAILED: Plugin Config Update Failed; PLUGIN_ENABLE_FAILED: Plugin Enable Failed; PLUGIN_INSTALL_FAILED: Plugin Install Failed; PLUGIN_INVALID_NAME: Plugin Invalid Name; PLUGIN_MARKETPLACE_ALREADY_CONFIGURED: Plugin Marketplace Already Configured; PLUGIN_MARKETPLACE_SOURCE_INVALID: Plugin Marketplace Source Invalid; PLUGIN_MARKETPLACE_SOURCE_MANAGED: Plugin Marketplace Source Managed; PLUGIN_NO_FRONTEND: Plugin No Frontend; PLUGIN_RELOAD_FAILED: Plugin Reload Failed; PLUGIN_UNINSTALL_FAILED: Plugin Uninstall Failed; PORT_ALREADY_IN_USE: Port Already In Use; REGISTRATION_FAILED: Registration Failed; SERVER_ALREADY_ON_NODE: Server Already On Node; SERVER_ALREADY_RUNNING: Server Already Running; SERVER_CLONE_FAILED: Server Clone Failed; SERVER_IMAGE_VARIANT_INVALID: Server Image Variant Invalid; SERVER_MISSING_TEMPLATE_VARIABLES: Server Missing Template Variables; SERVER_NETWORK_IP_INVALID: Server Network Ip Invalid; SERVER_NETWORK_MODE_INVALID: Server Network Mode Invalid; SERVER_TEMPLATE_IMAGE_REQUIRED: Server Template Image Required; SERVER_TEMPLATE_MINIMUM_DISK: Server Template Minimum Disk; SERVER_TRANSFER_FAILED: Server Transfer Failed; SERVER_TRANSFER_STATE_CHANGED: Server Transfer State Changed; SERVER_VARIABLE_INVALID: Server Variable Invalid; SERVER_VARIABLE_PATTERN_INVALID: Server Variable Pattern Invalid; SERVER_VARIABLE_VALIDATION_TIMEOUT: Server Variable Validation Timeout; TASK_INVALID_ACTION: Task Invalid Action; TASK_INVALID_CRON: Task Invalid Cron; UPDATE_FAILED: Update Failed; VALIDATION_ERROR: Validation Error"
       },
       "Error401": {
         "allOf": [

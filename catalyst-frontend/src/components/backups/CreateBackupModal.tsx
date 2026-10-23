@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from '@/csync';
+import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import { backupsApi } from '../../services/api/backups';
@@ -36,6 +36,19 @@ function CreateBackupModal({
   const [compress, setCompress] = useState(true);
   // Pin bypasses the retention limit; only offered with the backup.pin grant.
   const [pin, setPin] = useState(false);
+  // Extra copy on the admin-configured secondary drive (off by default).
+  const [secondaryDrive, setSecondaryDrive] = useState(false);
+
+  // Fetched only while the dialog is open: most servers never see this option.
+  const { data: secondaryStatus } = useQuery({
+    queryKey: qk.backupSecondaryDrive(serverId),
+    queryFn: () => backupsApi.secondaryDriveStatus(serverId),
+    enabled: open,
+    staleTime: 60_000,
+  });
+  const secondaryAvailable = Boolean(
+    secondaryStatus?.enabled && secondaryStatus?.supported,
+  );
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -43,6 +56,7 @@ function CreateBackupModal({
         name: name.trim() || undefined,
         compressed: compress,
         ...(pin ? { pinned: true } : {}),
+        ...(secondaryAvailable && secondaryDrive ? { secondaryDrive: true } : {}),
       }),
     onSuccess: () => {
       notifySuccess(t('backups.create.success'));
@@ -50,6 +64,7 @@ function CreateBackupModal({
       setName('');
       setCompress(true);
       setPin(false);
+      setSecondaryDrive(false);
     },
     onError: (error: any) => {
       notifyError(error);
@@ -104,6 +119,29 @@ function CreateBackupModal({
                   </span>
                   <span className="block text-micro text-muted-foreground">
                     {t('backups.create.pinHint')}
+                  </span>
+                </label>
+              </div>
+            ) : null}
+            {secondaryAvailable ? (
+              <div className="flex items-start gap-2">
+                <Checkbox
+                  id="create-backup-secondary-drive"
+                  checked={secondaryDrive}
+                  onCheckedChange={(value) => setSecondaryDrive(value === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="create-backup-secondary-drive" className="min-w-0 cursor-pointer">
+                  <span className="block text-mini text-foreground">
+                    {t('backups.create.secondaryDriveLabel')}
+                    {secondaryStatus?.label ? (
+                      <span className="ml-1 font-mono text-micro text-muted-foreground">
+                        {secondaryStatus.label}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="block text-micro text-muted-foreground">
+                    {t('backups.create.secondaryDriveHint')}
                   </span>
                 </label>
               </div>

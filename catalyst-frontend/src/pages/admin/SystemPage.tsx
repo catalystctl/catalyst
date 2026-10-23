@@ -15,11 +15,12 @@ import {
  User,
  ArrowUpCircle,
  Languages,
+ HardDrive,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import { BracketLabel } from '../../components/deck/primitives';
 
-import { useAdminHealth, useAdminStats, useLocalizationSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
+import { useAdminHealth, useAdminStats, useBackupSecondarySettings, useLocalizationSettings, useModManagerSettings, useSmtpSettings } from '../../hooks/useAdmin';
 import UpdateSettings from '../../components/admin/UpdateSettings';
 import { adminApi } from '../../services/api/admin';
 import { notifyError, notifySuccess } from '../../utils/notify';
@@ -70,6 +71,7 @@ function SystemPage() {
  const { data: smtpSettings } = useSmtpSettings();
  const { data: modManagerSettings } = useModManagerSettings();
  const { data: localizationSettings } = useLocalizationSettings();
+ const { data: backupSecondarySettings } = useBackupSecondarySettings();
 
  const [smtpHost, setSmtpHost] = useState('');
  const [smtpPort, setSmtpPort] = useState('587');
@@ -85,6 +87,8 @@ function SystemPage() {
  const [curseforgeApiKey, setCurseforgeApiKey] = useState('');
  const [modrinthApiKey, setModrinthApiKey] = useState('');
   const [defaultLocale, setDefaultLocale] = useState<SupportedLocale>(DEFAULT_LOCALE);
+ const [backupSecondaryEnabled, setBackupSecondaryEnabled] = useState(false);
+ const [backupSecondaryPath, setBackupSecondaryPath] = useState('');
 
  const updateSmtpMutation = useMutation({
  mutationFn: () =>
@@ -126,6 +130,19 @@ function SystemPage() {
  onSuccess: () => notifySuccess(t('system.toastLanguageUpdated')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminLocalizationSettings() });
+ },
+ onError: (error: any) => notifyError(error),
+ });
+
+ const updateBackupSecondaryMutation = useMutation({
+ mutationFn: () =>
+ adminApi.updateBackupSecondarySettings({
+ enabled: backupSecondaryEnabled,
+ path: backupSecondaryPath.trim() || null,
+ }),
+ onSuccess: () => notifySuccess(t('system.toastBackupSecondaryUpdated')),
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminBackupSecondary() });
  },
  onError: (error: any) => notifyError(error),
  });
@@ -173,6 +190,15 @@ function SystemPage() {
  ? localizationSettings.defaultLocale
  : DEFAULT_LOCALE,
  );
+ }
+ }
+
+ const [prevBackupSecondarySettings, setPrevBackupSecondarySettings] = useState(backupSecondarySettings);
+ if (backupSecondarySettings !== prevBackupSecondarySettings) {
+ setPrevBackupSecondarySettings(backupSecondarySettings);
+ if (backupSecondarySettings) {
+ setBackupSecondaryEnabled(Boolean(backupSecondarySettings.enabled));
+ setBackupSecondaryPath(backupSecondarySettings.path ?? '');
  }
  }
 
@@ -344,6 +370,42 @@ function SystemPage() {
  </Select>
  </label>
  <p className="text-mini text-muted-foreground">{t('system.languageHint')}</p>
+ </div>
+ </Section>
+
+ {/* ── Secondary backup drive ── */}
+ <Section
+ title={t('system.backupSecondary')}
+ subtitle={t('system.backupSecondaryDescription')}
+ icon={<HardDrive className="h-3.5 w-3.5" />}
+ footer={
+ <Button size="sm" className="h-8 px-3 text-mini" disabled={updateBackupSecondaryMutation.isPending} onClick={() => updateBackupSecondaryMutation.mutate()}>
+ {updateBackupSecondaryMutation.isPending ? t('saving') : t('system.saveBackupSecondary')}
+ </Button>
+ }
+ >
+ <div className="space-y-3">
+ <label className="flex cursor-pointer items-center gap-2 text-mini text-muted-foreground">
+ <input
+ type="checkbox"
+ checked={backupSecondaryEnabled}
+ onChange={(e) => setBackupSecondaryEnabled(e.target.checked)}
+ className="h-4 w-4 rounded-sm border-border/40 bg-card text-primary"
+ />
+ {t('system.backupSecondaryEnabled')}
+ </label>
+ <label className="block space-y-1">
+ <span className="type-overline flex items-center gap-1">
+ <HardDrive className="h-3 w-3" /> {t('system.backupSecondaryPath')}
+ </span>
+ <Input
+ value={backupSecondaryPath}
+ onChange={(e) => setBackupSecondaryPath(e.target.value)}
+ placeholder="/mnt/backup-drive/catalyst"
+ className="h-8 rounded-sm border-border/40 font-mono text-mini"
+ />
+ </label>
+ <p className="text-mini text-muted-foreground">{t('system.backupSecondaryHint')}</p>
  </div>
  </Section>
 

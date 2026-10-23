@@ -165,6 +165,15 @@ export function useModManagerSettings() {
   });
 }
 
+export function useBackupSecondarySettings() {
+  return useQuery({
+    queryKey: qk.adminBackupSecondary(),
+    queryFn: adminApi.getBackupSecondarySettings,
+    staleTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 export function useLocalizationSettings() {
   return useQuery({
     queryKey: qk.adminLocalizationSettings(),

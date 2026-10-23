@@ -19,6 +19,12 @@ import {
 import { invalidateUserPermissions, resolveUserPermissionsLive, isValidPermission } from '../lib/permissions-catalog.js';
 import { publishCacheInvalidate } from '../lib/event-bus.js';
 import { invalidateConfig } from '../lib/config-cache.js';
+import {
+  BackupSecondaryPathError,
+  getBackupSecondarySettings,
+  resolveSecondaryBackupRoot,
+  updateBackupSecondarySettings,
+} from '../services/backup-secondary.js';
 import { invalidateAgentApiKeyCache } from '../lib/agent-auth.js';
 import { captureSystemError } from '../services/error-logger';
 import { SimpleCache } from '../lib/cache.js';
@@ -4301,6 +4307,89 @@ export async function adminRoutes(app: FastifyInstance) {
       } catch { /* ignore — WS push is best-effort */ }
 
       reply.send({ success: true });
+    }
+  );
+
+  // Secondary ("another drive") backup destination: get
+  app.get(
+    '/backup-secondary',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(checkPerm(request, 'admin.read'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin read permission required');
+      }
+      const settings = await getBackupSecondarySettings();
+      reply.send(serialize({ success: true, data: settings }));
+    }
+  );
+
+  // Secondary ("another drive") backup destination: update
+  app.put(
+    '/backup-secondary',
+    { preHandler: authenticate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+      if (!(checkPerm(request, 'admin.write'))) {
+        return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, 'Admin write permission required');
+      }
+
+      const { enabled, path: rawPath } = request.body as {
+        enabled?: boolean;
+        path?: string | null;
+      };
+      if (enabled !== undefined && typeof enabled !== 'boolean') {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'enabled must be a boolean');
+      }
+
+      let next;
+      try {
+        next = await updateBackupSecondarySettings({
+          enabled: enabled === true,
+          path: rawPath ?? null,
+        });
+      } catch (error: any) {
+        // Path shape / reserved-directory rejections are configuration errors,
+        // not server failures — surface the reason to the admin.
+        if (error instanceof BackupSecondaryPathError) {
+          return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, error.message);
+        }
+        throw error;
+      }
+
+      // Enabling an unusable directory must fail loudly now rather than when
+      // the next backup silently loses its extra copy. A missing directory is
+      // tolerated while disabled (the drive may simply not be mounted yet).
+      if (next.enabled && next.path) {
+        try {
+          const root = await resolveSecondaryBackupRoot();
+          if (root !== next.path) {
+            // The configured path resolves somewhere else (a symlink to the
+            // drive); that is fine, but the admin should know what was stored.
+            request.log?.info({ configured: next.path, resolved: root }, 'secondary backup directory resolved');
+          }
+        } catch (error: any) {
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.VALIDATION_ERROR,
+            error?.message || 'Secondary backup directory is not available',
+          );
+        }
+      }
+
+      await createAuditLog(user.userId, {
+        request,
+        action: 'backup_secondary.settings.update',
+        resource: 'system',
+        details: { enabled: next.enabled, configured: Boolean(next.path) },
+      });
+
+      try {
+        const wsGateway = (app as any).wsGateway;
+        wsGateway?.pushToAdminSubscribers('system_settings_updated', { updatedBy: user.userId });
+      } catch { /* ignore — WS push is best-effort */ }
+
+      reply.send(serialize({ success: true, data: next }));
     }
   );
 

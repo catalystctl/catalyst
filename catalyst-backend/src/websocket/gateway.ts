@@ -3286,6 +3286,75 @@ export class WebSocketGateway {
           }
         }
 
+        // Secondary ("another drive") copy: the backup row records the opt-in,
+        // and the destination path was validated against the admin-configured
+        // root at creation time. Re-validate now and copy the archive so the
+        // extra copy never exists as a half-written file.
+        if (mode === "local" || mode === "stream") {
+          const secondaryPath = (backupRecord.metadata as any)?.secondaryPath;
+          if (typeof secondaryPath === "string" && secondaryPath) {
+            const secondaryMetadata = (status: string, failure?: string) => {
+              const next = { ...(backupRecord.metadata as any), secondaryStatus: status };
+              if (failure) next.secondaryError = failure.slice(0, 500);
+              else delete next.secondaryError;
+              return next;
+            };
+            try {
+              const { materializeSecondaryCopy, copyLocalArchiveToSecondary } =
+                await import("../services/backup-secondary");
+              if (mode === "local") {
+                const { streamAgentBackupToLocal } = await import("../services/backup-storage");
+                await materializeSecondaryCopy({
+                  secondaryPath,
+                  fetchTo: (destination) =>
+                    streamAgentBackupToLocal(
+                      this,
+                      server.nodeId,
+                      server.id,
+                      server.uuid,
+                      agentPath,
+                      destination,
+                    ),
+                });
+              } else {
+                await copyLocalArchiveToSecondary(backupRecord.path, secondaryPath);
+              }
+              await this.prisma.backup.update({
+                where: { id: backupRecord.id },
+                data: { metadata: secondaryMetadata("completed") },
+              });
+            } catch (error) {
+              const message =
+                error instanceof Error ? error.message : "Secondary drive copy failed";
+              captureSystemError({
+                level: 'error',
+                component: 'WebSocketGateway',
+                message,
+                stack: error instanceof Error ? error.stack : undefined,
+                metadata: { backupId: backupRecord.id },
+              }).catch(() => {});
+              this.logger.error(
+                { err: error, backupId: backupRecord.id },
+                "Failed to copy backup to the secondary drive",
+              );
+              // Keep the agent copy: the secondary drive is an extra copy, not
+              // the primary location, so a failed copy must not lose the backup.
+              await this.prisma.backup
+                .update({
+                  where: { id: backupRecord.id },
+                  data: { metadata: secondaryMetadata("failed", message) },
+                })
+                .catch(() => {});
+            }
+            await this.routeToClients(message.serverId, {
+              type: "backup_updated",
+              serverId: message.serverId,
+              backupId: backupRecord.id,
+              timestamp: Date.now(),
+            }).catch(() => {});
+          }
+        }
+
         const retentionCount = server.backupRetentionCount ?? 0;
         const retentionDays = server.backupRetentionDays ?? 0;
         if (retentionCount > 0 || retentionDays > 0) {

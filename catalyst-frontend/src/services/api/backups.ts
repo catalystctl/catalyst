@@ -10,7 +10,7 @@ export const backupsApi = {
   },
   create: async (
     serverId: string,
-    payload: { name?: string; compressed?: boolean; pinned?: boolean },
+    payload: { name?: string; compressed?: boolean; pinned?: boolean; secondaryDrive?: boolean },
   ) => {
     const data = await apiClient.post<{ success: boolean; message?: string; backupName?: string }>(
       `/api/servers/${serverId}/backups`,
@@ -57,6 +57,16 @@ export const backupsApi = {
   },
   get: async (serverId: string, backupId: string) => {
     const data = await apiClient.get<Backup>(`/api/servers/${serverId}/backups/${backupId}`);
+    return data;
+  },
+  /** Whether an admin enabled the secondary ("another drive") destination. */
+  secondaryDriveStatus: async (serverId: string) => {
+    const data = await apiClient.get<{
+      success?: boolean;
+      enabled?: boolean;
+      supported?: boolean;
+      label?: string | null;
+    }>(`/api/servers/${serverId}/backups/secondary-drive`);
     return data;
   },
 };

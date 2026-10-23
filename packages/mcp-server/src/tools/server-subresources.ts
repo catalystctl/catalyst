@@ -260,9 +260,21 @@ export function registerBackupTools(server: McpServer, client: CatalystClient): 
       inputSchema: z.object({
         serverId,
         name: z.string().optional().describe("Friendly backup name"),
+        secondaryDrive: z
+          .boolean()
+          .optional()
+          .describe(
+            "Also copy the finished archive to the admin-configured secondary drive. Fails with BACKUP_SECONDARY_UNAVAILABLE when no drive is enabled or the server uses S3/SFTP storage",
+          ),
       }),
     },
-    async (args) => text(await client.post(`/servers/${args.serverId}/backups`, { name: args.name })),
+    async (args) =>
+      text(
+        await client.post(`/servers/${args.serverId}/backups`, {
+          name: args.name,
+          ...(args.secondaryDrive === undefined ? {} : { secondaryDrive: args.secondaryDrive }),
+        }),
+      ),
   );
 
   server.registerTool(

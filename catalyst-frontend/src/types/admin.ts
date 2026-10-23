@@ -300,6 +300,17 @@ export interface ModManagerSettings {
   modrinthApiKey: string | null;
 }
 
+/**
+ * Panel-wide secondary ("another drive") backup destination.
+ *
+ * Only admins can read or change it; the path lives on the panel host and is
+ * never accepted from a non-admin request.
+ */
+export interface BackupSecondarySettings {
+  enabled: boolean;
+  path: string | null;
+}
+
 export interface AuthLockout {
   id: string;
   email: string;
