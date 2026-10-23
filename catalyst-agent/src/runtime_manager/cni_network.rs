@@ -255,7 +255,7 @@ impl ContainerdRuntime {
             .cni_results_dir
             .join(format!("catalyst-{}-config", container_id));
         if let Ok(j) = serde_json::to_string(&cfg) {
-            let _ = fs::write(&cfg_path, &j);
+            self.write_state_file(&cfg_path, &j);
         }
         let result = self
             .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
@@ -264,7 +264,7 @@ impl ContainerdRuntime {
             .cni_results_dir
             .join(format!("catalyst-{}", container_id));
         if let Ok(j) = serde_json::to_string_pretty(&result) {
-            let _ = fs::write(&rp, &j);
+            self.write_state_file(&rp, &j);
         }
         let cip = result
             .get("ips")
@@ -317,7 +317,7 @@ impl ContainerdRuntime {
                     PORT_FWD_STATE_PREFIX, container_id
                 ));
                 if let Ok(j) = serde_json::to_string_pretty(&state) {
-                    let _ = fs::write(&state_path, &j);
+                    self.write_state_file(&state_path, &j);
                 }
             }
         }
@@ -862,8 +862,9 @@ impl ContainerdRuntime {
                 .exec_cni_plugin(&cfg, "ADD", container_id, &netns, "eth0")
                 .await?;
             if let Ok(j) = serde_json::to_string_pretty(&result) {
-                let _ = fs::write(
-                    self.cni_results_dir
+                self.write_state_file(
+                    &self
+                        .cni_results_dir
                         .join(format!("catalyst-{}", container_id)),
                     &j,
                 );
@@ -904,7 +905,7 @@ impl ContainerdRuntime {
                         forwards: forwards.clone(),
                     };
                     if let Ok(j) = serde_json::to_string_pretty(&state) {
-                        let _ = fs::write(&ports_path, &j);
+                        self.write_state_file(&ports_path, &j);
                     }
 
                     for fwd in &forwards {
@@ -963,7 +964,7 @@ impl ContainerdRuntime {
                             forwards,
                         };
                         if let Ok(j) = serde_json::to_string_pretty(&state) {
-                            let _ = fs::write(&ports_path, &j);
+                            self.write_state_file(&ports_path, &j);
                         }
                     }
                 }
@@ -1043,21 +1044,17 @@ impl ContainerdRuntime {
                     }
                 }
             }
-            // The container record itself may still exist (stopped) while its
-            // task is gone; only sweep NAT when the record is gone too.
+            // The task is gone, so this container's addresses are dead for NAT
+            // purposes even while its container record still exists
+            // (`stop_server` deletes the record only after this teardown).
             // teardown_port_forward above already removed rules tracked in
-            // ports.json — this catches the rest (e.g. CNI portmap chains
-            // from older agents).
-            if !self.container_exists(container_id).await {
-                let mut ips = stale_ips;
-                if let Some(live) = self.live_container_ips().await {
-                    ips.retain(|ip| !live.contains(ip));
-                } else {
-                    ips.clear();
-                }
-                if !ips.is_empty() {
-                    self.sweep_dead_nat_rules(&ips).await;
-                }
+            // ports.json — this catches the rest the bridge plugin added, e.g.
+            // `POSTROUTING -s <ip>/32 -j CNI-<hash>`, which nothing else can
+            // remove once the netns is gone (issue #311).
+            let live = self.live_container_ips_except(container_id).await;
+            let ips = dead_ips_for_teardown(stale_ips, live.as_ref());
+            if !ips.is_empty() {
+                self.sweep_dead_nat_rules(&ips).await;
             }
         }
         let _ = tokio::fs::remove_file(&rp).await;
@@ -1065,9 +1062,25 @@ impl ContainerdRuntime {
         Ok(())
     }
 
-    /// Best-effort idempotency guard for `-A`: skip the rule when an
-    /// identical one already exists (stop → start re-attach must not stack
-    /// duplicates).
+    /// Persist a CNI state file (config, result or port-forward state).
+    ///
+    /// Teardown depends on these files: without the result/transport state a
+    /// stop leaves the IPAM lease and the port-forward rules behind, so a
+    /// failure is logged instead of being dropped. The parent directory is
+    /// created here too — on older installs `/var/lib/cni/results` was never
+    /// created and every write failed silently (issue #310).
+    fn write_state_file(&self, path: &Path, contents: &str) {
+        if let Some(dir) = path.parent() {
+            if let Err(e) = fs::create_dir_all(dir) {
+                error!("Failed to create CNI state dir {}: {}", dir.display(), e);
+                return;
+            }
+        }
+        if let Err(e) = fs::write(path, contents) {
+            error!("Failed to write CNI state {}: {}", path.display(), e);
+        }
+    }
+
     /// All container IPs referenced by on-disk CNI state for one container:
     /// the CNI result file, the ports.json state, and IPAM lease filenames
     /// holding its ID.
@@ -1124,6 +1137,14 @@ impl ContainerdRuntime {
     /// `None` when containerd cannot be listed — callers must skip sweeping
     /// then (an empty live set would misclassify everything as dead).
     async fn live_container_ips(&self) -> Option<HashSet<String>> {
+        self.live_container_ips_except("").await
+    }
+
+    /// Same as [`Self::live_container_ips`], but ignores the given container
+    /// (and its on-disk result file) when deciding what is live. Teardown needs
+    /// this: the container being torn down still has a record and a result
+    /// file, so counting it as live would leave its own rules unswept.
+    async fn live_container_ips_except(&self, exclude: &str) -> Option<HashSet<String>> {
         let containers = match self.list_containers().await {
             Ok(c) => c,
             Err(e) => {
@@ -1136,6 +1157,9 @@ impl ContainerdRuntime {
         };
         let mut out = HashSet::new();
         for c in containers {
+            if !exclude.is_empty() && c.id == exclude {
+                continue;
+            }
             // get_container_ip falls back to the result file, so stopped
             // containers keep their addresses too.
             if let Ok(ip) = self.get_container_ip(&c.id).await {
@@ -1726,6 +1750,25 @@ fn parse_nat_save(
 /// Plan deletions: exact-duplicate rules (keep the first occurrence) plus
 /// rules whose container IP is dead. Returns rule indices and `CNI-*` chains
 /// left with zero references once the planned deletions are applied.
+/// IPs to sweep from NAT when a container is torn down.
+///
+/// The container's own addresses are dead even though its result file still
+/// exists: `stop_server` deletes the container record only *after* this
+/// teardown, and the on-disk result file keeps `get_container_ip` answering for
+/// it — that is why the live set must exclude the container being torn down
+/// (issue #311). An address still owned by another container is kept, and when
+/// containerd cannot be listed (`None`) nothing is swept, because an empty live
+/// set would misclassify every address as dead.
+fn dead_ips_for_teardown(
+    stale: HashSet<String>,
+    live: Option<&HashSet<String>>,
+) -> HashSet<String> {
+    match live {
+        Some(live) => stale.into_iter().filter(|ip| !live.contains(ip)).collect(),
+        None => HashSet::new(),
+    }
+}
+
 fn plan_nat_cleanup(
     rules: &[NatRule],
     refcounts: &std::collections::HashMap<String, usize>,
@@ -1961,5 +2004,31 @@ COMMIT
         assert_eq!(select_dead_jump_rules(&rules, &live_too), vec![4, 5]);
         let empty = HashSet::new();
         assert!(select_dead_jump_rules(&rules, &empty).is_empty());
+    }
+
+    #[test]
+    fn teardown_sweeps_its_own_ips_even_with_a_live_record() {
+        // The stopped container still has a record and a result file, but the
+        // live set excludes it — so its own addresses are swept (#311).
+        let stale: HashSet<String> = ["10.44.0.15".to_string()].into_iter().collect();
+        let live: HashSet<String> = ["10.44.0.13".to_string()].into_iter().collect();
+        let dead = dead_ips_for_teardown(stale, Some(&live));
+        assert_eq!(dead, ["10.44.0.15".to_string()].into_iter().collect());
+    }
+
+    #[test]
+    fn teardown_keeps_addresses_of_other_containers() {
+        let stale: HashSet<String> = ["10.44.0.15".to_string(), "10.44.0.13".to_string()]
+            .into_iter()
+            .collect();
+        let live: HashSet<String> = ["10.44.0.13".to_string()].into_iter().collect();
+        let dead = dead_ips_for_teardown(stale, Some(&live));
+        assert_eq!(dead, ["10.44.0.15".to_string()].into_iter().collect());
+    }
+
+    #[test]
+    fn teardown_skips_the_sweep_when_containerd_cannot_be_listed() {
+        let stale: HashSet<String> = ["10.44.0.15".to_string()].into_iter().collect();
+        assert!(dead_ips_for_teardown(stale, None).is_empty());
     }
 }

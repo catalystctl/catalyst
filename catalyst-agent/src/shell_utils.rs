@@ -37,20 +37,34 @@ pub fn requires_bash(command: &str) -> bool {
 
 /// Normalize common bash arithmetic condition syntax so startup commands run under /bin/sh.
 /// Example: `((1))` -> `[ $((1)) -ne 0 ]`
+///
+/// Only standalone `(( … ))` conditions are rewritten. `$(( … ))` arithmetic
+/// expansion (e.g. `n=$((n+1))`) must stay untouched: rewriting it produces
+/// `$[ $(( n+1 )) -ne 0 ]`, which bash rejects as a syntax error and the server
+/// crash-loops.
 pub fn normalize_startup_for_sh(command: &str) -> String {
     static ARITH_COND_RE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"\(\(\s*([^()]*)\s*\)\)").expect("valid arithmetic condition regex")
     });
-    ARITH_COND_RE
-        .replace_all(command, |caps: &regex::Captures<'_>| {
-            let expr = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
-            if expr.is_empty() {
-                "[ 0 -ne 0 ]".to_string()
-            } else {
-                format!("[ $(( {} )) -ne 0 ]", expr)
-            }
-        })
-        .into_owned()
+    let mut out = String::with_capacity(command.len());
+    let mut last = 0usize;
+    for caps in ARITH_COND_RE.captures_iter(command) {
+        let whole = caps.get(0).expect("match has group 0");
+        // `$(( … ))` is arithmetic expansion, not a condition.
+        if command[..whole.start()].ends_with('$') {
+            continue;
+        }
+        out.push_str(&command[last..whole.start()]);
+        let expr = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+        if expr.is_empty() {
+            out.push_str("[ 0 -ne 0 ]");
+        } else {
+            out.push_str(&format!("[ $(( {} )) -ne 0 ]", expr));
+        }
+        last = whole.end();
+    }
+    out.push_str(&command[last..]);
+    out
 }
 
 /// Cap for `-XX:MaxRAMPercentage` when rewriting visible startup / injecting options.
@@ -360,6 +374,26 @@ mod tests {
         );
         // No arithmetic condition → unchanged
         assert_eq!(normalize_startup_for_sh("echo hello"), "echo hello");
+    }
+
+    #[test]
+    fn test_normalize_startup_for_sh_leaves_arithmetic_expansion() {
+        // `$(( … ))` is expansion, not a condition (Enshrouded template).
+        assert_eq!(
+            normalize_startup_for_sh("n=0; n=$((n+1)); echo $n"),
+            "n=0; n=$((n+1)); echo $n"
+        );
+        assert_eq!(
+            normalize_startup_for_sh("while [ $wait_n -lt 60 ]; do wait_n=$((wait_n+1)); done"),
+            "while [ $wait_n -lt 60 ]; do wait_n=$((wait_n+1)); done"
+        );
+        // Mixed: the expansion stays, the standalone condition is rewritten.
+        assert_eq!(
+            normalize_startup_for_sh("n=$((n+1)); if ((n)); then echo $n; fi"),
+            "n=$((n+1)); if [ $(( n )) -ne 0 ]; then echo $n; fi"
+        );
+        // Empty arithmetic expansion also stays untouched.
+        assert_eq!(normalize_startup_for_sh("x=$(( ))"), "x=$(( ))");
     }
 
     #[test]

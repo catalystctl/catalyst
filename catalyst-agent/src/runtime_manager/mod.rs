@@ -465,14 +465,7 @@ pub mod image_and_spec;
 
 impl ContainerdRuntime {
     pub async fn new(config: ContainerdRuntimeConfig) -> AgentResult<Self> {
-        // Ensure console log directory exists
-        fs::create_dir_all(&config.console_log_dir).map_err(|e| {
-            AgentError::ContainerError(format!(
-                "Failed to create console log dir {}: {}",
-                config.console_log_dir.display(),
-                e
-            ))
-        })?;
+        ensure_state_dirs(&config)?;
 
         let channel = containerd_client::connect(&config.socket_path)
             .await
@@ -560,4 +553,73 @@ impl ContainerdRuntime {
 pub struct CtrEvent {
     pub topic: String,
     pub container_id: String,
+}
+
+/// Create the directories the agent owns: console logs and CNI state.
+///
+/// `cni_results_dir` is not created by the host-local IPAM plugin, and teardown
+/// reads those state files to release the lease and the port forwards. On a
+/// fresh install the directory was missing, every write failed silently and
+/// stopping a server left a stale lease plus its DNAT/MASQUERADE rules behind
+/// (issue #310).
+pub(crate) fn ensure_state_dirs(config: &ContainerdRuntimeConfig) -> AgentResult<()> {
+    for dir in [
+        &config.console_log_dir,
+        &config.cni_results_dir,
+        &config.cni_data_dir,
+    ] {
+        fs::create_dir_all(dir).map_err(|e| {
+            AgentError::ContainerError(format!(
+                "Failed to create state dir {}: {}",
+                dir.display(),
+                e
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod state_dir_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn test_config(root: &std::path::Path) -> ContainerdRuntimeConfig {
+        ContainerdRuntimeConfig {
+            socket_path: PathBuf::from("/run/containerd/containerd.sock"),
+            namespace: "catalyst".to_string(),
+            dns_servers: Vec::new(),
+            console_log_dir: root.join("console"),
+            cni_results_dir: root.join("cni/results"),
+            cni_data_dir: root.join("cni/networks"),
+            cni_dir: root.join("cni/net.d"),
+            cni_bin_dir: root.join("cni/bin"),
+            cni_bridge_name: "catalyst0".to_string(),
+            cni_bridge_subnet: "10.42.0.0/16".to_string(),
+            allow_host_network: false,
+        }
+    }
+
+    #[test]
+    fn creates_console_and_cni_state_dirs() {
+        let root = std::env::temp_dir().join(format!(
+            "catalyst-state-dirs-{}",
+            std::process::id() as u64 * 1000 + 7
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let config = test_config(&root);
+
+        ensure_state_dirs(&config).expect("state dirs are created");
+
+        assert!(config.console_log_dir.is_dir());
+        assert!(
+            config.cni_results_dir.is_dir(),
+            "results dir missing (#310)"
+        );
+        assert!(config.cni_data_dir.is_dir());
+        // Idempotent: a second call on existing dirs must not fail.
+        ensure_state_dirs(&config).expect("second call is a no-op");
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }

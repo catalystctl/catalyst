@@ -534,6 +534,10 @@ prepare_directories() {
     mkdir -p "${console_dir}"
     mkdir -p /etc/cni/net.d
     mkdir -p /var/lib/cni/networks
+    # CNI result/config/port-forward state. The host-local IPAM plugin does not
+    # create this directory, and teardown needs the state files to release the
+    # lease and the DNAT/MASQUERADE rules on stop (issue #310).
+    mkdir -p "${CNI_RESULTS_DIR:-/var/lib/cni/results}"
     chmod 0755 "${console_dir}"
 }
 
