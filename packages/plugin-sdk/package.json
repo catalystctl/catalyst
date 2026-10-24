@@ -44,7 +44,7 @@
 		"dev": "tsc --watch"
 	},
 	"dependencies": {
-		"zod": "^4.6.5"
+		"zod": "^4.6.7"
 	},
 	"peerDependencies": {
 		"fastify": "^5.0.0",
@@ -59,7 +59,7 @@
 		}
 	},
 	"devDependencies": {
-		"@types/node": "^26.6.4",
+		"@types/node": "^26.6.5",
 		"@types/react": "^19.3.0",
 		"@typescript/native": "npm:typescript@^7.0.2",
 		"archiver": "^8.0.0",

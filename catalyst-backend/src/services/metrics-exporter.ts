@@ -1,4 +1,4 @@
-import { Registry, Counter, Histogram, Gauge } from "prom-client";
+import { Registry, Counter, Histogram, Gauge } from "@prometheus-io/client";
 import type { FastifyInstance } from "fastify";
 
 export class MetricsExporter {

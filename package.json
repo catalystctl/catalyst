@@ -54,8 +54,8 @@
 		"prepare": "husky"
 	},
 	"devDependencies": {
-		"@commitlint/cli": "^21.2.3",
-		"@commitlint/config-conventional": "^21.2.3",
+		"@commitlint/cli": "^21.2.4",
+		"@commitlint/config-conventional": "^21.2.4",
 		"@typescript/native": "npm:typescript@~7.0.2",
 		"autocannon": "^8.0.0",
 		"husky": "^9.1.7",

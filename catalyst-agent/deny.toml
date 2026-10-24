@@ -6,7 +6,9 @@
 version = 2
 # RUSTSEC-2023-0071 (rsa Marvin Attack): no patched release exists; rsa is a
 # transitive dep of russh (SFTP host-key exchange) and not used for panel
-# traffic. Tracked for removal when russh drops the rsa default feature.
+# traffic. Tracked for removal when russh drops the rsa default feature
+# (still in russh 0.64.1's default feature set, so also still ignored in the
+# CI cargo-audit step).
 #
 # RUSTSEC-2024-0449 (unsafe-libyaml unmaintained): the repository was archived
 # upstream, so there is no fixed release to move to. It reaches us only through
