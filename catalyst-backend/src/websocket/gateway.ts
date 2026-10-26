@@ -2994,7 +2994,14 @@ export class WebSocketGateway {
               ],
             }
           },
-          select: { id: true, uuid: true, status: true, suspendedAt: true }
+          select: {
+            id: true, nodeId: true, status: true, suspendedAt: true,
+            uuid: true,
+            template: true, node: true, allocatedMemoryMb: true, allocatedCpuCores: true,
+            allocatedDiskMb: true, allocatedSwapMb: true, ioWeight: true, primaryPort: true,
+            primaryIp: true, portBindings: true, networkMode: true, environment: true,
+            startupCommand: true, restartPolicy: true, maxCrashCount: true,
+          }
         });
 
         // Check which servers are missing (container not found)
@@ -3006,6 +3013,57 @@ export class WebSocketGateway {
 
           // Container name is server.id (CUID), not server.uuid
           if (!foundContainers.has(server.id)) {
+            // A missing container for a previously running server indicates a
+            // node reboot. Replay its persisted start configuration; an
+            // intentional stop remains represented by STOPPED and is skipped.
+            if (server.status === ServerState.RUNNING) {
+              const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
+              const environment: Record<string, string> = {
+                ...(server.environment as Record<string, string>),
+                SERVER_DIR: `${serverDir}/${server.uuid}`,
+              };
+              if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
+                environment.CATALYST_NETWORK_IP = server.primaryIp;
+              }
+              const template = server.startupCommand
+                ? { ...server.template, startup: server.startupCommand }
+                : server.template;
+              const sent = await this.sendToAgent(server.nodeId, {
+                type: "start_server",
+                serverId: server.id,
+                serverUuid: server.uuid,
+                template,
+                environment,
+                allocatedMemoryMb: server.allocatedMemoryMb,
+                allocatedCpuCores: server.allocatedCpuCores,
+                allocatedDiskMb: server.allocatedDiskMb,
+                allocatedSwapMb: server.allocatedSwapMb,
+                ioWeight: server.ioWeight,
+                primaryPort: server.primaryPort,
+                portBindings: server.portBindings ?? {},
+                networkMode: server.networkMode,
+                autoRestart: {
+                  enabled: server.restartPolicy !== "never",
+                  delay: 10,
+                  maxRestarts: server.maxCrashCount ?? 5,
+                  windowSecs: 60,
+                },
+              });
+              if (sent) {
+                this.logger.info({ serverId: server.id }, "Restoring server after node reconnect");
+                await this.prisma.serverLog.create({
+                  data: {
+                    serverId: server.id,
+                    stream: "system",
+                    data: "[State Sync] Container missing after node reconnect; start command sent to restore running state",
+                  },
+                });
+              } else {
+                this.logger.warn({ serverId: server.id }, "Could not restore server after node reconnect");
+              }
+              continue;
+            }
+
             // Server should exist but container wasn't found - mark as stopped
             this.logger.info(
               { serverId: server.id, uuid: server.uuid, previousStatus: server.status },

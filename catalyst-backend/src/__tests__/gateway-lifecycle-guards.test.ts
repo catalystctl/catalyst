@@ -216,6 +216,44 @@ describe("state sync transitional-state protection", () => {
     gw.destroy();
   });
 
+  it("restores a running server when reconciliation finds its container missing", async () => {
+    const sent: any[] = [];
+    let statusWrites = 0;
+    const prisma: any = {
+      systemSetting: { findUnique: async () => null },
+      node: { findUnique: async () => null, update: async () => ({}) },
+      server: {
+        findMany: async () => [{
+          id: "s1", uuid: "u1", nodeId: "n1", status: "running", suspendedAt: null,
+          allocatedMemoryMb: 1024, allocatedCpuCores: 1, allocatedDiskMb: 10240,
+          allocatedSwapMb: 0, ioWeight: 500, primaryPort: 25565, primaryIp: null,
+          portBindings: {}, networkMode: "bridge", environment: {}, startupCommand: null,
+          restartPolicy: "on-failure", maxCrashCount: 5,
+          node: { publicAddress: "127.0.0.1" },
+          template: { image: "example/image", startup: "run", variables: [] },
+        }],
+        update: async () => { statusWrites += 1; return {}; },
+      },
+      serverLog: { create: async () => {} },
+    };
+    const gw: any = new WebSocketGateway(prisma, loggerStub);
+    gw.sendToAgent = async (_nodeId: string, message: any) => { sent.push(message); return true; };
+    (gw as any).routeToClients = async () => {};
+    const socket = makeFakeSocket();
+    seedAgent(gw, "n1", socket);
+
+    await gw.handleAgentMessage(
+      "n1", socket,
+      JSON.stringify({ type: "server_state_sync_complete", nodeId: "n1", foundContainers: [] }),
+      false,
+    );
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ type: "start_server", serverId: "s1", serverUuid: "u1" });
+    expect(statusWrites).toBe(0);
+    gw.destroy();
+  });
+
   it("sync_complete does not mark INSTALLING servers STOPPED for missing containers", async () => {
     let stoppedWrites = 0;
     const prisma: any = {
