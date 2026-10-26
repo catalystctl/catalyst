@@ -285,19 +285,17 @@ describe('invite-based registration', () => {
     const data = res.json().data;
     expect(data.email).toBe(`test-invite-fresh-${suffix}@example.com`);
     expect(data.userId).toBeTruthy();
-    // Email verification is enforced on this database, so better-auth
-    // withholds the session: the response must say so instead of implying
-    // the invitee is signed in.
+    expect(data.emailVerificationRequired).toBe(false);
+    // Better-auth withholds the initial session when verification is enabled,
+    // but the invited email itself must already count as verified for sign-in.
     if (security.requireEmailVerification) {
       expect(data.token).toBeNull();
-      expect(data.emailVerificationRequired).toBe(true);
-      expect(typeof data.mailConfigured).toBe('boolean');
-    } else {
-      expect(data.emailVerificationRequired).toBe(false);
     }
+    expect(typeof data.mailConfigured).toBe('boolean');
 
     const created = await prisma.user.findUnique({ where: { email: `test-invite-fresh-${suffix}@example.com` } });
     expect(created?.username).toBe(`invitereg${suffix}`);
+    expect(created?.emailVerified).toBe(true);
     const access = await prisma.serverAccess.findUnique({
       where: { userId_serverId: { userId: data.userId, serverId } },
     });

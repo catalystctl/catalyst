@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
 import { DEFAULT_PERMISSION_PRESETS, INVITE_EXPIRY_DAYS, auth, canAccessServer, canManageSubusers, captureSystemError, getEffectiveServerPermissions, nanoid, renderInviteEmail, revokeSftpTokensForUser, sendEmail } from './_helpers.js';
-import { isMailConfigured, getSecuritySettings } from '../../services/mailer.js';
+import { isMailConfigured } from '../../services/mailer.js';
 import { forwardAuthHeaders } from '../auth.js';
 import { localeForEmail } from '../../i18n/user-locale.js';
 import { publishCacheInvalidate } from '../../lib/event-bus.js';
@@ -553,6 +553,12 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
         return apiError(reply, 400, ErrorCodes.REGISTRATION_FAILED, "Registration failed");
       }
 
+      // The invite was delivered to this address, so its token proves ownership.
+      await prisma.user.update({
+        where: { id: signUpUser.id },
+        data: { emailVerified: true },
+      });
+
       const accepted = await acceptInviteForUser({ userId: signUpUser.id, token, reply, invite });
       if (!accepted) {
         return;
@@ -592,12 +598,9 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       // navigation 401-bounces back to /login.
       const tokenValue = forwardAuthHeaders(signUpResponse, reply);
 
-      // Better-auth skips auto sign-in while email verification is pending,
+      // Better-auth may skip auto sign-in before the verified flag is set,
       // so no session exists yet — the client must not fake one.
-      const [security, mailConfigured] = await Promise.all([
-        getSecuritySettings(),
-        isMailConfigured(),
-      ]);
+      const mailConfigured = await isMailConfigured();
 
       reply.send({
         success: true,
@@ -607,7 +610,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
           username: signUpUser.username ?? username,
           permissions,
           token: tokenValue ?? null,
-          emailVerificationRequired: !tokenValue && security.requireEmailVerification,
+          emailVerificationRequired: false,
           mailConfigured,
         },
       });
