@@ -7,12 +7,13 @@ import { useAuthStore } from '../../stores/authStore';
 
 import { authApi } from '../../services/api/auth';
 import type { PluginOauthProvider } from '../../services/api/auth';
+import { profileApi } from '../../services/api/profile';
 import type { LoginSchema } from '../../validators/auth';
 import { createLoginSchema } from '../../validators/auth';
 import { authClient } from '../../services/authClient';
 import { reportSystemError } from '../../services/api/systemErrors';
-import { notifyError } from '../../utils/notify';
-import { getLocalizedErrorMessage } from '../../i18n/api-errors';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import { getApiErrorCode, getLocalizedErrorMessage } from '../../i18n/api-errors';
 import { describeError } from '../../utils/errors';
 import { useThemeStore } from '../../stores/themeStore';
 import { usePanelBranding } from '../../hooks/usePanelBranding';
@@ -54,6 +55,8 @@ function LoginPage() {
  const [totpTrustDevice, setTotpTrustDevice] = useState(false);
  const [totpSubmitting, setTotpSubmitting] = useState(false);
  const [totpError, setTotpError] = useState<string | null>(null);
+ const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+ const [resendingVerification, setResendingVerification] = useState(false);
  const loginSchema = useMemo(() => createLoginSchema(t), [t]);
  const {
  register,
@@ -152,6 +155,7 @@ function LoginPage() {
  };
 
  const onSubmit = async (values: LoginSchema, fallbackOverride?: boolean | BaseSyntheticEvent) => {
+ setVerificationEmail(null);
  const allowFallback =
  typeof fallbackOverride === 'boolean' ? fallbackOverride : allowPasskeyFallback;
  try {
@@ -170,20 +174,33 @@ function LoginPage() {
  stack: err instanceof Error ? err.stack : undefined,
  metadata: { context: 'onSubmit' },
  });
- const error = err as { code?: string };
- if (error.code === 'PASSKEY_REQUIRED') {
+ const errorCode = getApiErrorCode(err);
+ if (errorCode === 'PASSKEY_REQUIRED') {
  setAuthStep('passkey');
  return;
  }
- if (error.code === 'TWO_FACTOR_REQUIRED') {
+ if (errorCode === 'TWO_FACTOR_REQUIRED') {
  setTotpError(null);
  setAuthStep('totp');
  return;
  }
- if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
- notifyError(t('login.emailVerificationRequired'));
+ if (errorCode === 'EMAIL_VERIFICATION_REQUIRED') {
+ setVerificationEmail(values.email);
  return;
  }
+ }
+ };
+
+ const handleResendVerification = async () => {
+ if (!verificationEmail) return;
+ setResendingVerification(true);
+ try {
+ await profileApi.resendVerification(verificationEmail);
+ notifySuccess(t('login.verificationEmailSent'));
+ } catch (err) {
+ notifyError(err);
+ } finally {
+ setResendingVerification(false);
  }
  };
 
@@ -303,7 +320,21 @@ function LoginPage() {
             </div>
           </div>
 
- {error && !authStep && (
+ {verificationEmail && !authStep && (
+ <div role="alert" className={`mt-4 space-y-1 ${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>
+ <p>{t('login.emailVerificationRequired')}</p>
+ <button
+ type="button"
+ className="min-h-7 text-mini font-medium underline underline-offset-4 transition-colors hover:text-danger/80 disabled:cursor-not-allowed disabled:opacity-60"
+ onClick={handleResendVerification}
+ disabled={resendingVerification}
+ >
+ {resendingVerification ? t('login.resendingVerification') : t('login.resendVerification')}
+ </button>
+ </div>
+ )}
+
+ {error && !authStep && !verificationEmail && (
  <div role="alert" className={`mt-4 ${AUTH_BANNER_CLASS} border-danger/25 bg-danger/5 text-danger`}>{error}</div>
  )}
 

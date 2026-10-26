@@ -328,6 +328,13 @@ export async function authRoutes(app: FastifyInstance) {
           },
         });
       } catch (err: any) {
+        if (err?.code === 'EMAIL_VERIFICATION_REQUIRED') {
+          return reply.status(403).send({
+            error: 'Email verification required. Please check your inbox.',
+            code: 'EMAIL_VERIFICATION_REQUIRED',
+          });
+        }
+
         const isCredentialError =
           err?.message?.toLowerCase().includes('invalid') ||
           err?.message?.toLowerCase().includes('credential') ||
