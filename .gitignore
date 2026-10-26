@@ -59,6 +59,7 @@ catalyst-frontend/.vite/
 
 # Pi agent runtime state
 .pi/
+.rpi/
 context.md
 test-results/.last-run.json
 .pi-lens
@@ -132,3 +133,26 @@ catalyst-doc/
 .graphflow-cache/
 graphflow-out/
 .serena/
+
+# Local tool caches (regenerated on demand, never commit)
+.eslintcache
+*.tsbuildinfo
+/.cache/
+/.pnpm-store/
+.turbo/
+
+# pnpm per-machine state. Build-script approvals live in pnpm-workspace.yaml
+# `allowBuilds`; this file is local scratch written by `pnpm approve-builds`.
+.pnpm-approve-builds.json
+
+# Playwright run artifacts (the frontend e2e suite writes these)
+catalyst-frontend/test-results/
+catalyst-frontend/playwright/.cache/
+
+# Logs
+*.log
+
+# Real environment files — only the *.example templates are tracked.
+# (Per-package .gitignore files cover the plain `.env` case.)
+.env.*
+!.env.*.example
