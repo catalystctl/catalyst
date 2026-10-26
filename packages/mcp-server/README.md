@@ -27,7 +27,9 @@ and make it executable. No npm registry needed — only Node.js 20 or newer.
 ```bash
 curl -fLO https://github.com/catalystctl/catalyst/releases/latest/download/catalyst-mcp.mjs
 curl -fLO https://github.com/catalystctl/catalyst/releases/latest/download/catalyst-mcp.mjs.sha256
-sha256sum -c catalyst-mcp.mjs.sha256
+# The published .sha256 records the build path, so re-point it at the file you
+# just downloaded before checking:
+echo "$(cut -d' ' -f1 catalyst-mcp.mjs.sha256)  catalyst-mcp.mjs" | sha256sum -c -
 chmod +x catalyst-mcp.mjs
 ```
 
@@ -80,7 +82,7 @@ curl, and Node.js 20+; nothing persists on disk):
       "command": "bash",
       "args": [
         "-c",
-        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; b=https://github.com/catalystctl/catalyst/releases/latest/download; curl -fsSL -o \"$d/catalyst-mcp.mjs\" \"$b/catalyst-mcp.mjs\" -o \"$d/catalyst-mcp.mjs.sha256\" \"$b/catalyst-mcp.mjs.sha256\"; (cd \"$d\" && sha256sum -c catalyst-mcp.mjs.sha256 >/dev/null); exec node \"$d/catalyst-mcp.mjs\""
+        "set -e; d=$(mktemp -d); trap 'rm -rf \"$d\"' EXIT; b=https://github.com/catalystctl/catalyst/releases/latest/download; curl -fsSL -o \"$d/catalyst-mcp.mjs\" \"$b/catalyst-mcp.mjs\" -o \"$d/catalyst-mcp.mjs.sha256\" \"$b/catalyst-mcp.mjs.sha256\"; [ \"$(cut -d' ' -f1 \"$d/catalyst-mcp.mjs.sha256\")\" = \"$(sha256sum \"$d/catalyst-mcp.mjs\" | cut -d' ' -f1)\" ]; exec node \"$d/catalyst-mcp.mjs\""
       ],
       "env": {
         "CATALYST_URL": "https://panel.example.com",
@@ -155,7 +157,7 @@ Locations: `list_locations`, `get_location`, `create_location`, `update_location
 
 Templates: `list_templates`, `get_template`, `create_template`, `update_template`, `delete_template`, `import_pterodactyl_egg`, `list_nests`, `get_nest`, `create_nest`, `update_nest`, `delete_nest`.
 
-Users: `list_users`, `get_user`, `create_user`, `update_user`, `delete_user`, `ban_user`, `unban_user`, `list_user_servers`.
+Users: `list_users`, `create_user`, `update_user`, `delete_user`, `ban_user`, `unban_user`, `list_user_servers`.
 
 Roles and keys: `list_roles`, `get_role`, `create_role`, `update_role`, `delete_role`, `assign_role_to_user`, `remove_role_from_user`, `list_role_presets`, `get_user_roles`, `add_role_permission`, `remove_role_permission`, `set_role_scope`, `list_role_nodes`, `get_user_nodes`, `list_api_keys`, `create_api_key`, `get_api_key`, `update_api_key`, `delete_api_key`, `get_api_key_usage`.
 

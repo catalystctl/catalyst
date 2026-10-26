@@ -66,7 +66,7 @@ Rules of thumb:
 |---|---|---|
 | **Docker** 20.10+ **or** **Podman** 4.0+ | Required | Docker Compose v2 plugin or `podman-compose` |
 | **Architecture** | `linux/amd64` or `linux/arm64` | Pre-built images are multi-arch; `docker compose` pulls the matching manifest automatically |
-| **Ports** | 8080, 3000, 2022, 5432, 6379 | Adjust in `.env` if conflicts |
+| **Ports** | 8080, 3000, 5432, 6379 | Adjust in `.env` if conflicts |
 | **RAM** | 2 GB | 4+ GB recommended |
 | **Disk** | 10 GB | SSD recommended |
 
@@ -119,7 +119,7 @@ nano .env
 | `PASSKEY_RP_ID` | `localhost` | Set to hostname from `PUBLIC_URL` for passkeys |
 | `FRONTEND_PORT` | `0.0.0.0:8080` (installed `.env`; bare compose fallback is `0.0.0.0:80`) | Change to `127.0.0.1:8080` to block external access |
 | `PORT` | `80` | Nginx listen port inside the frontend container (same mechanism as the backend's `PORT`). Advanced use — to move the panel for users, change `FRONTEND_PORT` instead. |
-| `BACKEND_PORT` | `127.0.0.1:3000` | Change to `127.0.0.1:3000` for localhost-only API |
+| `BACKEND_PORT` | `127.0.0.1:3000` | Already loopback-only. Set the host side to `0.0.0.0:3000` only if an external client must reach the API directly |
 | `BACKEND_INTERNAL_PORT` | `3000` | Port the backend listens on inside its container. Advanced use — the frontend nginx upstream, backend healthcheck, and published mapping all follow it. |
 
 > SFTP is served by the node agent (default port `2022`), not by this compose stack.
@@ -161,14 +161,15 @@ docker compose ps
 podman compose ps
 ```
 
-Expected output — all containers `Up` with postgres/redis/backend showing `(healthy)`:
+Expected output — all four containers `Up`, each showing `(healthy)` once its
+healthcheck passes (the frontend's has a 10s start period):
 
 | Container | Status | Exposed Port |
 |---|---|---|
 | `catalyst-postgres` | `healthy` | `127.0.0.1:5432` |
 | `catalyst-redis` | `healthy` | `127.0.0.1:6379` |
 | `catalyst-backend` | `healthy` | `127.0.0.1:3000` |
-| `catalyst-frontend` | `running` | `0.0.0.0:8080` |
+| `catalyst-frontend` | `healthy` | `0.0.0.0:8080` |
 
 If any container shows `(unhealthy)` or `Restarting`, see [Troubleshooting](#troubleshooting).
 
@@ -178,11 +179,11 @@ Open `PUBLIC_URL` in your browser (e.g. `http://192.168.1.78:8080`).
 
 Complete the **Setup** wizard on first visit; that account becomes the administrator and open registration is disabled.
 
-> **Optional:** If you want pre-seeded demo data, run:
-> ```bash
-> docker compose exec backend pnpm run db:seed
-> ```
-> Default credentials: `admin@example.com` / `admin123` — **change immediately**.
+The image ships no demo data — the wizard creates the first admin, and every
+other user/server is created from the panel. The runtime image holds only the
+`pnpm deploy --prod` tree (`catalyst-backend/Dockerfile`): `tsx` is a dev
+dependency and `pnpm` is not on `PATH`, so `pnpm run db:seed` cannot be run
+inside the backend container.
 
 ---
 
@@ -195,7 +196,7 @@ The Docker Compose stack defines four services:
 | Service | Image | Purpose | Exposed Port |
 |---|---|---|---|
 | `postgres` | `postgres:16-alpine` | Primary database | `127.0.0.1:5432` |
-| `redis` | `redis:7.4-alpine` | Present in compose; **not** the Better Auth session store in current backend | `127.0.0.1:6379` |
+| `redis` | `redis:7.4-alpine` | Cross-instance cache/pub-sub (config, rate limits, session-cache invalidation). Sessions themselves live in PostgreSQL; `REDIS_ENABLED=false` runs without it | `127.0.0.1:6379` |
 | `backend` | `ghcr.io/catalystctl/catalyst-backend:latest` | Fastify API (SFTP runs on the node agent, not here) | `127.0.0.1:3000` |
 | `frontend` | `ghcr.io/catalystctl/catalyst-frontend:latest` | Nginx static SPA | `0.0.0.0:8080` |
 
@@ -203,10 +204,10 @@ The Docker Compose stack defines four services:
 
 ```
 frontend → backend → postgres
-                ↘ redis
 ```
 
-The frontend waits for the backend health check before starting. The backend waits for both PostgreSQL and Redis.
+The frontend waits for the backend health check; the backend waits for
+PostgreSQL only — without Redis it degrades to Postgres + process-local state.
 
 ### Volumes
 
@@ -219,6 +220,7 @@ All data persists in named volumes:
 | `catalyst-backup-data` | Backup archives |
 | `catalyst-plugin-data` | Installed plugins |
 | `caddy-data` | Caddy TLS certificates (Caddy overlay) |
+| `caddy-config` | Caddy runtime config (Caddy overlay) |
 | `traefik-certs` | Traefik ACME certificates (Traefik overlay) |
 
 ### Environment Injection
@@ -442,7 +444,7 @@ docker compose logs --tail=50 redis
 | Backend crashes on start | Missing `BETTER_AUTH_SECRET` or `POSTGRES_PASSWORD` | Verify both are set in `.env` |
 | Backend keeps restarting | Database not ready yet | Wait 30s for postgres healthcheck; check `docker compose logs postgres` |
 | Frontend never starts | Backend unhealthy | Fix backend first; frontend depends on backend |
-| Port already in use | Another service uses 8080, 3000, or 2022 | Change the host side in `.env` (`FRONTEND_PORT` / `BACKEND_PORT`); a host-network collision instead needs `PORT` / `BACKEND_INTERNAL_PORT` |
+| Port already in use | Another service uses 8080 or 3000 | Change the host side in `.env` (`FRONTEND_PORT` / `BACKEND_PORT`); a host-network collision instead needs `PORT` / `BACKEND_INTERNAL_PORT` |
 
 ### Health check failures
 
@@ -544,9 +546,6 @@ grep POSTGRES_PASSWORD .env
 
 # Test connection manually
 docker compose exec postgres psql -U catalyst -d catalyst_db -c "SELECT 1;"
-
-# For a fresh database, seed it:
-docker compose exec backend pnpm run db:seed
 ```
 
 **Symptom:** `Error: P1000 Authentication failed` / postgres log
@@ -636,7 +635,7 @@ Then either:
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
    ```
-   Note `docker-compose.test.yml` also defines a `catalyst-agent` service; that
+   Note `docker-compose.test.yml` also defines an `agent` service; that
    runtime belongs on a **game-server node**, not on the panel host, so omit it
    for a panel-only deployment.
 
@@ -674,7 +673,6 @@ Before exposing Catalyst to the internet, complete this checklist:
 - [ ] Set up TLS (Caddy, Traefik, or external reverse proxy)
 - [ ] Set `PUBLIC_URL` to your real domain (`https://panel.example.com`)
 - [ ] Set `PASSKEY_RP_ID` to match your domain
-- [ ] Restrict `BACKEND_PORT` to `127.0.0.1:3000` (localhost only)
 - [ ] Disable external PostgreSQL access (keep `POSTGRES_PORT=127.0.0.1:5432`)
 - [ ] Keep Redis localhost-only (`REDIS_PORT=127.0.0.1:6379`); never publish `0.0.0.0:6379`
 - [ ] Generate a backup encryption key: `openssl rand -base64 32`
@@ -708,8 +706,6 @@ docker compose logs --tail=100 backend
 | `docker compose up -d --build` | Build and start (if building from source) |
 | `docker compose logs -f` | Tail all logs |
 | `docker compose logs -f backend` | Tail backend logs |
-| `docker compose exec backend pnpm run db:seed` | Seed database with sample data |
-| `docker compose exec backend pnpm run db:studio` | Open Prisma Studio GUI |
 | `docker compose exec backend sh` | Shell into backend container |
 | `docker compose down` | Stop services (keep volumes) |
 | `docker compose down -v` | Stop and delete all data volumes |
@@ -728,4 +724,4 @@ docker compose logs --tail=100 backend
 
 ---
 
-*Last updated: 2026-10-14*
+*Last updated: 2026-10-20*

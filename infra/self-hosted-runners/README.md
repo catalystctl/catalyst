@@ -16,17 +16,18 @@ credential to jobs.
 
 ## What these runners are for
 
-This pool now serves **PR gates only** (`ci.yml`, plus `e2e-lxc.yml` and the
-benchmark `live` job). Release builds in `auto-version.yml` — agent binaries and
-container images — run entirely on GitHub-hosted runners, natively per
-architecture, so a release never competes with the production panel or the
-second pool on this host.
+This pool runs the `ci.yml` PR gates and `e2e-lxc.yml` (manual + weekly cron,
+not a PR gate). The benchmark `live` job needs the LXC host's `benchmark`
+runner instead. Release builds in `auto-version.yml` — agent binaries and
+container images — run on GitHub-hosted runners, natively per architecture, so
+a release never competes with the production panel or the second pool here.
 
 The aarch64 musl cross toolchain and `sccache` in the image are therefore no
 longer used by any release job: `agent-release` installs its own protoc and
-sccache and builds ARM64 on `ubuntu-24.04-arm`. They stay in the image because
-`ci.yml` still needs the cross linkers for the aarch64 target and `sccache`
-still fronts PR-job Rust compiles against `/cache/sccache`.
+sccache and builds ARM64 on `ubuntu-24.04-arm`. The cross linkers and the
+`aarch64-*` rustup targets stay in the image so a job can cross-compile without
+downloading them, and `sccache` still fronts PR-job Rust compiles against
+`/cache/sccache`.
 
 ## Security model (public repo)
 
@@ -72,7 +73,8 @@ journalctl --user -u gh-catalyst-runner -f
 gh api repos/catalystctl/catalyst/actions/runners --jq '.runners[]|{name,status,busy}'
 podman logs -f catalyst-ci-$(hostname -s)-0
 systemctl --user restart gh-catalyst-runner
-podman volume rm gh-catalyst-cache-0 gh-catalyst-cache-1 gh-catalyst-cache-2 gh-catalyst-cache-3  # full cache reset
+# Full cache reset: one volume per slot, 0..CONCURRENCY-1 (CONCURRENCY defaults to 2)
+podman volume rm $(podman volume ls -q --filter name=gh-catalyst-cache)
 ```
 
 ## Rebuild the image

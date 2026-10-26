@@ -120,9 +120,17 @@ components:
 
 # Design System: Catalyst — the Server Browser deck
 
-The full contract, the anti-default audit and the structural rules live in
-[`docs/design/deck-identity.md`](docs/design/deck-identity.md). This file is the
-machine-readable summary that tooling reads.
+The tokens below are the machine-readable summary that tooling reads. The
+implementation is the source of truth:
+
+- `catalyst-frontend/src/styles/globals.css` — CSS variables, `.deck-*`,
+  `.type-overline`, `.text-micro/mini/data`
+- `catalyst-frontend/src/components/deck/primitives.tsx` — `BracketLabel`,
+  `ActivityBars`, `Meter`
+- `catalyst-frontend/src/stores/themeStore.ts` — theme presets and the HSL
+  re-hue at runtime
+- [THEME_STANDARDIZATION_GUIDE.md](catalyst-frontend/THEME_STANDARDIZATION_GUIDE.md)
+  — which Tailwind classes to use instead of palette literals
 
 ## 1. Subject and lane
 
@@ -195,7 +203,7 @@ are off-ramp and flagged by tooling:
 - **Structure**: a 56px cabinet rail, a marquee header, and one framed
   `.deck-panel` per surface holding a control strip, a sticky column header of
   `type-overline` labels, dense rows (`px-3`, 1px `border-border/40`
-  separators, hover `bg-surface-1/40`) and a footer strip. Labels are
+  separators, a `--signal` hover tint) and a footer strip. Labels are
   `BracketLabel` (filled square + letterspaced display label) — never an
   overline closed by a long hairline.
 - **Sizing roles**: page primary action h-8, toolbar and row controls h-7, icon

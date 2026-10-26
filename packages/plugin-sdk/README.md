@@ -4,10 +4,25 @@ Official SDK for building Catalyst plugins (backend + frontend).
 
 ## Installation
 
-```bash
-npm install @catalyst/plugin-sdk
-# peer (optional): fastify, react
-```
+The SDK is **not published to npm** — it is a workspace package inside this
+monorepo, and plugins consume it in two ways:
+
+- **Frontend plugin code** imports `@catalyst/plugin-sdk/frontend`. The panel's
+  Vite config aliases that specifier to `packages/plugin-sdk/src/frontend/index.ts`
+  (`catalyst-frontend/vite.config.ts`), so plugin frontends bundled by the panel
+  need no install step.
+- **Authoring / standalone builds** use the built package. Build it first:
+
+  ```bash
+  pnpm install
+  pnpm --filter @catalyst/plugin-sdk run build        # tsc → packages/plugin-sdk/dist
+  pnpm --dir packages/plugin-sdk/cli run build       # → packages/plugin-sdk/cli/dist
+  ```
+
+  Backend plugin code receives its `context` from the host and needs no SDK
+  import at runtime.
+
+Peer dependencies (both optional): `fastify` ^5, `react` ^19.
 
 ## Package entry points
 
@@ -20,6 +35,7 @@ npm install @catalyst/plugin-sdk
 | `@catalyst/plugin-sdk/routes` | `defineRoutes`, `PluginRouteBuilder` |
 | `@catalyst/plugin-sdk/storage` | `createTypedCollection` |
 | `@catalyst/plugin-sdk/context` | `createTypedContext`, `defineTypedContext` |
+| `@catalyst/plugin-sdk/licensing` | `activateLicense`, `loadLicensedModule` (uses `node:crypto`; not re-exported from the root) |
 
 ## Quick start (backend)
 
@@ -102,7 +118,7 @@ export default createFrontendPlugin({
   tabs: [
     { id: 'my-plugin', label: 'My Plugin', component: AdminTab, location: 'admin' },
   ],
-  // Host slots: dashboard-widgets, sidebar-bottom
+  // Host slots: dashboard-widgets, server-header-stats, profile-connections
   components: [
     { slot: 'dashboard-widgets', component: MyWidget, order: 50 },
   ],
@@ -112,25 +128,36 @@ export default createFrontendPlugin({
 
 ## CLI
 
+The CLI lives in `packages/plugin-sdk/cli` (`@catalyst/plugin-sdk-cli`, bin
+`catalyst-plugin`) and is not published. Build it, then run it from the repo:
+
 ```bash
-npx @catalyst/plugin-sdk-cli create my-plugin --template fullstack
-cd my-plugin && npm install && npm run build
-# drop into catalyst-plugins/ and restart the panel
+pnpm --dir packages/plugin-sdk/cli run build
+
+node packages/plugin-sdk/cli/dist/index.js create my-plugin --template fullstack
+# templates: backend-only (default) | fullstack | minimal
+node packages/plugin-sdk/cli/dist/index.js build
+node packages/plugin-sdk/cli/dist/index.js test
+node packages/plugin-sdk/cli/dist/index.js pack      # → <name>-<version>.catpkg.zip + .sha256
 ```
+
+Drop the plugin directory into `catalyst-plugins/` and restart the panel to load
+it.
 
 ## Storage engines
 
-| Engine | Manifest | Notes |
-|--------|----------|-------|
-| `legacy` (default) | omit | JSON array in one PluginStorage row — fine under ~1k docs |
-| `dedicated` | `"storageEngine": "dedicated"` | One Postgres row per document — use for production CRUD |
-
-Collection filters support dotted paths (`sla.resolutionBreached`) and `$set` with dotted keys.
+`createTypedCollection` writes through one of two per-plugin engines: `legacy`
+(the default, one JSON array per collection) or `"storageEngine": "dedicated"`
+(one row per document). Filters and the `$set`/`$unset`/`$inc`/`$push`/`$pull`
+operators behave identically on both — see
+[catalyst-backend/src/plugins/storage/README.md](../../catalyst-backend/src/plugins/storage/README.md).
 
 ## Isolation
 
-`"runtime": "isolated"` is **accepted in the manifest but forced to in-process** today.
-Worker-thread isolation is not production-ready; do not rely on process isolation for security.
+`"runtime": "isolated"` is **rejected at load time**. The backend refuses to
+import a plugin that declares it, because worker-thread isolation cannot yet
+proxy the full plugin context (`catalyst-backend/src/plugins/loader.ts`). Ship
+plugins without a `runtime` field, or set `"runtime": "legacy"`.
 
 ## Testing
 

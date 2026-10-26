@@ -65,8 +65,7 @@ Environment variables (or `CONFIG=/path/to.env ./...`); see `config.env`:
 | `E2E_USE_LOCAL` | `0` | `1` pushes the working tree `install.sh` + `catalyst-docker/`; `0` downloads `install.sh` from GitHub like a user (curl path) |
 | `E2E_TEMPLATES` | `paper` | `paper` imports just Paper; `all` imports all ~250 eggs under `eggs/` too |
 | `E2E_MC_VERSION` / `E2E_MC_BUILD` | `1.21.11` / `132` | Pinned PaperMC coordinates. `latest` tracks bleeding edge (26.x, Java 25+ only) and its metadata drifts, breaking the egg's URL building |
-| `E2E_MC_VERSION` / `E2E_MC_BUILD` | `latest` / `latest` | PaperMC Fill API version selectors |
-| `E2E_MC_IMAGE_VARIANT` | `Java 21` | Must match `egg-paper.json` `docker_images` |
+| `E2E_MC_IMAGE_VARIANT` | `Java 25` | Must be a key in `eggs/minecraft/java/paper/egg-paper.json` `docker_images` |
 | `E2E_KEEP_ON_SUCCESS` | `0` | `1` keeps LXCs after `all` for debugging |
 
 ## What it verifies (and why users hit these)
@@ -74,7 +73,9 @@ Environment variables (or `CONFIG=/path/to.env ./...`); see `config.env`:
 1. **install** — `install.sh -y` exits 0, `.env` has generated secrets,
    `docker compose up -d` reaches backend `/health` and panel `/`.
 2. **bootstrap** — `/api/setup/complete` + login, location, node with
-   `publicAddress=<node-ip>`, allocation for the MC port, Paper egg import.
+   `publicAddress=<node-ip>`, allocation for the MC port, Paper egg import
+   (from the local `eggs/` checkout at `eggs/minecraft/java/paper/egg-paper.json`
+   — check out `pterodactyl/game-eggs` there first).
 3. **agent** — single-use `/api/nodes/:id/deployment-token` → Bearer fetch of
    `/api/deploy/:token` → `deploy-agent.sh` in the node LXC → node `isOnline`.
 4. **minecraft** — server create (`bridge`, `primaryPort`), async install to

@@ -1,14 +1,6 @@
 # Docker Automated Testing
 
-This document describes the Docker-based E2E testing system for Catalyst. It builds local Docker images and runs the full test suite against containerized services.
-
-## Quick Start
-
-```bash
-# Run the full Docker E2E test suite
-cd tests
-./run-docker-tests.sh
-```
+Builds local Docker images and runs the full bash E2E suite against containerized services.
 
 ## Prerequisites
 
@@ -18,7 +10,7 @@ cd tests
 - **jq** — JSON processing
 - **curl** — HTTP requests
 - **openssl** — Secret generation
-- **ssh-keygen** — SFTP host key generation
+- **ssh-keygen** — checked by `check_docker_prerequisites` (`tests/lib/docker-env.sh`)
 
 Install prerequisites on Ubuntu/Debian:
 
@@ -45,7 +37,7 @@ sudo apt-get install -y jq curl openssl openssh-client
               │               │               │
               ▼               ▼               ▼
         docker compose    docker-env.sh   run-all-tests.sh
-        build             .env.test       (14 test suites)
+        build             .env.test       (8 core suites)
 ```
 
 ## Running Tests Locally
@@ -62,8 +54,11 @@ This will:
 2. Generate a test `.env` file with randomized ports and secrets
 3. Start all services with Docker Compose
 4. Wait for healthchecks to pass
-5. Run database migrations and seed data
-6. Execute all 14 core E2E test suites
+5. Run database migrations and seed data — **broken today**: `tests/run-docker-tests.sh:309,320`
+   runs `pnpm run db:push --force-reset` / `pnpm run db:seed` inside the backend container,
+   but that is the production image with no `pnpm` and no `tsx` (`catalyst-backend/Dockerfile:109-114`).
+   It does ship the Prisma CLI (`catalyst-backend/Dockerfile:95-101`), which the orchestrator should call instead.
+6. Execute the 8 core E2E suites (`TEST_SUITES` in `run-all-tests.sh`)
 7. Clean up containers and volumes
 
 ### Single Test Suite
@@ -150,33 +145,14 @@ All logs are saved to `TEST_LOG_DIR` (default: `/tmp/catalyst-docker-tests`):
 
 ## CI Integration
 
-The GitHub Actions workflow (`.github/workflows/docker-e2e.yml`) runs automatically on:
+No GitHub Actions workflow runs this Docker suite today. The only bash E2E
+pipeline in CI is the LXC one (`.github/workflows/e2e-lxc.yml`, which runs
+`tests/e2e-lxc/e2e-minecraft.sh` on the self-hosted runner pool). Run
+`run-docker-tests.sh` locally before changing anything in `catalyst-docker/`,
+the backend image or the test suites.
 
-- **Pull requests** to `main` or `develop` (when relevant files change)
-- **Pushes** to `main` (when relevant files change)
-
-The workflow:
-1. Checks out the repository
-2. Sets up Docker Buildx with layer caching
-3. Installs dependencies (`jq`, `curl`, `openssl`)
-4. Runs the full Docker E2E test suite with `--verbose`
-5. Uploads test logs as artifacts (always)
-6. Captures container logs on failure
-7. Cleans up containers on failure
-
-### Workflow Triggers
-
-The workflow triggers when any of these paths change:
-
-```yaml
-paths:
-  - 'catalyst-backend/**'
-  - 'catalyst-frontend/**'
-  - 'catalyst-agent/**'
-  - 'catalyst-docker/**'
-  - 'tests/**'
-  - '.github/workflows/docker-e2e.yml'
-```
+If you wire it into CI, mirror the local prerequisites: Docker with BuildKit,
+`jq`, `curl`, `openssl`, `ssh-keygen`, and enough disk for two images.
 
 ## Files Reference
 
@@ -185,10 +161,8 @@ paths:
 | `tests/run-docker-tests.sh` | Main orchestrator script |
 | `tests/lib/docker-env.sh` | Environment generation library |
 | `tests/lib/utils.sh` | Docker helper functions (wait, logs, cleanup) |
-| `catalyst-docker/docker-compose.test.yml` | Test-specific Compose override |
-| `catalyst-docker/.env.test` | Auto-generated test environment (temporary) |
-| `.github/workflows/docker-e2e.yml` | GitHub Actions CI workflow |
-| `tests/DOCKER_TESTING.md` | This documentation |
+| `catalyst-docker/docker-compose.test.yml` | Test-specific Compose override (services: `postgres`, `redis`, `backend`, `frontend`, `agent`) |
+| `catalyst-docker/.env.test` | Auto-generated test environment (temporary; untracked, not ignored) |
 
 ## Troubleshooting
 
@@ -233,8 +207,8 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml --env-file .env.
 If migrations fail, the backend container may not have connectivity to postgres:
 
 ```bash
-# Test connectivity from backend container
-docker exec catalyst-backend-test pg_isready -h postgres -U catalyst
+# Test connectivity from the postgres container (the backend image has no psql/pg_isready)
+docker exec catalyst-postgres pg_isready -U catalyst -d catalyst_db
 ```
 
 ## Development Tips
@@ -249,20 +223,22 @@ cd tests
 ./run-docker-tests.sh --skip-build --skip-cleanup
 
 # Then run individual suites against running containers
-BACKEND_URL=$(./lib/docker-env.sh get_test_backend_url 2>/dev/null || echo "http://127.0.0.1:3000")
+BACKEND_URL=$(source lib/docker-env.sh && get_test_backend_url ../catalyst-docker/.env.test)
 export BACKEND_URL
 bash 01-auth.test.sh
 ```
 
 ### Testing Agent-Related Suites
 
-Some test suites (07, 21, 24) require the agent container. The orchestrator builds the agent image but starts it in a paused state (`sleep infinity`). Tests that need the agent will configure and start it dynamically.
+Some suites (`21`, `24`) need the agent container. The orchestrator builds the
+agent image but starts it in a paused state (`sleep infinity`). Tests that need
+the agent configure and start it dynamically.
 
 ### Adding New Test Suites
 
 To add a new test suite:
 
-1. Create `tests/XX-your-suite.test.sh`
+1. Create `tests/NN-your-suite.test.sh`
 2. Source `lib/utils.sh` and `config.env`
 3. Use the assertion helpers (`assert_equals`, `assert_http_code`, etc.)
 4. Call `print_test_summary` at the end
@@ -271,10 +247,9 @@ To add a new test suite:
 ## Security Considerations
 
 - Test secrets are auto-generated per-run and never committed
-- SFTP host keys are generated fresh for each test run
 - Containers are isolated with randomized ports
 - All test data is destroyed on cleanup (`docker compose down -v`)
-- The `.env.test` file is created in `.gitignore` territory (it is explicitly removed on cleanup)
+- `.env.test` holds generated secrets and is **not** gitignored (`.gitignore` covers `.env` only), so it shows up as untracked — never commit it
 
 ## Future Enhancements
 
@@ -282,4 +257,3 @@ To add a new test suite:
 - [ ] Agent container automatic startup for agent-dependent tests
 - [ ] Multi-arch image builds (ARM64 + AMD64)
 - [ ] Test result reporting to GitHub PR comments
-- [ ] Snapshot testing for container image sizes

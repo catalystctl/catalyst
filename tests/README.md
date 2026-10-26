@@ -1,421 +1,143 @@
-# Catalyst E2E Test Suite
+# Catalyst E2E test suites
 
-Comprehensive end-to-end testing for the Catalyst game server management system.
+Bash end-to-end tests that drive a running Catalyst stack through its REST API,
+WebSocket gateway and node agent. They are separate from the Vitest suites that
+live next to the code (`catalyst-backend/src/__tests__/`,
+`catalyst-frontend/src/**/__tests__/`).
 
-## Overview
-
-This test suite provides **real** E2E testing that validates the entire Catalyst stack:
-- Backend REST API (TypeScript/Fastify)
-- WebSocket communication
-- Agent-Backend integration (Rust)
-- Container lifecycle with **real containerd** (no mocks)
-- Security & permissions
-- Error handling & edge cases
-
-## Quick Start
-
-### Prerequisites
+## Prerequisites
 
 ```bash
-# Required
-sudo apt-get install -y curl jq docker.io
-
-# Optional (for advanced tests)
-cargo install websocat  # WebSocket client
+sudo apt-get install -y curl jq        # required by every suite
+sudo apt-get install -y docker.io      # suites that start containers
 ```
 
-### Run All Tests
+Suites that deploy real containers (`08`, `10`, `15`–`19`, `21`, `24`) also
+need `containerd`/`nerdctl` and a built agent binary (`cargo build --release` in
+`catalyst-agent/`).
+
+## Run
 
 ```bash
-cd /root/catalyst3/tests
-./run-all-tests.sh
-```
+cd tests
 
-### Run Specific Test Suite
-
-```bash
-cd /root/catalyst3/tests
-./01-auth.test.sh           # Authentication tests
-./02-templates.test.sh      # Template CRUD tests
-./04-servers.test.sh        # Server management tests
-./10-full-workflow.test.sh  # Complete E2E workflow
-```
-
-### Run With Options
-
-```bash
-# Run specific suite
-./run-all-tests.sh --suite 01-auth.test.sh
-
-# Stop on first failure
+./run-all-tests.sh                     # the 8 core suites, in order
+./run-all-tests.sh --suite 04-servers.test.sh
 ./run-all-tests.sh --stop-on-failure
-
-# Verbose output
 ./run-all-tests.sh --verbose
-
-# Help
 ./run-all-tests.sh --help
+
+./04-servers.test.sh                   # any single suite, directly
 ```
 
-## Test Suites
+`run-all-tests.sh` runs only the core suites listed in its `TEST_SUITES` array
+(`01`–`10`). The newer suites (`15`–`30`) are run individually — most need a
+deployed node, a real agent, or root, so they are not part of the default pass.
 
-### Phase 1: Backend API Tests
+Logs land in `$TEST_LOG_DIR` (default `/tmp/catalyst-tests`), one
+`<suite>.test.sh.log` per suite.
 
-| Suite | File | Tests | Description |
-|-------|------|-------|-------------|
-| **01** | `01-auth.test.sh` | 14 | User registration, login, JWT validation, security |
-| **02** | `02-templates.test.sh` | 11 | Template CRUD, variable substitution |
-| **03** | `03-nodes.test.sh` | 12 | Node management, deployment tokens |
-| **04** | `04-servers.test.sh` | 13 | Server CRUD, resource allocation |
-| **05** | `05-permissions.test.sh` | 6 | RBAC, ownership, access control |
+### Docker orchestrator
 
-### Phase 2: Integration Tests
+`run-docker-tests.sh` builds the images, generates `catalyst-docker/.env.test`
+with random ports and secrets, and runs `run-all-tests.sh` against the compose
+stack. See [DOCKER_TESTING.md](DOCKER_TESTING.md).
 
-| Suite | File | Tests | Description |
-|-------|------|-------|-------------|
-| **06** | `06-websocket.test.sh` | TBD | WebSocket connectivity, real-time messaging |
-| **08** | `08-container-lifecycle.test.sh` | TBD | Container create, start, stop, delete |
+## Suites
 
-### Phase 3: End-to-End Workflows
+| Suite | File | Covers | Core runner |
+|---|---|---|---|
+| 01 | `01-auth.test.sh` | Registration, login, token validation, auth security | ✅ |
+| 02 | `02-templates.test.sh` | Template CRUD, variable substitution | ✅ |
+| 03 | `03-nodes.test.sh` | Node CRUD, status tracking, deployment tokens | ✅ |
+| 04 | `04-servers.test.sh` | Server CRUD, resource allocation | ✅ |
+| 05 | `05-permissions.test.sh` | RBAC, ownership, access control | ✅ |
+| 06 | `06-websocket.test.sh` | WebSocket connectivity, real-time messaging | ✅ |
+| 08 | `08-container-lifecycle.test.sh` | Crash detection, state transitions, auto-restart, rate limiting | ✅ |
+| 10 | `10-full-workflow.test.sh` | Complete user journey with real containers | ✅ |
+| 15 | `15-full-deployment.test.sh` | User → node → server → container deployment | — |
+| 16 | `16-real-container-deploy.test.sh` | Real container deployment end to end | — |
+| 17 | `17-complete-deployment-flow.test.sh` | Auth → template → server → deploy → validation | — |
+| 18 | `18-deployment-persistent.test.sh` | Deployment that leaves the container running for inspection | — |
+| 19 | `19-system-setup.test.sh` | Automatic first-boot system initialisation | — |
+| 20 | `20-alerts.test.sh` | Alert-rule CRUD and alert listing | — |
+| 21 | `21-agent-containerd-deploy.test.sh` | Agent deployed inside containerd (nerdctl), node shows online | — |
+| 22 | `22-resource-updates.test.sh` | Memory/CPU/disk updates through a server's lifecycle | — |
+| 23 | `23-security-hardening.test.sh` | Security-hardening regressions | — |
+| 24 | `24-real-agent-e2e.test.sh` | API → WebSocket → agent → container | — |
+| 25 | `25-suspend-unsuspend.test.sh` | Suspension enforcement, task disabling, unsuspend restore | — |
+| 26 | `26-subuser-lifecycle.test.sh` | Invites, access, SFTP cleanup, ownership transfer, user deletion | — |
+| 27 | `27-agent-resilience.test.sh` | Agent↔panel chaos tests (~3–5 min) | — |
+| 28 | `28-supply-chain.test.sh` | `install.sh` / `deploy-agent.sh` checksum and fingerprint helpers (offline) | — |
+| 29 | `29-docker-port-wiring.test.sh` | Container-internal port consistency across compose, nginx and healthchecks | — |
+| 30 | `30-fedora44-openat2.test.sh` | Fedora 44 `RestrictSUIDSGID` vs `openat2(2)` | — |
 
-| Suite | File | Tests | Description |
-|-------|------|-------|-------------|
-| **10** | `10-full-workflow.test.sh` | 18 | Complete user journey with real containers |
+The LXC pipeline (`tests/e2e-lxc/`) is documented separately in
+[e2e-lxc/README.md](e2e-lxc/README.md); it is the only suite wired into CI
+(`.github/workflows/e2e-lxc.yml`).
 
-## Test Coverage
+## Configuration
 
-### ✅ Implemented (5 suites, ~60 tests)
-- ✅ Authentication & JWT
-- ✅ Templates CRUD
-- ✅ Node Management
-- ✅ Server Management
-- ✅ RBAC & Permissions
-- ✅ Full E2E Workflow (with real containers)
-
-### 🚧 Planned (9 suites)
-- 🚧 WebSocket real-time communication
-- 🚧 Agent connectivity & lifecycle
-- 🚧 Container operations (detailed)
-- 🚧 File operations
-- 🚧 Multi-server scenarios
-- 🚧 Failure & recovery
-- 🚧 Load & performance
-- 🚧 Security penetration
-
-## Test Infrastructure
-
-### Configuration
-
-Edit `config.env` to customize:
-```bash
-export BACKEND_URL="http://localhost:3000"
-export BACKEND_WS_URL="ws://localhost:3000/ws"
-export DATABASE_URL="postgresql://aero:aero@localhost:5432/aero_test"
-export SERVICE_TIMEOUT=30
-```
-
-### Utilities Library
-
-`lib/utils.sh` provides:
-- **Assertions**: `assert_equals`, `assert_http_code`, `assert_json_field`
-- **HTTP Helpers**: `http_get`, `http_post`, `http_put`, `http_delete`
-- **Wait Functions**: `wait_for_service`, `wait_for_condition`
-- **Cleanup**: `cleanup_docker_containers`, `cleanup_nerdctl_containers`
-- **Logging**: `log_info`, `log_success`, `log_error`, `log_section`
-- **Data Generators**: `random_string`, `random_email`, `unique_id`
-
-### Example Test
+The API-driving suites source `config.env` (`19`, `23`, `28`–`30` don't):
 
 ```bash
-#!/bin/bash
-set -e
-source "$(dirname "$0")/config.env"
-source "$(dirname "$0")/lib/utils.sh"
-
-log_section "My Test Suite"
-
-# Make HTTP request
-response=$(http_post "$BACKEND_URL/api/endpoint" '{"key": "value"}')
-http_code=$(parse_http_code "$response")
-body=$(parse_response "$response")
-
-# Assert results
-assert_http_code "$http_code" "200" "Endpoint should return 200"
-assert_json_field "$body" "data.id" "expected-id" "ID should match"
-
-# Print summary
-print_test_summary
+BACKEND_URL="http://localhost:3000"
+BACKEND_WS_URL="ws://localhost:3000/ws"
+DATABASE_URL="postgresql://catalyst:catalyst_dev@localhost:5432/catalyst_db"
+SERVICE_TIMEOUT=30
+CONTAINER_TIMEOUT=60
+TEST_LOG_DIR="/tmp/catalyst-tests"
 ```
 
-## Running Tests in CI/CD
+Export `BACKEND_URL`/`BACKEND_WS_URL` before running to point at a different
+instance; `run-all-tests.sh` preserves values set in the environment.
 
-### GitHub Actions
+## Helpers
 
-```yaml
-name: E2E Tests
-on: [push, pull_request]
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Start services
-        run: docker-compose up -d
-      - name: Run tests
-        run: cd tests && ./run-all-tests.sh
-      - name: Upload logs
-        if: failure()
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-logs
-          path: /tmp/catalyst-tests/
-```
+`lib/utils.sh` provides assertions (`assert_equals`, `assert_http_code`,
+`assert_json_field`, `assert_contains`), HTTP wrappers (`http_get`,
+`http_post`, `http_put`, `http_patch`, `http_delete`, `parse_http_code`,
+`parse_response`), waits (`wait_for_service`, `wait_for_condition`), cleanup
+(`cleanup_docker_containers`, `cleanup_nerdctl_containers`,
+`cleanup_docker_compose`, `setup_cleanup_trap`), logging (`log_info`,
+`log_success`, `log_error`, `log_section`, `print_test_summary`) and data
+generators (`random_string`, `random_email`, `random_port`, `unique_id`).
 
-### Docker-based Testing
+`lib/docker-env.sh` generates and reads the `.env.test` used by
+`run-docker-tests.sh` (`generate_test_env`, `get_test_backend_url`,
+`get_test_frontend_url`, `get_test_ws_url`, `check_docker_prerequisites`).
+
+## Writing a suite
 
 ```bash
-# Run tests in isolated container
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(pwd):/workspace \
-  -w /workspace/tests \
-  ubuntu:22.04 \
-  bash -c "apt-get update && apt-get install -y curl jq && ./run-all-tests.sh"
-```
-
-## Test Environment Setup
-
-### 1. Start Backend Services
-
-```bash
-cd /root/catalyst3
-docker-compose up -d  # PostgreSQL + Redis
-cd catalyst-backend
-npm install
-npm run db:push
-npm run db:seed
-npm run dev  # Or: npm start for production build
-```
-
-### 2. Build Agent (for E2E tests)
-
-```bash
-cd /root/catalyst3/catalyst-agent
-cargo build --release
-# Binary: ./target/release/catalyst-agent
-```
-
-### 3. Verify Setup
-
-```bash
-curl http://localhost:3000/health
-# Should return: {"status":"ok"}
-```
-
-### 4. Run Tests
-
-```bash
-cd /root/catalyst3/tests
-./run-all-tests.sh
-```
-
-## Debugging Failed Tests
-
-### View Test Logs
-
-```bash
-# All logs are saved to /tmp/catalyst-tests/
-ls -la /tmp/catalyst-tests/
-
-# View specific test log
-cat /tmp/catalyst-tests/01-auth.test.sh.log
-
-# View backend logs
-cat /tmp/catalyst-backend-test.log
-
-# View agent logs
-cat /tmp/catalyst-agent-test.log
-```
-
-### Run Single Test With Verbose Output
-
-```bash
-cd /root/catalyst3/tests
-bash -x ./01-auth.test.sh  # Shell debug mode
-```
-
-### Manual Test Execution
-
-```bash
-# Source utilities
-source config.env
-source lib/utils.sh
-
-# Make test requests
-response=$(http_get "$BACKEND_URL/health")
-echo "$response"
-
-# Check backend
-curl -v http://localhost:3000/health
-```
-
-## Common Issues
-
-### Backend Not Running
-
-```bash
-# Check if backend is running
-curl http://localhost:3000/health
-
-# Start backend
-cd /root/catalyst3/catalyst-backend
-npm run dev
-```
-
-### Database Connection Failed
-
-```bash
-# Check PostgreSQL
-docker ps | grep postgres
-
-# Restart database
-docker-compose restart postgres
-
-# Reset database
-cd catalyst-backend
-npm run db:push
-npm run db:seed
-```
-
-### Agent Tests Failing
-
-```bash
-# Check if agent binary exists
-ls -la /root/catalyst3/catalyst-agent/target/release/catalyst-agent
-
-# Rebuild agent
-cd /root/catalyst3/catalyst-agent
-cargo build --release
-
-# Check containerd
-sudo systemctl status containerd
-```
-
-### Permission Errors
-
-```bash
-# Make scripts executable
-chmod +x /root/catalyst3/tests/*.sh
-chmod +x /root/catalyst3/tests/lib/*.sh
-
-# Containerd requires sudo
-sudo nerdctl ps  # Should work
-```
-
-## Adding New Tests
-
-### 1. Create Test File
-
-```bash
-cat > tests/99-my-test.test.sh << 'EOF'
 #!/bin/bash
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/config.env"
 source "$SCRIPT_DIR/lib/utils.sh"
 
-log_section "My New Test Suite"
+log_section "My suite"
+setup_cleanup_trap cleanup
 
-# Your tests here
-log_info "Test 1: Description"
-response=$(http_get "$BACKEND_URL/api/endpoint")
-http_code=$(parse_http_code "$response")
-assert_http_code "$http_code" "200" "Endpoint test"
+response=$(http_post "$BACKEND_URL/api/example" '{"key":"value"}')
+assert_http_code "$(parse_http_code "$response")" "200" "endpoint returns 200"
+assert_json_field "$(parse_response "$response")" "data.id" "expected-id" "id matches"
 
 print_test_summary
-EOF
-
-chmod +x tests/99-my-test.test.sh
 ```
 
-### 2. Add to Test Runner
+Name the file `NN-name.test.sh`, make it executable, and add it to
+`TEST_SUITES` in `run-all-tests.sh` only if it can run unattended against a
+fresh local stack. Use `unique_id()` for resource names, always install a
+cleanup trap, and assert both success and failure paths.
 
-Edit `run-all-tests.sh` and add to `TEST_SUITES` array:
-```bash
-TEST_SUITES=(
-    ...
-    "99-my-test.test.sh"
-)
-```
+## Troubleshooting
 
-### 3. Run Your Test
+| Symptom | Check |
+|---|---|
+| Everything 401/403 | `curl -s $BACKEND_URL/health`; the stack must be seeded (`pnpm run db:seed` at the repo root) |
+| Connection refused | Backend not running — `pnpm run dev` from the repo root |
+| Database errors | `pnpm run dev:infra` (Postgres + Redis), then `pnpm --filter catalyst-backend run db:push` |
+| Container suites skip/fail | `sudo systemctl status containerd`; agent binary at `catalyst-agent/target/release/catalyst-agent` |
 
-```bash
-./tests/99-my-test.test.sh
-```
-
-## Best Practices
-
-### ✅ Do's
-- Use `unique_id()` for test resource names
-- Always set up cleanup traps: `setup_cleanup_trap cleanup`
-- Assert both success and failure cases
-- Use meaningful assertion messages
-- Log important steps with `log_info`
-- Reset test data between suites
-
-### ❌ Don'ts
-- Don't hardcode IDs or names
-- Don't leave test containers running
-- Don't depend on other test suites
-- Don't skip cleanup on failure
-- Don't use `sleep` without comments explaining why
-
-## Performance
-
-### Test Execution Times
-
-| Suite | Approximate Time |
-|-------|------------------|
-| Authentication | ~5 seconds |
-| Templates | ~8 seconds |
-| Nodes | ~8 seconds |
-| Servers | ~10 seconds |
-| Permissions | ~12 seconds |
-| Full Workflow | ~60 seconds (with containers) |
-| **Full Suite** | **~10-15 minutes** |
-
-### Optimization Tips
-
-- Run independent tests in parallel (future enhancement)
-- Use smaller container images (Alpine)
-- Reduce sleep delays where safe
-- Skip heavy tests in quick CI runs
-
-## Contributing
-
-When adding tests:
-1. Follow existing naming conventions (`NN-name.test.sh`)
-2. Use the utilities library
-3. Document what you're testing
-4. Include both positive and negative cases
-5. Clean up all resources
-6. Update this README
-
-## License
-
-MIT - Same as Catalyst project
-
-## Support
-
-For issues or questions:
-- Check test logs in `/tmp/catalyst-tests/`
-- Review backend/agent logs
-- Verify services are running
-- Consult main Catalyst documentation in `/root/catalyst3/`
-
----
-
-**Test Coverage**: 5/14 suites implemented (~60 tests)  
-**Status**: ✅ Core functionality tested, 🚧 Advanced tests in progress  
-**Last Updated**: 2026-01-24
+Debug a single suite with `bash -x ./01-auth.test.sh`.

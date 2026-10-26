@@ -1,43 +1,38 @@
-# Plugin Storage
+# Plugin storage
 
-Catalyst supports two storage engines for plugin collections:
+Plugin collections have two backing engines, chosen per plugin in `plugin.json`.
+Both expose the same `PluginCollectionAPI` (`find`, `findOne`, `insert`,
+`update`, `delete`, `count`) with Mongo-style filters, so switching engines needs
+no code change.
 
-## Legacy Storage (Default)
+## Legacy (default)
 
-Collections are stored as JSON arrays in a single `pluginStorage` row.
-- **Good for:** Small collections (< 1000 docs), simple plugins
-- **Cons:** O(n) queries, no DB-level indexing, slow for large collections
-- **Opt-in:** No changes needed
+The whole collection is one JSON array in a single `PluginStorage` row
+(`pluginName` + `key`). Every operation loads and re-saves that array.
 
-## Dedicated Table Storage
+- Opt in: nothing — this is the default when `storageEngine` is absent.
+- Use for: small config-like collections, prototypes.
+- Cost: reads/writes scale with the number of documents in the collection.
 
-Collections are stored as individual rows in `PluginCollectionItem`.
-- **Good for:** Large collections, frequent queries, production workloads
-- **Pros:** Per-row storage, DB-level pagination, concurrent-safe
-- **Opt-in:** Add `"storageEngine": "dedicated"` to plugin.json
+## Dedicated (`storageEngine: "dedicated"`)
 
-### Migration
+Each document is a row in `PluginCollectionItem` (`pluginName`, `collectionName`,
+`docId`, `document`), with a unique index on `(pluginName, collectionName,
+docId)` and an index on `(pluginName, collectionName)`. Implemented in
+`collection-storage.ts`.
 
 ```json
 // plugin.json
 {
   "name": "my-plugin",
-  "storageEngine": "dedicated",
-  ...
+  "storageEngine": "dedicated"
 }
 ```
 
-### Performance Comparison
+- Use for: anything users create rows in — tickets, activity logs, user content.
+- Gives per-row storage, DB-level pagination and per-document writes instead of
+  rewriting one array.
 
-| Metric | Legacy | Dedicated |
-|--------|--------|-----------|
-| Insert | ~2ms | ~5ms |
-| Find (100 docs) | ~1ms | ~3ms |
-| Find (10k docs) | ~200ms | ~5ms |
-| Delete | O(n) | O(1) |
-| Count | O(n) | ~2ms |
-
-### When to Use Which
-
-- **Legacy:** Quick prototyping, small config-like data, < 1000 items
-- **Dedicated:** Ticketing systems, activity logs, user-generated content, > 1000 items
+Filters and update operators behave identically on both engines
+(`src/plugins/path-utils.ts`): dotted paths (`sla.resolutionBreached`) and
+`$set`, `$unset`, `$inc`, `$push`, `$pull`.

@@ -76,7 +76,7 @@ Catalyst has multiple components you can contribute to:
 
 ### Prerequisites
 
-- **Node.js 22+** (with `pnpm`) - For backend and frontend
+- **Node.js 22** (with `pnpm`; CI and the Docker images use 22, the packages declare `>=20`) - For backend and frontend
 - **Rust 1.95** (toolchain pin in `catalyst-agent/rust-toolchain.toml`) - For agent development
 - **Docker & Docker Compose** (or Podman) - For local development
 - **PostgreSQL 16** - Database (or use `pnpm run dev:infra`)
@@ -84,17 +84,19 @@ Catalyst has multiple components you can contribute to:
 
 ### Backend Setup
 
-```bash
-cd catalyst-backend
+Install once from the repository root — the pnpm workspace covers backend,
+frontend and `packages/*`:
 
-# Install dependencies
+```bash
 pnpm install
+
+cd catalyst-backend
 
 # Copy environment file
 cp .env.example .env
 # Edit .env with your settings
 
-# Initialize database
+# Initialize database (PostgreSQL + Redis: `pnpm run dev:infra` from the root)
 pnpm run db:push
 pnpm run db:seed
 
@@ -109,7 +111,7 @@ Backend runs on **http://localhost:3000**
 pnpm run dev          # Start dev server with watch
 pnpm run build        # Compile TypeScript
 pnpm start            # Start production server (from catalyst-backend/)
-pnpm run lint         # Run ESLint (root `pnpm run lint` also works; bare `eslint src --ext` fails on ESLint v9+)
+pnpm run lint         # Run ESLint (`pnpm run lint` from the repo root runs every package)
 pnpm run lint -- --fix # Auto-fix linting issues
 pnpm run db:studio    # Open Prisma Studio GUI
 pnpm run db:migrate   # Create versioned migration
@@ -120,9 +122,6 @@ pnpm run db:generate  # Regenerate Prisma client
 
 ```bash
 cd catalyst-frontend
-
-# Install dependencies
-pnpm install
 
 # Copy environment file
 cp .env.example .env
@@ -222,7 +221,7 @@ Run it on the host (`pnpm run dev:agent`) or through
 - Handle errors explicitly (no silent failures)
 
 **Naming Conventions:**
-- **Files:** kebab-case (`user-routes.ts`)
+- **Files:** kebab-case (`api-keys.ts`)
 - **Variables/Functions:** camelCase (`getUserById`)
 - **Classes/Types:** PascalCase (`User`, `UserProfile`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_RETRIES`)
@@ -325,7 +324,7 @@ export function MyComponent({ id, title }: ComponentProps) {
 - Use `?` operator for error propagation
 
 **Naming Conventions:**
-- **Files:** snake_case (`runtime_manager.rs`)
+- **Files:** snake_case (`file_manager.rs`)
 - **Variables/Functions:** snake_case (`get_container_status`)
 - **Types/Structs:** PascalCase (`ContainerStatus`)
 - **Constants:** UPPER_SNAKE_CASE (`MAX_RETRIES`)
@@ -377,18 +376,14 @@ pub async fn start_container(id: &str) -> Result<(), AgentError> {
 
 **Unit Tests:**
 ```typescript
-// src/__tests__/user.test.ts
+// src/__tests__/my-feature.test.ts
 import { describe, it, expect } from 'vitest';
-import { createUser } from '../services/user.service';
+import { ServerStateMachine } from '../services/state-machine';
+import { ServerState } from '../shared-types';
 
-describe('createUser', () => {
-  it('should create a user with valid data', async () => {
-    const user = await createUser({
-      email: 'test@example.com',
-      password: 'securepassword',
-    });
-    expect(user).toHaveProperty('id');
-    expect(user.email).toBe('test@example.com');
+describe('state machine', () => {
+  it('allows stopped -> starting', () => {
+    expect(ServerStateMachine.canTransition(ServerState.STOPPED, ServerState.STARTING)).toBe(true);
   });
 });
 ```
@@ -403,13 +398,13 @@ pnpm run test
 
 **Component Tests:**
 ```typescript
-// src/components/__tests__/Button.test.tsx
+// src/components/__tests__/MyComponent.test.tsx
 import { render, screen } from '@testing-library/react';
-import { Button } from '../Button';
+import { MyComponent } from '../MyComponent';
 
-describe('Button', () => {
+describe('MyComponent', () => {
   it('renders with correct text', () => {
-    render(<Button>Click me</Button>);
+    render(<MyComponent title="Click me" />);
     expect(screen.getByText('Click me')).toBeInTheDocument();
   });
 });
@@ -418,14 +413,14 @@ describe('Button', () => {
 **Run Frontend Tests:**
 ```bash
 cd catalyst-frontend
-pnpm run test
+pnpm exec vitest run
 ```
 
 ### Agent Tests
 
 **Unit Tests:**
 ```rust
-// src/runtime_manager.rs
+// src/runtime_manager/mod.rs
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -480,34 +475,9 @@ pnpm run dev:stack:test # unit tests in the same image, against the dev database
 
 ### Before Submitting
 
-1. **Run linters:**
-   ```bash
-   # Backend
-   cd catalyst-backend && pnpm run lint -- --fix
-
-   # Frontend
-   cd catalyst-frontend && pnpm run lint -- --fix && pnpm run format
-
-   # Agent
-   cd catalyst-agent && cargo fmt && cargo clippy
-   ```
-
-2. **Run tests:**
-   ```bash
-   cd catalyst-backend && pnpm test
-   cd catalyst-frontend && pnpm test
-   cd catalyst-agent && cargo test
-   ```
-
-3. **Test manually:**
-   - Verify your changes work as expected
-   - Test edge cases
-   - Check for regressions
-
-4. **Update documentation:**
-   - Update README if needed
-   - Update API docs for new endpoints
-   - Add comments for complex logic
+Run the CI gates for every area you touched — the command table is in
+[AGENTS.md](AGENTS.md#verify-before-claiming-something-works). Locally you can
+run the `--fix` / `cargo fmt` variants first; CI runs the check variants.
 
 ### Commit Guidelines
 
@@ -592,70 +562,20 @@ reconnection after network failure.
 2. **Check documentation** - Ensure it's not a configuration issue
 3. **Test on latest version** - Verify bug still exists
 
-### Bug Report Template
+Use the [bug report template](.github/ISSUE_TEMPLATE/bug_report.md) and include:
 
-```markdown
-**Description:**
-A clear and concise description of what the bug is.
-
-**To Reproduce:**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '...'
-3. Scroll down to '...'
-4. See error
-
-**Expected Behavior:**
-A clear description of what you expected to happen.
-
-**Actual Behavior:**
-What actually happened.
-
-**Screenshots:**
-If applicable, add screenshots to help explain the problem.
-
-**Environment:**
-- OS: [e.g. Ubuntu 22.04]
-- Node.js: [e.g. 22.0.0]
-- Rust: [e.g. 1.95.0]
-- Catalyst Version: [e.g. 1.56.3]
-
-**Logs:**
-Relevant log output:
-
-```
-Paste logs here
-```
-
-**Additional Context:**
-Any other context about the problem.
-```
+- what you expected vs. what happened, and the steps to reproduce;
+- your environment: OS, Node.js version, Rust version, Catalyst version;
+- relevant backend/agent logs (redact secrets) — `bash catalyst-docker/diagnose.sh`
+  produces a redacted bundle for panel problems.
 
 ---
 
 ## Feature Requests
 
-### Before Requesting
-
-1. **Search existing issues** - Check if feature is already requested
-2. **Check roadmap** - See if feature is planned
-3. **Consider impact** - Will this benefit many users?
-
-### Feature Request Template
-
-```markdown
-**Is your feature request related to a problem?**
-A clear and concise description of what the problem is.
-
-**Describe the solution you'd like:**
-A clear description of what you want to happen.
-
-**Describe alternatives you've considered:**
-A clear description of any alternative solutions or features you've considered.
-
-**Additional context:**
-Any other context, screenshots, or examples about the feature request here.
-```
+Use the [feature request template](.github/ISSUE_TEMPLATE/feature_request.md).
+Say what problem you are trying to solve and what you want instead, and search
+open issues first so duplicates can be merged.
 
 ---
 
@@ -667,25 +587,32 @@ Any other context, screenshots, or examples about the feature request here.
 
 1. Define request/response schemas with Zod
 2. Add route handler in `src/routes/`
-3. Add RBAC middleware for protected routes
+3. Guard it with `requireAuthAndPermission` (or a server-scoped access check) for protected routes
 4. Write unit tests
 5. Update API documentation
 
 **Example:**
 ```typescript
 // src/routes/servers.ts
+import { requireAuthAndPermission } from '../middleware/auth';
+
 const StartServerSchema = z.object({
   serverId: z.string(),
 });
 
 app.post('/api/servers/:id/start',
-  { onRequest: rbac.checkPermission('server.start') },
+  { onRequest: requireAuthAndPermission(prisma, 'server.start', 'id') },
   async (request, reply) => {
     const { serverId } = StartServerSchema.parse(request.params);
     // Implementation
   }
 );
 ```
+
+Server-scoped routes additionally run `ensureServerAccess`
+(`src/routes/servers/_helpers.ts`) or the private `ensurePowerAccess`
+(`src/routes/servers/power.ts`); both resolve owner, explicit `ServerAccess`
+grants, roles and node access through `src/lib/server-access.ts`.
 
 **Database Changes:**
 
@@ -699,7 +626,7 @@ app.post('/api/servers/:id/start',
 **Adding Pages:**
 
 1. Create page component in `src/pages/`
-2. Add route in `src/App.tsx`
+2. Add the route where the app's routes are declared (`src/App.tsx`)
 3. Create data fetching hooks in `src/hooks/`
 4. Write component tests
 
@@ -721,13 +648,13 @@ export function ServersPage() {
 **Adding Message Handlers:**
 
 1. Define message type in WebSocket protocol
-2. Add handler in `websocket_handler.rs`
+2. Add handler in `websocket_handler/`
 3. Implement logic in appropriate service
 4. Write tests
 
 **Example:**
 ```rust
-// src/websocket_handler.rs
+// src/websocket_handler/backup.rs
 async fn handle_backup_request(&self, msg: BackupRequest) -> Result<(), AgentError> {
     self.runtime_manager.create_backup(&msg.server_id).await?;
     self.send_message(BackupSuccess { server_id: msg.server_id }).await?;
@@ -755,14 +682,9 @@ completing a language is pure JSON editing — no React knowledge required — a
 untranslated keys automatically fall back to English, so a partial translation
 is safe to merge.
 
-See **[docs/i18n.md](docs/i18n.md)** for the namespace layout, key conventions,
-and the exact workflow (including the `pnpm i18n:status` command that lists the
-keys still awaiting translation).
-
-When you add UI code, wrap user-visible text in `t()`. CI runs
-`pnpm i18n:hardcoded`, which fails on literal strings that are neither
-translated nor listed with a reason in
-`scripts/i18n-hardcoded-baseline.json`.
+See **[AGENTS.md](AGENTS.md#i18n-rules)** for the namespace layout, key
+conventions and the exact workflow (including `pnpm i18n:status`, which lists
+the keys still awaiting translation).
 
 ### Documentation Style
 
@@ -779,7 +701,7 @@ translated nor listed with a reason in
 ### Resources
 
 - **Documentation:** [docs.catalystctl.com](https://docs.catalystctl.com) ([source](https://github.com/catalystctl/catalyst-doc) — standalone repo, clone it next to this checkout to edit docs)
-- **Architecture:** [docs/architecture.md](docs/architecture.md)
+- **Architecture:** [DESIGN.md](DESIGN.md) for the panel's visual contract; `AGENTS.md` for repo layout
 - **API Reference:** [generated OpenAPI](https://docs.catalystctl.com/api/reference/) (`pnpm --filter catalyst-backend run openapi:export`)
 
 ### Community
