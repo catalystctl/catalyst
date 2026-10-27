@@ -1033,12 +1033,25 @@ impl ContainerdRuntime {
                             // Strip CIDR prefix to get bare IP for the lease filename
                             let bare_ip = addr.split('/').next().unwrap_or(addr);
                             let lease = ipam_dir.join(bare_ip);
-                            if lease.exists() {
-                                info!(
-                                    "Releasing stale CNI IPAM lease {} for container {}",
-                                    bare_ip, container_id
-                                );
-                                let _ = fs::remove_file(&lease);
+                            // Only release the lease this container owns. The
+                            // address may already belong to another running
+                            // server (after an earlier collision); deleting its
+                            // lease would move the conflict forward (#328).
+                            match fs::read_to_string(&lease) {
+                                Ok(content) if lease_belongs_to(&content, container_id) => {
+                                    info!(
+                                        "Releasing stale CNI IPAM lease {} for container {}",
+                                        bare_ip, container_id
+                                    );
+                                    let _ = fs::remove_file(&lease);
+                                }
+                                Ok(content) => info!(
+                                    "Keeping CNI IPAM lease {}: owned by {}, not {}",
+                                    bare_ip,
+                                    lease_owner(&content),
+                                    container_id
+                                ),
+                                Err(_) => {}
                             }
                         }
                     }
@@ -1124,7 +1137,7 @@ impl ContainerdRuntime {
                     continue;
                 }
                 if let Ok(content) = tokio::fs::read_to_string(entry.path()).await {
-                    if content.trim() == container_id {
+                    if lease_belongs_to(&content, container_id) {
                         out.insert(name);
                     }
                 }
@@ -1504,11 +1517,24 @@ impl ContainerdRuntime {
         // --- Phase 2: Scan IPAM data dir for orphaned leases ---
         // Even if result files are gone (e.g. agent was force-killed), the
         // host-local IPAM plugin may still hold lease files.  Cross-reference
-        // each lease file's container ID against containerd.
+        // each lease's owner container ID against containerd.
         let ipam_base = self.cni_data_dir.join("catalyst");
         if !tokio::fs::try_exists(&ipam_base).await.unwrap_or(false) {
             return;
         }
+        // One listing instead of a Get per lease file. Without it ownership
+        // cannot be verified, and treating an unverifiable owner as gone would
+        // delete the leases of running servers (issue #328).
+        let existing: HashSet<String> = match self.list_containers().await {
+            Ok(c) => c.into_iter().map(|c| c.id).collect(),
+            Err(e) => {
+                warn!(
+                    "IPAM lease sweep: cannot list containers, keeping leases: {}",
+                    e
+                );
+                return;
+            }
+        };
         if let Ok(mut entries) = tokio::fs::read_dir(&ipam_base).await {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 let path = entry.path();
@@ -1519,23 +1545,18 @@ impl ContainerdRuntime {
                 } else {
                     continue;
                 }
-                // Lease files are named by IP address (e.g. 10.42.0.15)
-                // and their contents hold the container ID.
-                let container_id = tokio::fs::read_to_string(&path)
-                    .await
-                    .ok()
-                    .map(|s| s.trim().to_string())
-                    .unwrap_or_default();
-                if container_id.is_empty() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let content = match tokio::fs::read_to_string(&path).await {
+                    Ok(c) => c,
+                    Err(_) => continue,
+                };
+                let Some(owner) = orphan_lease_owner(&name, &content, &existing) else {
                     continue;
-                }
-                if self.container_exists(container_id.trim()).await {
-                    continue;
-                }
+                };
                 info!(
                     "Removing orphaned CNI IPAM lease {} (container {})",
                     path.display(),
-                    container_id
+                    owner
                 );
                 let _ = tokio::fs::remove_file(&path).await;
             }
@@ -1747,9 +1768,46 @@ fn parse_nat_save(
     (rules, refcounts, declared)
 }
 
-/// Plan deletions: exact-duplicate rules (keep the first occurrence) plus
-/// rules whose container IP is dead. Returns rule indices and `CNI-*` chains
-/// left with zero references once the planned deletions are applied.
+/// Lease files are named by the leased address; host-local keeps bookkeeping
+/// next to them (`lock`, `last_reserved_ip.0`) which names no container and is
+/// never a lease to prune.
+fn is_lease_filename(name: &str) -> bool {
+    name.parse::<std::net::IpAddr>().is_ok()
+}
+
+/// Owner container ID of a host-local IPAM lease file.
+///
+/// The plugin writes `<containerID>\r\n<ifname>`, so the owner is the first
+/// line. Trimming the whole file leaves `<id>\r\neth0`, which matches no
+/// container and made the orphan scan delete leases of running servers
+/// (issue #328).
+fn lease_owner(content: &str) -> &str {
+    content.lines().next().unwrap_or("").trim()
+}
+
+/// True when the lease file still names `container_id`.
+pub(crate) fn lease_belongs_to(content: &str, container_id: &str) -> bool {
+    lease_owner(content) == container_id
+}
+
+/// Owner to log when a lease file is an orphan: it names a container the
+/// runtime no longer knows. `None` for bookkeeping files, empty owners and
+/// leases of existing containers.
+fn orphan_lease_owner<'a>(
+    name: &str,
+    content: &'a str,
+    existing: &HashSet<String>,
+) -> Option<&'a str> {
+    if !is_lease_filename(name) {
+        return None;
+    }
+    let owner = lease_owner(content);
+    if owner.is_empty() || existing.contains(owner) {
+        return None;
+    }
+    Some(owner)
+}
+
 /// IPs to sweep from NAT when a container is torn down.
 ///
 /// The container's own addresses are dead even though its result file still
@@ -1769,6 +1827,9 @@ fn dead_ips_for_teardown(
     }
 }
 
+/// Plan deletions: exact-duplicate rules (keep the first occurrence) plus
+/// rules whose container IP is dead. Returns rule indices and `CNI-*` chains
+/// left with zero references once the planned deletions are applied.
 fn plan_nat_cleanup(
     rules: &[NatRule],
     refcounts: &std::collections::HashMap<String, usize>,
@@ -2024,6 +2085,47 @@ COMMIT
         let live: HashSet<String> = ["10.44.0.13".to_string()].into_iter().collect();
         let dead = dead_ips_for_teardown(stale, Some(&live));
         assert_eq!(dead, ["10.44.0.15".to_string()].into_iter().collect());
+    }
+
+    #[test]
+    fn lease_owner_is_the_first_line() {
+        // host-local writes `<containerID>\r\neth0` (#328).
+        assert_eq!(lease_owner("abc123\r\neth0"), "abc123");
+        assert_eq!(lease_owner("abc123\neth0\n"), "abc123");
+        assert_eq!(lease_owner("abc123"), "abc123");
+        assert_eq!(lease_owner(""), "");
+        assert!(lease_belongs_to("abc123\r\neth0", "abc123"));
+        assert!(!lease_belongs_to("abc123\r\neth0", "def456"));
+        // A lease of another running container is never claimed.
+        assert!(!lease_belongs_to("other\r\neth0", "abc123"));
+    }
+
+    #[test]
+    fn host_local_bookkeeping_is_not_a_lease() {
+        assert!(is_lease_filename("10.42.0.10"));
+        assert!(!is_lease_filename("last_reserved_ip.0"));
+        assert!(!is_lease_filename("lock"));
+    }
+
+    #[test]
+    fn orphan_scan_keeps_leases_of_running_containers() {
+        let existing: HashSet<String> = ["running-id".to_string()].into_iter().collect();
+        // The regression: `\r\neth0` must not hide the live owner.
+        assert_eq!(
+            orphan_lease_owner("10.42.0.10", "running-id\r\neth0", &existing),
+            None
+        );
+        // A lease of a container that is gone is an orphan.
+        assert_eq!(
+            orphan_lease_owner("10.42.0.11", "dead-id\r\neth0", &existing),
+            Some("dead-id")
+        );
+        // Bookkeeping and empty leases are skipped, never deleted.
+        assert_eq!(
+            orphan_lease_owner("last_reserved_ip.0", "10.42.0.11", &existing),
+            None
+        );
+        assert_eq!(orphan_lease_owner("10.42.0.12", "", &existing), None);
     }
 
     #[test]

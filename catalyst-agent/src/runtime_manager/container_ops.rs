@@ -1633,7 +1633,10 @@ impl ContainerdRuntime {
                         let n = f.file_name().to_string_lossy().to_string();
                         if n.parse::<Ipv4Addr>().is_ok() {
                             if let Ok(c) = tokio::fs::read_to_string(f.path()).await {
-                                if c.trim().contains(container_id) {
+                                // host-local lease files start with the owning
+                                // container ID (`<id>\r\n<ifname>`); a substring
+                                // test could match a different container.
+                                if cni_network::lease_belongs_to(&c, container_id) {
                                     return Ok(n);
                                 }
                             }
