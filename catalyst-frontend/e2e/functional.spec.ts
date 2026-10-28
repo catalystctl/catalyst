@@ -275,6 +275,37 @@ test.describe('Navigation', () => {
     expect.soft(classes).toMatch(/active|bg-|font-|text-primary/);
   });
 
+  test('Sidebar rows keep one height when the nav overflows', async ({ page }) => {
+    test.setTimeout(30_000);
+    // A short viewport makes the expanded nav scroll. The main cluster
+    // (dashboard/servers) are direct children of that height-constrained flex
+    // column, so without `shrink-0` they collapsed to their text height while
+    // the grouped rows — protected by their wrapper div — stayed 30px.
+    await page.setViewportSize({ width: 1280, height: 620 });
+    await navAndWait(page, '/dashboard');
+
+    const nav = page.locator('aside nav').first();
+    await expect.soft(nav).toBeVisible({ timeout: 10_000 });
+    const overflows = await nav.evaluate((el) => el.scrollHeight > el.clientHeight + 2);
+    expect.soft(overflows).toBe(true);
+
+    const rowHeights = (selector: string) =>
+      page.locator(selector).evaluate((el) =>
+        [...el.querySelectorAll('a, button')].map((row) => Math.round(row.getBoundingClientRect().height)),
+      );
+
+    const expanded = await rowHeights('aside nav');
+    expect.soft(expanded.length).toBeGreaterThan(4);
+    expect.soft([...new Set(expanded)]).toEqual([30]);
+
+    // The collapsed rail holds its 36px targets under the same pressure.
+    await page.locator('aside button[aria-label="Collapse navigation"]').click();
+    await page.waitForTimeout(400);
+    const collapsed = await rowHeights('aside nav');
+    expect.soft(collapsed.length).toBeGreaterThan(2);
+    expect.soft([...new Set(collapsed)]).toEqual([36]);
+  });
+
   test('Admin sidebar sections can collapse/expand', async ({ page }) => {
     test.setTimeout(30_000);
     // Navigate to an admin page to ensure admin nav is visible

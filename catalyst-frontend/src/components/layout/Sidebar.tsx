@@ -93,8 +93,13 @@ function NavRow({
 
   // Density is intentional: 30px labelled rows when expanded, 36px targets
   // on the collapsed rail (same split as RailButton below). Keep in sync.
+  // `shrink-0` is load-bearing: the nav is a height-constrained flex column, so
+  // a row that is a direct child (the main cluster) would otherwise shrink to
+  // its text height when the destinations overflow — a fixed `h-*` is not a
+  // minimum. Rows wrapped in a group div survive by accident, which is why the
+  // first two rows used to render short.
   const className = cn(
-    'group/row relative flex items-center rounded-sm text-muted-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+    'group/row relative flex shrink-0 items-center rounded-sm text-muted-foreground/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
     expanded
       ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data hover:bg-surface-2/70 hover:text-foreground'
       : 'h-9 w-9 justify-center hover:bg-surface-2 hover:text-foreground',
@@ -194,7 +199,7 @@ function RailButton({
       onClick={onClick}
       aria-label={label}
       className={cn(
-        'flex items-center rounded-sm text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+        'flex shrink-0 items-center rounded-sm text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
         // Same 30px/36px density split as NavRow above. Keep in sync.
         expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : "relative h-9 w-9 justify-center after:absolute after:-inset-1 after:content-['']",
         danger ? 'hover:bg-danger/10 hover:text-danger' : 'hover:bg-surface-2 hover:text-foreground',
@@ -445,7 +450,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                     aria-label={t('shell.sections')}
                     aria-expanded={sectionsOpen}
                     onClick={openSections}
-                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
@@ -459,7 +464,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                     type="button"
                     aria-label={t('shell.openSearch', { shortcut: 'Ctrl+K' })}
                     onClick={() => window.dispatchEvent(new CustomEvent('catalyst:open-search'))}
-                    className="relative flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <Search className="h-4 w-4" />
                   </button>
@@ -485,7 +490,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
           {expanded ? (
             <NavLink
               to="/profile"
-              className="group/me mt-1 flex w-full items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group/me mt-1 flex w-full shrink-0 items-center gap-2.5 rounded-sm border border-border/60 bg-surface-1/60 px-2 py-2 text-muted-foreground transition-colors hover:border-border hover:bg-surface-2/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               title={`${displayName} · ${user?.role ? user.role : t('sidebar.fallbackRole')}`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm bg-surface-2 font-display text-micro font-semibold text-foreground ring-1 ring-border">
@@ -509,7 +514,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                 <NavLink
                   to="/profile"
                   aria-label={displayName}
-                  className="flex h-9 w-9 items-center justify-center rounded-sm font-display text-micro font-semibold text-muted-foreground ring-1 ring-border transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm font-display text-micro font-semibold text-muted-foreground ring-1 ring-border transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {user?.image ? (
                     <img src={user.image} alt="" className="h-full w-full rounded-sm object-cover" />
@@ -544,7 +549,7 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
                   : t('sidebar.versionTooltip', { version: PANEL_VERSION })
               }
               className={cn(
-                'flex items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                'flex shrink-0 items-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
                 expanded ? 'h-[1.875rem] w-full gap-2.5 px-2 text-data' : 'h-9 w-9 justify-center',
               )}
             >
