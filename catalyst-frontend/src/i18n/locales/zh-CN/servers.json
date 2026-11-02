@@ -353,6 +353,8 @@
     "emptyTitle": "暂无服务器"
   },
   "metrics": {
+    "cpuAllocation": "{{used}} / {{total}} 核心",
+    "cpuPercentOfCores": "已分配核心的 {{percent}}%",
     "labels": {
       "cpu": "CPU",
       "disk": "磁盘",

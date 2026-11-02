@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useVirtualizer } from '@/csync';
 import { serverStatusLabel } from '../../utils/constants';
+import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
@@ -97,7 +98,20 @@ function ServerRow({
   const navigate = useNavigate();
   const running = server.status === 'running';
 
+  // CPU arrives as per-core percent (100 = one core) against an allocation that
+  // can be several cores. The bar draws the share of the allocation while the
+  // reading stays in cores, so a 3-core server at 260% reads "2.6/3" and draws
+  // a bar with headroom instead of one pegged at a single busy core.
+  const cpuCoresAllocated = resolveCpuCores(server.allocatedCpuCores);
   const cpu = running && server.cpuPercent != null ? server.cpuPercent : null;
+  const cpuShare = cpu == null ? null : cpuPercentOfAllocation(cpu, cpuCoresAllocated);
+  const cpuReading =
+    cpu == null
+      ? '—'
+      : // Compact "2.6/3" — the column is 88px (bar + reading), so the words
+        // live in the cell's title instead of stealing width from the bar.
+        `${formatCpuCores(cpuCoresUsed(cpu, cpuCoresAllocated))}/${formatCpuCores(cpuCoresAllocated)}`;
+
   const ramPct =
     running && server.memoryUsageMb != null && server.allocatedMemoryMb
       ? (server.memoryUsageMb / server.allocatedMemoryMb) * 100
@@ -179,10 +193,20 @@ function ServerRow({
           carries only the reading (bar + value). The value hugs its bar so the
           pair reads as one unit; the spacing between resources comes from the
           column, not from a shared value box. */}
-      <span className="server-list-xl items-center gap-2">
-        <Meter value={cpu} width="w-7" />
-        <Segmented muted={cpu == null} className={severityClass(cpu)}>
-          {cpu == null ? '—' : `${Math.round(cpu)}%`}
+      <span
+        className="server-list-xl items-center gap-2"
+        title={
+          cpu == null
+            ? undefined
+            : t('metrics.cpuAllocation', {
+                used: formatCpuCores(cpuCoresUsed(cpu, cpuCoresAllocated)),
+                total: formatCpuCores(cpuCoresAllocated),
+              })
+        }
+      >
+        <Meter value={cpuShare} width="w-7" />
+        <Segmented muted={cpu == null} className={cn('tabular-nums', severityClass(cpuShare))}>
+          {cpuReading}
         </Segmented>
       </span>
       <span className="server-list-xl items-center gap-2">

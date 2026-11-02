@@ -1165,6 +1165,7 @@ function ServerDetailsPage() {
             metrics={displayMetrics}
             allocatedMemoryMb={server?.allocatedMemoryMb}
             allocatedDiskMb={diskLimitMb}
+            allocatedCpuCores={server?.allocatedCpuCores}
             backupAllocationMb={server?.backupAllocationMb}
             serverId={server?.id}
             serverStatus={server?.status}
@@ -1324,6 +1325,7 @@ function ServerDetailsPage() {
  serverMemoryPercent={isServerRunning ? (server.memoryPercent ?? 0) : 0}
  allocatedMemoryMb={server.allocatedMemoryMb ?? 0}
  allocatedDiskMb={diskLimitMb}
+ allocatedCpuCores={server.allocatedCpuCores}
  liveMetrics={displayMetrics}
  isMetricsConnected={metricsStreamConnected}
  serverStatus={server.status}

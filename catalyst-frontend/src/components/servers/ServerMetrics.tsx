@@ -1,21 +1,52 @@
 import { useTranslation } from 'react-i18next';
 import { BracketLabel, Meter, Segmented, StatusLed } from '../deck/primitives';
 import { cn } from '@/lib/utils';
+import {
+  cpuCoresUsed,
+  cpuPercentOfAllocation,
+  formatCpuCores,
+  resolveCpuCores,
+} from '../../utils/cpu';
 
 type Metric = {
   label: string;
   value: number;
+  reading: string;
+  title?: string;
 };
 
 /** Severity belongs on the reading; the meter stays a neutral glance. */
 const severityClass = (value: number) =>
   value >= 90 ? 'text-danger' : value >= 75 ? 'text-warning' : undefined;
 
-function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; memory?: number; isLive?: boolean }) {
+function ServerMetrics({
+  cpu = 0,
+  memory = 0,
+  allocatedCpuCores,
+  isLive = true,
+}: {
+  cpu?: number;
+  memory?: number;
+  /** Cores the server may use; CPU is per core, so the bar needs the share. */
+  allocatedCpuCores?: number | null;
+  isLive?: boolean;
+}) {
   const { t } = useTranslation('servers');
+  const cpuCores = resolveCpuCores(allocatedCpuCores);
+  const cpuShare = cpuPercentOfAllocation(cpu, cpuCores);
   const metrics: Metric[] = [
-    { label: t('metrics.labels.cpu'), value: cpu },
-    { label: t('metrics.labels.memory'), value: memory },
+    {
+      label: t('metrics.labels.cpu'),
+      // The bar shows the share of the allocation; the reading names the cores
+      // so >100% per-core figures stop reading as an overflow.
+      value: cpuShare,
+      reading: t('metrics.cpuAllocation', {
+        used: formatCpuCores(cpuCoresUsed(cpu, cpuCores)),
+        total: formatCpuCores(cpuCores),
+      }),
+      title: t('metrics.cpuPercentOfCores', { percent: Math.round(cpuShare) }),
+    },
+    { label: t('metrics.labels.memory'), value: memory, reading: `${memory.toFixed(0)}%` },
   ];
 
   return (
@@ -38,8 +69,11 @@ function ServerMetrics({ cpu = 0, memory = 0, isLive = true }: { cpu?: number; m
             {/* Bounded at the call site: an unbounded flex-1 track renders as a
                 4px hairline ~1200px long and stops reading as a proportion. */}
             <Meter value={metric.value} width="flex-1 max-w-[16rem]" />
-            <Segmented className={cn('ml-auto min-w-[3rem] text-right', severityClass(metric.value))}>
-              {metric.value.toFixed(0)}%
+            <Segmented
+              className={cn('ml-auto min-w-[3rem] text-right', severityClass(metric.value))}
+              title={metric.title}
+            >
+              {metric.reading}
             </Segmented>
           </div>
         ))}

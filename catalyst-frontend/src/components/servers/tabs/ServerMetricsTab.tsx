@@ -33,6 +33,8 @@ interface Props {
   serverMemoryPercent: number;
   allocatedMemoryMb: number;
   allocatedDiskMb: number;
+  /** Cores the server may use; CPU is reported per core. */
+  allocatedCpuCores?: number | null;
   liveMetrics: LiveMetrics | null;
   /**
    * Connected state of the dedicated metrics stream (/metrics/stream) — NOT
@@ -52,6 +54,7 @@ export default function ServerMetricsTab({
   serverMemoryPercent,
   allocatedMemoryMb,
   allocatedDiskMb,
+  allocatedCpuCores,
   liveMetrics,
   isMetricsConnected,
   serverStatus,
@@ -103,12 +106,18 @@ export default function ServerMetricsTab({
         }
       />
 
-      <ServerMetrics cpu={cpu} memory={memory} isLive={isRunning && isMetricsConnected} />
+      <ServerMetrics
+        cpu={cpu}
+        memory={memory}
+        allocatedCpuCores={allocatedCpuCores}
+        isLive={isRunning && isMetricsConnected}
+      />
 
       <ServerMetricsTrends
         history={metricsHistory?.history ?? []}
         latest={metricsHistory?.latest ?? null}
         allocatedMemoryMb={allocatedMemoryMb}
+        allocatedCpuCores={allocatedCpuCores}
         timeRangeLabel={metricsTimeRange.label}
       />
     </div>

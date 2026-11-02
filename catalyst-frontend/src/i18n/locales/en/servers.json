@@ -355,6 +355,8 @@
     "emptyTitle": "No servers"
   },
   "metrics": {
+    "cpuAllocation": "{{used}} / {{total}} cores",
+    "cpuPercentOfCores": "{{percent}}% of allocated cores",
     "labels": {
       "cpu": "CPU",
       "disk": "Disk",

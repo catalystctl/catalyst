@@ -357,6 +357,8 @@
     "emptyTitle": "Aucun serveur"
   },
   "metrics": {
+    "cpuAllocation": "{{used}} / {{total}} cœurs",
+    "cpuPercentOfCores": "{{percent}} % des cœurs alloués",
     "labels": {
       "cpu": "CPU",
       "disk": "Disque",

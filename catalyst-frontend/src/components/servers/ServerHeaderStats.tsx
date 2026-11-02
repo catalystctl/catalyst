@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
+import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
 import { cn } from '@/lib/utils';
 import { Meter } from '../deck/primitives';
 import LastUpdated from '../shared/LastUpdated';
@@ -31,11 +32,14 @@ function HeaderStat({
   label,
   value,
   percent,
+  title,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   percent?: number;
+  /** Full wording behind a compact reading (hover / screen reader). */
+  title?: string;
 }) {
   return (
     <div className="min-w-[7rem]">
@@ -43,7 +47,10 @@ function HeaderStat({
         <Icon className="h-3 w-3" />
         <span className="type-overline">{label}</span>
       </div>
-      <div className={cn('type-numeric mt-1 whitespace-nowrap text-data', severityClass(percent))}>
+      <div
+        className={cn('type-numeric mt-1 whitespace-nowrap text-data', severityClass(percent))}
+        title={title}
+      >
         {value}
       </div>
       <Meter value={percent ?? null} className="mt-1 w-full" />
@@ -55,6 +62,7 @@ export default function ServerHeaderStats({
   metrics,
   allocatedMemoryMb,
   allocatedDiskMb,
+  allocatedCpuCores,
   backupAllocationMb,
   serverId,
   serverStatus,
@@ -64,6 +72,8 @@ export default function ServerHeaderStats({
   metrics: ServerMetrics | null;
   allocatedMemoryMb?: number | null;
   allocatedDiskMb?: number | null;
+  /** Cores the server may use; CPU is reported per core, so this sets the bar. */
+  allocatedCpuCores?: number | null;
   /** Server backup storage allocation (MB); 0 means unallocated. */
   backupAllocationMb?: number | null;
   /** Enables the `server-header-stats` plugin slot for this server. */
@@ -135,6 +145,18 @@ export default function ServerHeaderStats({
   // Offline servers must not render stale live usage. CPU/memory/network are
   // forced to zero; disk persists because files remain while stopped.
   const cpuPercent = isRunning ? metrics.cpuPercent : 0;
+  // CPU is per core: the bar needs the share of the allocation, not the raw
+  // percentage (which pegs the bar at a single busy core). The reading names
+  // the cores in use — that is the number an operator actually wants — and the
+  // percentage stays in the tooltip. `2.6 / 3 cores` also fits the header's
+  // uniform stat width, so the CPU bar keeps the same track as its neighbours.
+  const cpuCores = resolveCpuCores(allocatedCpuCores);
+  const cpuShare = cpuPercentOfAllocation(cpuPercent, cpuCores);
+  const cpuValue = t('metrics.cpuAllocation', {
+    used: formatCpuCores(cpuCoresUsed(cpuPercent, cpuCores)),
+    total: formatCpuCores(cpuCores),
+  });
+  const cpuTitle = t('metrics.cpuPercentOfCores', { percent: Math.round(cpuShare) });
   const memoryPercent = isRunning ? metrics.memoryPercent : 0;
   const memoryLimit = allocatedMemoryMb && allocatedMemoryMb > 0 ? allocatedMemoryMb : null;
   const memoryUsed = isRunning ? (metrics.memoryUsageMb ?? null) : 0;
@@ -156,11 +178,11 @@ export default function ServerHeaderStats({
   return (
     <>
     <div className={cn('hidden items-end gap-5 md:flex lg:hidden', !live && 'opacity-60')}>
-      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuValue} percent={cpuShare} title={cpuTitle} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
     </div>
     <div className={cn('hidden items-end gap-5 lg:flex', !live && 'opacity-60')}>
-      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={`${cpuPercent.toFixed(0)}%`} percent={cpuPercent} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuValue} percent={cpuShare} title={cpuTitle} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       {pluginStats}

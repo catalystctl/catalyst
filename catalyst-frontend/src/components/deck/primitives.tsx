@@ -108,10 +108,13 @@ export function Segmented({
   children,
   className,
   muted,
+  title,
 }: {
   children: ReactNode;
   className?: string;
   muted?: boolean;
+  /** Full wording behind a compact reading (hover / screen reader). */
+  title?: string;
 }) {
   return (
     <span
@@ -120,6 +123,7 @@ export function Segmented({
         muted ? 'text-muted-foreground' : 'text-foreground',
         className,
       )}
+      {...(title ? { title } : {})}
     >
       {children}
     </span>

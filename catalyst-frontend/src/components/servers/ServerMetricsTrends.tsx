@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ServerMetricsPoint } from '../../types/server';
 import { formatBytes } from '../../utils/formatters';
+import { cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
 import { cn } from '@/lib/utils';
 
 type TrendCard = {
@@ -33,16 +34,21 @@ function ServerMetricsTrends({
  history,
  latest,
  allocatedMemoryMb = 0,
+ allocatedCpuCores,
  timeRangeLabel,
 }: {
  history: ServerMetricsPoint[];
  latest: ServerMetricsPoint | null;
  allocatedMemoryMb?: number;
+ /** Cores the server may use; CPU history is per core. */
+ allocatedCpuCores?: number | null;
  timeRangeLabel?: string;
 }) {
  const { t } = useTranslation('servers');
  const resolvedTimeRangeLabel = timeRangeLabel ?? t('metrics.last60Min');
  const cpuHistory = history.map((point) => point.cpuPercent);
+ // The chart plots the share of the allocation, matching the gauge above it.
+ const cpuShareHistory = cpuHistory.map((percent) => cpuPercentOfAllocation(percent, allocatedCpuCores));
  const memoryHistory = history.map((point) => point.memoryUsageMb);
  const diskHistory = history.map((point) => point.diskUsageMb);
  const diskIoHistory = history.map((point) => point.diskIoMb ?? null);
@@ -68,10 +74,19 @@ function ServerMetricsTrends({
  const cards: TrendCard[] = [
  {
  label: t('metrics.labels.cpu'),
- value: `${(latest?.cpuPercent ?? 0).toFixed(1)}%`,
- color: percentTone(latest?.cpuPercent ?? 0),
+ // Share of the allocation, same scale as the gauge above it: the per-core
+ // percentage would peg this line at the top of an auto-domain chart.
+ value: `${cpuPercentOfAllocation(latest?.cpuPercent ?? 0, allocatedCpuCores).toFixed(1)}%`,
+ color: percentTone(cpuPercentOfAllocation(latest?.cpuPercent ?? 0, allocatedCpuCores)),
  stroke: 'hsl(var(--primary))',
- data: toChartData(cpuHistory),
+ data: toChartData(cpuShareHistory),
+ formatTooltip: (value) => {
+ const cores = resolveCpuCores(allocatedCpuCores);
+ return t('metrics.cpuAllocation', {
+ used: formatCpuCores((value / 100) * cores),
+ total: formatCpuCores(cores),
+ });
+ },
  },
  {
  label: t('metrics.labels.memory'),

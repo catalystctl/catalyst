@@ -8,6 +8,7 @@ import { notifyError } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Meter, Segmented } from '../deck/primitives';
 import { cn } from '@/lib/utils';
+import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
 import { ServerIcon, Globe, Terminal, ChevronRight } from 'lucide-react';
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
@@ -34,8 +35,16 @@ function ServerCard({ server }: { server: Server }) {
 
   const cpuPercent =
     server.status === 'running' && server.cpuPercent != null && typeof server.cpuPercent === 'number'
-      ? clampPercent(server.cpuPercent)
+      ? // Per-core percent against a multi-core allocation: draw the share.
+        cpuPercentOfAllocation(server.cpuPercent, server.allocatedCpuCores)
       : null;
+  const cpuDisplay =
+    cpuPercent == null
+      ? '—'
+      : t('metrics.cpuAllocation', {
+          used: formatCpuCores(cpuCoresUsed(server.cpuPercent, server.allocatedCpuCores)),
+          total: formatCpuCores(resolveCpuCores(server.allocatedCpuCores)),
+        });
 
   const memoryPercent =
     server.status === 'running' && server.memoryPercent != null && typeof server.memoryPercent === 'number'
@@ -64,11 +73,11 @@ function ServerCard({ server }: { server: Server }) {
 
   const metrics = useMemo(
     () => [
-      { label: t('metrics.labels.cpu'), value: cpuPercent, display: formatPercent(cpuPercent) },
+      { label: t('metrics.labels.cpu'), value: cpuPercent, display: cpuDisplay },
       { label: t('metrics.labels.ram'), value: memoryPercent, display: memoryDisplay },
       { label: t('metrics.labels.disk'), value: diskPercent, display: diskDisplay },
     ],
-    [t, cpuPercent, memoryPercent, diskPercent, diskDisplay, memoryDisplay],
+    [t, cpuPercent, cpuDisplay, memoryPercent, diskPercent, diskDisplay, memoryDisplay],
   );
 
   return (

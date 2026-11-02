@@ -1,10 +1,12 @@
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
 import { Button } from '@/components/ui/button';
 import { Meter, Segmented } from '../deck/primitives';
+import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
 import { cn } from '@/lib/utils';
 import { ServerIcon, Globe, Terminal, ChevronRight, HardDrive, Cpu, MemoryStick } from 'lucide-react';
 
@@ -21,6 +23,7 @@ const severityClass = (value: number | null) =>
   value != null && value >= 90 ? 'text-danger' : value != null && value >= 75 ? 'text-warning' : undefined;
 
 function ServerListItem({ server }: { server: Server }) {
+  const { t } = useTranslation('servers');
   const host =
     server.connection?.host ??
     server.primaryIp ??
@@ -31,8 +34,17 @@ function ServerListItem({ server }: { server: Server }) {
 
   const cpuPercent =
     server.status === 'running' && server.cpuPercent != null
-      ? clampPercent(server.cpuPercent)
+      ? // Per-core percent: clamp the *share of the allocation* for the bar and
+        // keep the number out of a 0-100 clamp, which read as "100%" at one core.
+        cpuPercentOfAllocation(server.cpuPercent, server.allocatedCpuCores)
       : null;
+  const cpuReading =
+    cpuPercent == null
+      ? null
+      : t('metrics.cpuAllocation', {
+          used: formatCpuCores(cpuCoresUsed(server.cpuPercent, server.allocatedCpuCores)),
+          total: formatCpuCores(resolveCpuCores(server.allocatedCpuCores)),
+        });
 
   const memoryPercent =
     server.status === 'running' && server.memoryPercent != null
@@ -81,8 +93,16 @@ function ServerListItem({ server }: { server: Server }) {
         <div className="flex items-center gap-2">
           <Cpu className="h-3 w-3 text-muted-foreground/60" />
           <Meter value={cpuPercent} />
-          <Segmented muted={cpuPercent == null} className={cn('min-w-[3rem] text-right', severityClass(cpuPercent))}>
-            {formatPercent(cpuPercent)}
+          <Segmented
+            muted={cpuPercent == null}
+            className={cn('min-w-[3rem] text-right', severityClass(cpuPercent))}
+            title={
+              cpuPercent == null
+                ? undefined
+                : t('metrics.cpuPercentOfCores', { percent: Math.round(cpuPercent) })
+            }
+          >
+            {cpuReading ?? '—'}
           </Segmented>
         </div>
         <div className="flex items-center gap-2">
