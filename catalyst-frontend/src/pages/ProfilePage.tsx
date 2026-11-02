@@ -18,7 +18,7 @@ import AppearanceSettings from '../components/profile/AppearanceSettings';
 import { profileApi } from '../services/api/profile';
 import { notifyError, notifySuccess } from '../utils/notify';
 import i18n from '@/i18n';
-import { formatDate, formatRelativeTime } from '@/i18n/format';
+import { formatDate, formatTimeSince } from '@/i18n/format';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -40,7 +40,7 @@ import { PluginSlot } from '../plugins/PluginSlot';
 
 // ── Helpers ──
 const fmtDate = (d: string | null | undefined) => !d ? i18n.t('notAvailable', { ns: 'profile' }) : formatDate(d);
-const fmtRelative = (d: string | null | undefined) => !d ? '' : formatRelativeTime(d);
+const fmtRelative = (d: string | null | undefined) => !d ? '' : formatTimeSince(d);
 const parseUA = (ua: string | null | undefined) => {
  const unknown = i18n.t('actions.unknown', { ns: 'common' });
  if (!ua) return { browser: unknown, os: unknown, mobile: false };

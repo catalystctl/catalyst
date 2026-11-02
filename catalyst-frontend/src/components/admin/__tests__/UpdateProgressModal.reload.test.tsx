@@ -26,7 +26,12 @@ const { queryState, healthMock } = vi.hoisted(() => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    // Interpolate `{{time}}` so assertions can see the rendered value, which
+    // is what pins the "Started …" label's tense.
+    t: (key: string, opts?: Record<string, unknown>) =>
+      opts && 'time' in opts ? `${key} ${String(opts.time)}` : key,
+  }),
 }));
 
 vi.mock('@/csync', async (importOriginal) => {
@@ -72,7 +77,8 @@ vi.mock('@/components/deck/primitives', () => ({
   StatusLed: () => <span />,
 }));
 
-vi.mock('@/i18n/format', () => ({ formatRelativeTime: () => 'just now' }));
+// The real `@/i18n/format` is used on purpose: the "Started …" label's tense
+// is exactly what regressed, so mocking the formatter would hide it.
 
 vi.mock('../../services/api/admin', () => ({
   adminApi: { updateState: vi.fn(async () => queryState.current) },
@@ -170,5 +176,63 @@ describe('UpdateProgressModal auto-reload', () => {
 
     const close = await screen.findByRole('button');
     expect(close).toBeDisabled();
+  });
+
+  describe('"Started …" label (server clock skew)', () => {
+    afterEach(async () => {
+      const { default: i18n } = await import('@/i18n');
+      await i18n.changeLanguage('en');
+    });
+
+    /** The rendered "Started …" line, once the poll resolves. */
+    const startedLabel = () =>
+      screen.findByText(/^update\.progress\.started /, undefined, { timeout: 2_000 });
+
+    // Regression (customer report): the modal formatted `startedAt` with
+    // `Intl.RelativeTimeFormat`, which is direction-agnostic. The panel writes
+    // `startedAt` with the SERVER clock; when that clock runs ahead of the
+    // browser's, a pull that had already begun rendered as the countdown
+    // "Started in 24 seconds".
+    it('never renders a countdown when the server clock is ahead', async () => {
+      queryState.current = {
+        state: 'pulling',
+        message: 'Downloading the latest Catalyst images (this can take a few minutes)…',
+        // 24s in the browser's future — the exact skew from the report.
+        startedAt: new Date(Date.now() + 24_000).toISOString(),
+        logs: [],
+      };
+      renderModal();
+
+      const label = await startedLabel();
+      expect(label.textContent).toContain('update.progress.started now');
+      expect(label.textContent).not.toMatch(/\bin \d+ (second|minute|hour|day)/i);
+    });
+
+    it('renders elapsed time for a start that is already in the past', async () => {
+      queryState.current = {
+        state: 'pulling',
+        message: null,
+        startedAt: new Date(Date.now() - 3 * 60_000).toISOString(),
+        logs: [],
+      };
+      renderModal();
+
+      const label = await startedLabel();
+      expect(label.textContent).toContain('3 minutes ago');
+    });
+
+    it('describes a just-started update as "now", not "0 seconds ago"', async () => {
+      queryState.current = {
+        state: 'pulling',
+        message: null,
+        startedAt: new Date(Date.now()).toISOString(),
+        logs: [],
+      };
+      renderModal();
+
+      const label = await startedLabel();
+      expect(label.textContent).toContain('update.progress.started now');
+      expect(label.textContent).not.toContain('0 seconds');
+    });
   });
 });

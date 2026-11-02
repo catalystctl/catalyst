@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { QueryKey } from '@/csync';
-import { formatDateTime, formatRelativeTime } from '@/i18n/format';
+import { formatDateTime, formatTimeSince } from '@/i18n/format';
 import { useQueryFreshness } from '@/hooks/useDataFreshness';
 import { cn } from '@/lib/utils';
 
@@ -27,7 +27,7 @@ export default function LastUpdated({ queryKey, updatedAt, className }: LastUpda
   const label =
     at === 0
       ? t('freshness.never')
-      : t('freshness.updatedAt', { when: formatRelativeTime(at, freshness.now) });
+      : t('freshness.updatedAt', { when: formatTimeSince(at, freshness.now) });
   const tooltip = at === 0 ? label : `${label} · ${formatDateTime(at, { dateStyle: 'medium', timeStyle: 'medium' })}`;
 
   return (

@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import i18n from '../index';
 import { matchLocaleTag, isSupportedLocale, LOCALE_STORAGE_KEY, detectDeviceLocale } from '../config';
 import { getLocalizedErrorMessage, getApiErrorCode, getApiErrorParams, getLocalizedFieldErrors } from '../api-errors';
-import { formatDate, formatTime, formatRelativeTime } from '../format';
+import { formatDate, formatTime, formatRelativeTime, formatTimeSince } from '../format';
 import { consoleStreamLabel, roleDescriptionLabel, roleLabel } from '../../utils/constants';
 
 describe('locale matching', () => {
@@ -178,6 +178,46 @@ describe('catalog loading', () => {
     expect(formatRelativeTime(threeDaysLater, base)).toBe('in 3 days');
     await i18n.changeLanguage('zh-CN');
     expect(formatRelativeTime(threeDaysLater, base)).toBe('3天后');
+  });
+
+  describe('formatTimeSince (elapsed only)', () => {
+    const base = new Date('2026-01-01T12:00:00Z');
+
+    it('clamps a future timestamp to "now" instead of rendering a countdown', () => {
+      // Server clock 24s ahead of the browser — the reported "Started in 24
+      // seconds". The event already happened; the skew is not the user's news.
+      expect(formatTimeSince(new Date('2026-01-01T12:00:24Z'), base)).toBe('now');
+      expect(formatTimeSince(new Date('2026-01-01T12:05:00Z'), base)).toBe('now');
+    });
+
+    it('floors the unit so an age is never overstated', () => {
+      // 59.6s must not read "60 seconds ago".
+      expect(formatTimeSince(new Date('2026-01-01T11:59:00.400Z'), base)).toBe('59 seconds ago');
+      // 89.7s is still "1 minute ago", not "2 minutes ago".
+      expect(formatTimeSince(new Date('2026-01-01T11:58:30.300Z'), base)).toBe('1 minute ago');
+    });
+
+    it('renders ordinary elapsed readings', () => {
+      expect(formatTimeSince(base, base)).toBe('now');
+      expect(formatTimeSince(new Date('2026-01-01T11:59:57Z'), base)).toBe('3 seconds ago');
+      expect(formatTimeSince(new Date('2026-01-01T09:00:00Z'), base)).toBe('3 hours ago');
+      expect(formatTimeSince(new Date('2025-12-30T12:00:00Z'), base)).toBe('2 days ago');
+    });
+
+    it('localizes and returns "" for unparseable input', () => {
+      expect(formatTimeSince(new Date('2026-01-01T09:00:00Z'), base)).toBe('3 hours ago');
+      // `Intl.RelativeTimeFormat.format(NaN)` throws, so the guard matters.
+      expect(formatTimeSince('not a date', base)).toBe('');
+      expect(formatTimeSince('', base)).toBe('');
+    });
+
+    it('localizes the elapsed reading', async () => {
+      await i18n.changeLanguage('zh-CN');
+      expect(formatTimeSince(new Date('2026-01-01T09:00:00Z'), base)).toBe('3小时前');
+      expect(formatTimeSince(new Date('2026-01-01T12:00:24Z'), base)).toBe('现在');
+      await i18n.changeLanguage('fr');
+      expect(formatTimeSince(new Date('2026-01-01T09:00:00Z'), base)).toBe('il y a 3 heures');
+    });
   });
 
   it('falls back to English for missing and placeholder keys', async () => {

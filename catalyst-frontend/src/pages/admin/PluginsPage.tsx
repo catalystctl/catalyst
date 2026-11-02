@@ -48,7 +48,7 @@ import { SafetyConsentDialog, PLUGIN_DISCLAIMER_VERSION } from './plugins/Safety
 import { UninstallPluginDialog } from './plugins/UninstallPluginDialog';
 import { permissionLabel } from './plugins/permissionMeta';
 import { isNewerVersion } from './plugins/marketplace-utils';
-import { formatDateTime, formatRelativeTime } from '../../i18n/format';
+import { formatDateTime, formatTimeSince } from '../../i18n/format';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ function PluginRow({
   // A manifest with a blank version is possible (older/partial plugin.json) —
   // render a dash rather than a dangling "v".
   const installedVersion = plugin.version?.trim() || '—';
-  const loadedAt = plugin.loadedAt ? formatRelativeTime(new Date(plugin.loadedAt).getTime()) : null;
+  const loadedAt = plugin.loadedAt ? formatTimeSince(new Date(plugin.loadedAt).getTime()) : null;
 
   return (
     <div

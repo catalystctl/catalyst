@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { formatDateTime, formatRelativeTime } from '@/i18n/format';
+import { formatDateTime, formatTimeSince } from '@/i18n/format';
 import { useDataFreshness } from '@/hooks/useDataFreshness';
 import { StatusLed } from '../deck/primitives';
 
@@ -35,7 +35,7 @@ export default function DataFreshness() {
   );
   const freshnessLabel = never
     ? t('shell.lastRefreshedNever')
-    : t('shell.lastRefreshed', { when: formatRelativeTime(updatedAt, now) });
+    : t('shell.lastRefreshed', { when: formatTimeSince(updatedAt, now) });
   const refreshSuffix = isFetching ? ` · ${t('shell.refreshing')}` : '';
   const label = `${freshnessLabel} · ${liveLabel}${refreshSuffix}`;
   const absolute = never

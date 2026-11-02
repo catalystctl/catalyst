@@ -25,7 +25,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { BracketLabel, StatusLed } from '@/components/deck/primitives';
 import { qk } from '@/lib/queryKeys';
-import { formatRelativeTime } from '@/i18n/format';
+import { formatTimeSince } from '@/i18n/format';
 import { adminApi } from '../../services/api/admin';
 
 /** localStorage flag: show a completion toast after the post-update reload. */
@@ -362,7 +362,7 @@ export default function UpdateProgressModal({
 
               {state?.startedAt && (
                 <div className="font-mono text-micro tabular-nums text-muted-foreground">
-                  {t('update.progress.started', { time: formatRelativeTime(state.startedAt) })}
+                  {t('update.progress.started', { time: formatTimeSince(state.startedAt) })}
                   {state.message && phase === 'pulling' ? ` — ${state.message}` : ''}
                 </div>
               )}

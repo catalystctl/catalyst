@@ -31,7 +31,7 @@ import { queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { notifyError } from '../../../utils/notify';
-import { formatDateTime, formatRelativeTime } from '../../../i18n/format';
+import { formatDateTime, formatTimeSince } from '../../../i18n/format';
 import {
   addMarketplaceSource,
   deleteMarketplaceSource,
@@ -419,7 +419,7 @@ export default function MarketplacePage() {
             title={lastChecked ? formatDateTime(lastChecked) : undefined}
           >
             {lastChecked
-              ? t('pluginsAdmin.checkedAt', { time: formatRelativeTime(lastChecked.getTime()) })
+              ? t('pluginsAdmin.checkedAt', { time: formatTimeSince(lastChecked.getTime()) })
               : t('pluginsAdmin.notYetChecked')}
           </span>
         </div>
