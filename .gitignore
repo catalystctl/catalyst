@@ -116,6 +116,8 @@ BRANCH-STACK.md
 
 # Local agent harness state (workflows, memory, scratch — never commit)
 .grok/
+# karucode harness state (TODO lists, session transcripts — never commit)
+.karucode/
 
 # LXC/Incus container artifacts (exports, local state, per-host overrides)
 *.lxc
