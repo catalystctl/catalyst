@@ -430,6 +430,69 @@ export const isMaxBufferError = (error: any): boolean =>
   error?.code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ||
   (error?.message && String(error.message).includes("maxBuffer length exceeded"));
 
+/**
+ * Reject a JSON file-content request early when it is larger than the panel's
+ * configured max-upload gate.
+ *
+ * Why this exists: `POST /servers/:id/files/write` (and the sibling
+ * create/permissions routes) carry the file body as JSON, so they inherit
+ * Fastify's global 10MB `bodyLimit` (server.ts). That global cap is a
+ * request-envelope guard, not the panel's file-size policy — the panel exposes
+ * `fileTunnelMaxUploadMb` (default 500MB) for that, and every streaming route
+ * (files/upload, the file tunnel) already honours it. Without this an 11MB
+ * `server.properties` was rejected with a bare `FST_ERR_CTP_BODY_TOO_LARGE`
+ * ("Request body is too large") even though an 11MB upload via the file
+ * manager succeeded.
+ *
+ * This runs in `preParsing`, so an oversized upload is refused from the
+ * Content-Length header before the body is buffered. Chunked requests carry no
+ * length; `enforceFileWriteContentLimit` in the handler is the authoritative
+ * backstop for those.
+ *
+ * Returns true when the request was rejected (the caller must return).
+ */
+export const rejectOversizedFileWrite = (
+  request: { headers: Record<string, unknown> },
+  reply: FastifyReply,
+  maxBytes: number,
+  maxMb: number,
+): boolean => {
+  const declared = Number(request.headers["content-length"] ?? NaN);
+  if (!Number.isFinite(declared) || declared <= maxBytes) {
+    return false;
+  }
+  apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, `Upload exceeds maximum size of ${maxMb}MB`, {
+    params: { maxMb },
+  });
+  // Pause (do not destroy) the socket so the client is not reset mid-upload.
+  // Nothing is buffered: the body is never read.
+  const raw = (request as unknown as { raw?: { pause: () => void } }).raw;
+  if (raw && typeof raw.pause === 'function') raw.pause();
+  return true;
+};
+
+/**
+ * Authoritative size gate for the parsed file content. Catches chunked uploads
+ * that declared no Content-Length. Returns true when the request was rejected.
+ */
+export const enforceFileWriteContentLimit = (
+  content: unknown,
+  reply: FastifyReply,
+  maxBytes: number,
+  maxMb: number,
+): boolean => {
+  if (typeof content !== "string") {
+    return false;
+  }
+  if (Buffer.byteLength(content, "utf8") <= maxBytes) {
+    return false;
+  }
+  apiError(reply, 413, ErrorCodes.FILE_TOO_LARGE, `Upload exceeds maximum size of ${maxMb}MB`, {
+    params: { maxMb },
+  });
+  return true;
+};
+
 export const maxBufferErrorResponse = () => {
   const currentMb = Math.round(maxBufferBytes / (1024 * 1024));
   return {

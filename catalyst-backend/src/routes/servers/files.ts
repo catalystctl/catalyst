@@ -5,7 +5,7 @@ import { Transform } from "stream";
 import { pipeline } from "stream/promises";
 import { prisma } from "../../db.js";
 import { createAuditLog } from '../../middleware/audit.js';
-import { Actor, captureSystemError, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, validateAndNormalizePath } from './_helpers.js';
+import { Actor, captureSystemError, enforceFileWriteContentLimit, ensureServerAccess, fileRateLimitMax, fileRateLimitWindowMs, isArchiveName, path, rejectOversizedFileWrite, validateAndNormalizePath } from './_helpers.js';
 import { describeError } from '../../utils/describe-error.js';
 import { getSecuritySettings, MAX_UPLOAD_MB_CEILING, maxUploadBytesFromMb } from "../../services/mailer.js";
 import { apiError } from "../../lib/http-error";
@@ -13,6 +13,18 @@ import { ErrorCodes } from "../../shared-types";
 
 export async function serverFilesRoutes(app: FastifyInstance) {
   const uploadBodyLimit = MAX_UPLOAD_MB_CEILING * 1024 * 1024;
+
+  /**
+   * The panel's configured file-size gate. Shared by the streaming upload
+   * route and the JSON file-content routes (write/create) so a file that can
+   * be uploaded can also be saved through the editor. Resolved per request so
+   * a settings change takes effect without a restart.
+   */
+  const resolveFileContentLimit = async (): Promise<{ maxBytes: number; maxMb: number }> => {
+    const settings = await getSecuritySettings();
+    const maxMb = settings.fileTunnelMaxUploadMb;
+    return { maxBytes: maxUploadBytesFromMb(maxMb), maxMb };
+  };
   const fileTunnel = (app as any).fileTunnel as import("../../services/file-tunnel").FileTunnelService;
   const tunnelFileOp = async (
     nodeId: string,
@@ -292,6 +304,13 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/create",
     { schema: { summary: "Create a file", description: "Create a file.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
+      // Same file-content policy as files/write (see the note there).
+      bodyLimit: uploadBodyLimit,
+      preParsing: async (request: FastifyRequest, reply: FastifyReply) => {
+        const { maxBytes, maxMb } = await resolveFileContentLimit();
+        rejectOversizedFileWrite(request, reply, maxBytes, maxMb);
+        return undefined;
+      },
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -305,6 +324,12 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       if (!requestedPath) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path");
+      }
+
+      // Backstop for chunked uploads that sent no Content-Length.
+      const { maxBytes, maxMb } = await resolveFileContentLimit();
+      if (enforceFileWriteContentLimit(content, reply, maxBytes, maxMb)) {
+        return;
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
@@ -576,6 +601,15 @@ export async function serverFilesRoutes(app: FastifyInstance) {
     "/:serverId/files/write",
     { schema: { summary: "Write a file", description: "Write a file.", tags: ["Files"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },
       onRequest: [app.authenticate],
+      // The file body travels as JSON, so the route-level limit must be the
+      // panel's max-upload gate rather than Fastify's 10MB envelope default,
+      // otherwise a file the panel allows to be uploaded could not be saved.
+      bodyLimit: uploadBodyLimit,
+      preParsing: async (request: FastifyRequest, reply: FastifyReply) => {
+        const { maxBytes, maxMb } = await resolveFileContentLimit();
+        rejectOversizedFileWrite(request, reply, maxBytes, maxMb);
+        return undefined;
+      },
       config: { rateLimit: { max: fileRateLimitMax, timeWindow: fileRateLimitWindowMs } },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -585,6 +619,12 @@ export async function serverFilesRoutes(app: FastifyInstance) {
 
       if (!filePath || content === undefined) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Missing path or content");
+      }
+
+      // Backstop for chunked uploads that sent no Content-Length.
+      const { maxBytes, maxMb } = await resolveFileContentLimit();
+      if (enforceFileWriteContentLimit(content, reply, maxBytes, maxMb)) {
+        return;
       }
 
       const server = await requireFileAccess(serverId, userId, "file.write", reply, request.user);
