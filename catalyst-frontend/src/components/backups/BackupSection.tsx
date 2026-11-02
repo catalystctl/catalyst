@@ -197,6 +197,11 @@ function BackupSection({
 
  <ServerTabCard>
  <SectionHeader title={t('backups.settings.title')} description={t('backups.settings.description')} />
+ {/* One 12px rhythm for every block in this card: the retention grid, the
+     per-mode config grid, and the save row all separate by the same gap the
+     section header uses. Without it the mode grid and the save button sat
+     flush against the block above them. */}
+ <div className="space-y-3">
  <div className="grid grid-cols-1 gap-3 text-mini text-muted-foreground sm:grid-cols-3">
  <div>
  <label className="type-overline">
@@ -519,6 +524,7 @@ function BackupSection({
  >
  {t('backups.settings.save')}
  </button>
+ </div>
  </div>
  </ServerTabCard>
 
