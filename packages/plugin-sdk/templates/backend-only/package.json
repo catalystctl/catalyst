@@ -1,6 +1,6 @@
 {
 	"name": "{{pluginName}}",
-	"version": "1.87.6",
+	"version": "1.87.7",
 	"type": "module",
 	"scripts": {
 		"build": "tsc",
