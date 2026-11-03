@@ -1,6 +1,9 @@
 # Playwright failure artifacts (screenshots/ + report)
 catalyst-frontend/screenshots/
 catalyst-frontend/playwright-report/
+
+# Local design mocks (standalone HTML proposals, not shipped code)
+catalyst-frontend/docs/mocks/
 docs.md
 
 # Local architecture/review notes (not for commit, root only so .github/prompts stays tracked)
