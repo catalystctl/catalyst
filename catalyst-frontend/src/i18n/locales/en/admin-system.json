@@ -587,6 +587,17 @@
     "configured": "Configured ({{source}})",
     "contrastValue": "{{mode}} {{ratio}}:1",
     "copyJson": "Copy JSON",
+    "cpuFormat": "CPU display",
+    "cpuFormatDefault": "Default format",
+    "cpuFormatDescription": "How server CPU usage is written beside every gauge. Individual users can override this in their profile.",
+    "cpuFormatOverrideHint": "Users can override this in Profile → Appearance.",
+    "cpuFormatPreview": "Preview",
+    "cpuFormatPreviewHint": "The same {{cores}}-core server at 260% (2.6 cores busy).",
+    "cpuFormats": {
+      "cores": "Cores (2.6 / 4 cores)",
+      "perCore": "Per-core % (260%)",
+      "share": "Share of total (65%)"
+    },
     "customCss": "Custom CSS",
     "customCssCounter": "{{used}} / 100,000 characters",
     "customCssDescription": "Advanced styling injected into every page (max 100 KB)",

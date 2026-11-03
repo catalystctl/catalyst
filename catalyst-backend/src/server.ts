@@ -1566,6 +1566,9 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 					logoUrl: settings?.logoUrl ?? null,
 					faviconUrl: settings?.faviconUrl ?? null,
 					defaultTheme: settings?.defaultTheme ?? "dark",
+					// How server CPU is rendered panel-wide; a user's own
+					// preference (in their profile) takes precedence over this.
+					cpuDisplayFormat: settings?.cpuDisplayFormat ?? "cores",
 					enabledThemes: settings?.enabledThemes ?? null,
 					primaryColor: settings?.primaryColor ?? null,
 					secondaryColor: settings?.secondaryColor ?? null,

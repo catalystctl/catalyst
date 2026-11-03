@@ -407,6 +407,11 @@ model ThemeSettings {
   faviconUrl     String?
   defaultTheme   String   @default("dark") // light, dark, system
   enabledThemes  String[] @default(["light", "dark"])
+  // Panel-wide default for how server CPU is rendered: "cores" (2.6 / 4 cores),
+  // "perCore" (260%) or "share" (65%). Users may override it in their own
+  // preferences; it lives here because this row is the panel display defaults
+  // singleton and its public payload is already cached for every user at boot.
+  cpuDisplayFormat String @default("cores")
   customCss      String?  @db.Text
   primaryColor   String   @default("#3b82f6")
   secondaryColor String   @default("#8b5cf6")

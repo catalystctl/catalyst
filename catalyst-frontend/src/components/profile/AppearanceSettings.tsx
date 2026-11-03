@@ -1,9 +1,16 @@
-import { Moon, Palette, RotateCcw, Sun, Monitor, LayoutTemplate } from 'lucide-react';
+import { Moon, Palette, RotateCcw, Sun, Monitor, LayoutTemplate, Cpu } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ServerTabCard from '../servers/tabs/ServerTabCard';
 import SectionHeader from '../servers/tabs/SectionHeader';
 import LanguageSwitcher from '../shared/LanguageSwitcher';
 import { useThemeStore, type ThemePreference } from '../../stores/themeStore';
+import { useCpuFormat } from '../../hooks/useCpuFormat';
+import {
+  CPU_FORMAT_PREFERENCES,
+  formatCpuReading,
+  resolveCpuFormat,
+  type CpuFormatPreference,
+} from '../../utils/cpu';
 
 function PersonalColorField({
   label,
@@ -46,7 +53,9 @@ function PersonalColorField({
 }
 
 export default function AppearanceSettings() {
-  const { t } = useTranslation('profile');
+  // `servers` is bound too: the CPU option labels live in that namespace, and a
+  // lazily-loaded namespace that is not bound renders its raw keys.
+  const { t } = useTranslation(['profile', 'servers']);
   const themePreference = useThemeStore((s) => s.themePreference);
   const setThemePreference = useThemeStore((s) => s.setThemePreference);
   const personalColors = useThemeStore((s) => s.personalColors);
@@ -58,6 +67,19 @@ export default function AppearanceSettings() {
   const panelSecondary = themeSettings?.secondaryColor || '#8b5cf6';
   const panelAccent = themeSettings?.accentColor || '#06b6d4';
   const panelDefault = themeSettings?.defaultTheme || 'dark';
+
+  // CPU display format. The previews are rendered from one sample at the same
+  // 4-core allocation, so the three options differ only in how they read.
+  const { preference: cpuPreference, setPreference: setCpuPreference } = useCpuFormat();
+  const panelCpuFormat = resolveCpuFormat('panel', themeSettings?.cpuDisplayFormat);
+  const cpuSample = { percent: 260, cores: 4 };
+  const cpuFormatLabel = (format: CpuFormatPreference) =>
+    t(`servers:metrics.cpuFormats.${format}`);
+  const cpuFormatHint = (format: CpuFormatPreference) =>
+    t(`servers:metrics.cpuFormats.${format}Hint`, {
+      // The "Panel default" hint names what the panel is currently set to.
+      format: cpuFormatLabel(format === 'panel' ? panelCpuFormat : format),
+    });
 
   const primary = personalColors?.primaryColor || panelPrimary;
   const secondary = personalColors?.secondaryColor || panelSecondary;
@@ -142,6 +164,42 @@ export default function AppearanceSettings() {
           <p className="type-meta mt-2">
             {hasCustom ? t('appearance.usingCustom') : t('appearance.usingDefaults')} {t('appearance.changesApplyInstantly')}
           </p>
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center gap-2">
+            <Cpu className="h-3.5 w-3.5 text-muted-foreground" />
+            <p className="type-overline">{t('appearance.cpuFormat')}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {CPU_FORMAT_PREFERENCES.map((id) => {
+              const active = (cpuPreference || 'panel') === id;
+              // A live preview of the same sample in this option's format, so
+              // the choice is legible without hunting for a server page.
+              const resolved = resolveCpuFormat(id, themeSettings?.cpuDisplayFormat);
+              const preview = formatCpuReading(cpuSample.percent, cpuSample.cores, resolved);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setCpuPreference(id)}
+                  title={cpuFormatHint(id)}
+                  aria-pressed={active}
+                  className={`flex min-w-0 flex-col items-start gap-0.5 rounded-sm border px-2 py-2 text-mini leading-snug transition-colors ${
+                    active
+                      ? 'border-primary/60 bg-primary/5 text-foreground'
+                      : 'border-border/60 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <span className="min-w-0 truncate font-medium">{cpuFormatLabel(id)}</span>
+                  <span className="type-numeric text-micro tabular-nums text-muted-foreground">
+                    {preview.text}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="type-meta mt-2">{t('appearance.cpuFormatDescription')}</p>
         </div>
 
         <div>

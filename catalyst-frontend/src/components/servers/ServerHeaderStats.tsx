@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Activity, Cpu, HardDrive, MemoryStick } from 'lucide-react';
 import { formatBytes } from '../../utils/formatters';
-import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { useCpuFormat } from '../../hooks/useCpuFormat';
 import { cn } from '@/lib/utils';
 import { Meter } from '../deck/primitives';
 import LastUpdated from '../shared/LastUpdated';
@@ -93,6 +94,7 @@ export default function ServerHeaderStats({
   live?: boolean;
 }) {
   const { t } = useTranslation('servers');
+  const { read } = useCpuFormat();
   const prevNetRef = useRef<{ rx: number; tx: number; t: number } | null>(null);
   const [netRate, setNetRate] = useState({ rx: 0, tx: 0 });
 
@@ -145,18 +147,16 @@ export default function ServerHeaderStats({
   // Offline servers must not render stale live usage. CPU/memory/network are
   // forced to zero; disk persists because files remain while stopped.
   const cpuPercent = isRunning ? metrics.cpuPercent : 0;
-  // CPU is per core: the bar needs the share of the allocation, not the raw
-  // percentage (which pegs the bar at a single busy core). The reading names
-  // the cores in use — that is the number an operator actually wants — and the
-  // percentage stays in the tooltip. `2.6 / 3 cores` also fits the header's
-  // uniform stat width, so the CPU bar keeps the same track as its neighbours.
+  // CPU is per core: the bar draws the share of the allocation whatever format
+  // the reading is printed in, and the operator's preference decides the text.
   const cpuCores = resolveCpuCores(allocatedCpuCores);
   const cpuShare = cpuPercentOfAllocation(cpuPercent, cpuCores);
-  const cpuValue = t('metrics.cpuAllocation', {
-    used: formatCpuCores(cpuCoresUsed(cpuPercent, cpuCores)),
-    total: formatCpuCores(cpuCores),
+  const cpuReading = read(cpuPercent, cpuCores);
+  const cpuTitle = t('metrics.cpuAllocationDetail', {
+    used: formatCpuCores(cpuReading.cores),
+    total: formatCpuCores(cpuReading.allocated),
+    percent: Math.round(cpuShare),
   });
-  const cpuTitle = t('metrics.cpuPercentOfCores', { percent: Math.round(cpuShare) });
   const memoryPercent = isRunning ? metrics.memoryPercent : 0;
   const memoryLimit = allocatedMemoryMb && allocatedMemoryMb > 0 ? allocatedMemoryMb : null;
   const memoryUsed = isRunning ? (metrics.memoryUsageMb ?? null) : 0;
@@ -178,11 +178,11 @@ export default function ServerHeaderStats({
   return (
     <>
     <div className={cn('hidden items-end gap-5 md:flex lg:hidden', !live && 'opacity-60')}>
-      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuValue} percent={cpuShare} title={cpuTitle} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuReading.text} percent={cpuShare} title={cpuTitle} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
     </div>
     <div className={cn('hidden items-end gap-5 lg:flex', !live && 'opacity-60')}>
-      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuValue} percent={cpuShare} title={cpuTitle} />
+      <HeaderStat icon={Cpu} label={t('metrics.labels.cpu')} value={cpuReading.text} percent={cpuShare} title={cpuTitle} />
       <HeaderStat icon={MemoryStick} label={t('metrics.labels.memory')} value={memoryValue} percent={memoryPercent} />
       <HeaderStat icon={HardDrive} label={t('metrics.labels.disk')} value={diskValue} percent={diskPercent} />
       {pluginStats}

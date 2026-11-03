@@ -15,6 +15,9 @@ import './styles/globals.css';
 // instance-wide default an admin configured.
 import './i18n';
 import './i18n/user-locale';
+// Follows the signed-in user's saved CPU display format (and falls back to the
+// panel-wide default), the same way user-locale follows their language.
+import { syncCpuFormatWithUser } from './hooks/useCpuFormat';
 import { bootstrapSystemLocale } from './i18n/system-locale';
 
 // Replay the last saved palette + custom CSS before React mounts.
@@ -71,6 +74,8 @@ function renderApp(): void {
 // backend on startup. `applyLocale` updates i18next (and therefore the UI)
 // once the setting is available.
 renderApp();
+// Keep gauges in the signed-in user's chosen CPU format across sign-ins.
+syncCpuFormatWithUser();
 // Let auth/session restoration and the first paint get ahead of this optional
 // request. This also keeps a saved user locale from being needlessly replaced
 // while the session is being hydrated.

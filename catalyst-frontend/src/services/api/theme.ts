@@ -45,6 +45,11 @@ export interface PublicThemeSettings {
   logoUrl?: string | null;
   faviconUrl?: string | null;
   defaultTheme: string;
+  /**
+   * Panel-wide default for how server CPU is printed: 'cores' | 'perCore' |
+   * 'share'. A user's own preference in their profile overrides it.
+   */
+  cpuDisplayFormat?: string;
   enabledThemes: string[];
   primaryColor: string;
   secondaryColor: string;

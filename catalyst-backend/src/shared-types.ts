@@ -41,6 +41,22 @@ export enum NetworkMode {
   BRIDGE = "bridge",
 }
 
+/**
+ * How server CPU usage is rendered, panel-wide or per user.
+ *
+ * The stored metric (ServerMetrics.cpuPercent) is per core: 100 is one fully
+ * busy core and the ceiling is allocatedCpuCores * 100. These are three ways of
+ * reading that one number:
+ *   cores   — "2.6 / 4 cores"
+ *   perCore — "260%"   (one core = 100%)
+ *   share   — "65%"    (share of the server's whole allocation)
+ *
+ * Keep in step with the frontend's CpuDisplayFormat (utils/cpu.ts).
+ */
+export const CPU_DISPLAY_FORMATS = ["cores", "perCore", "share"] as const;
+export type CpuDisplayFormat = (typeof CPU_DISPLAY_FORMATS)[number];
+export const DEFAULT_CPU_DISPLAY_FORMAT: CpuDisplayFormat = "cores";
+
 export enum Permission {
   // Server permissions
   SERVER_START = "server.start",

@@ -154,6 +154,8 @@
     "accent": "强调色",
     "accentColors": "强调色",
     "changesApplyInstantly": "更改立即生效。",
+    "cpuFormat": "CPU 显示",
+    "cpuFormatDescription": "每处进度条旁 CPU 使用率的写法。无论选择哪种，进度条始终表示服务器 CPU 配额的使用比例。",
     "dark": "深色",
     "darkHint": "始终使用深色",
     "description": "仅在此浏览器中生效的个人主题——不会影响其他用户",

@@ -6,8 +6,53 @@ import { formatNumber } from '@/i18n/format';
  * CFS quota). A bar drawn straight from that number pegs at full the moment the
  * server uses a single core, which reads as "at capacity" on a multi-core
  * server when it may be a third of the allowance. Every CPU gauge therefore
- * draws `percentOfAllocation` and labels the reading in cores.
+ * draws `percentOfAllocation`, whatever format the reading is printed in.
  */
+
+/**
+ * How a CPU reading is printed. The *bar* is unaffected: it always means the
+ * share of the allocation, so severity never depends on the chosen format.
+ *
+ *   cores   — "2.6 / 4 cores"
+ *   perCore — "260%"   (one core = 100%, ceiling = cores * 100)
+ *   share   — "65%"    (share of the server's whole allocation)
+ */
+export const CPU_DISPLAY_FORMATS = ['cores', 'perCore', 'share'] as const;
+export type CpuDisplayFormat = (typeof CPU_DISPLAY_FORMATS)[number];
+
+/** The shipped default; also the backend's column default. */
+export const DEFAULT_CPU_DISPLAY_FORMAT: CpuDisplayFormat = 'cores';
+
+/**
+ * A user's own choice: follow the panel-wide default, or pin one format.
+ * Mirrors ThemePreference's 'panel' option.
+ */
+export type CpuFormatPreference = 'panel' | CpuDisplayFormat;
+
+export const CPU_FORMAT_PREFERENCES: readonly CpuFormatPreference[] = [
+  'panel',
+  ...CPU_DISPLAY_FORMATS,
+];
+
+export const isCpuDisplayFormat = (value: unknown): value is CpuDisplayFormat =>
+  typeof value === 'string' && (CPU_DISPLAY_FORMATS as readonly string[]).includes(value);
+
+export const isCpuFormatPreference = (value: unknown): value is CpuFormatPreference =>
+  typeof value === 'string' && (CPU_FORMAT_PREFERENCES as readonly string[]).includes(value);
+
+/**
+ * Resolve a stored preference against the panel default. Anything unrecognised
+ * (a legacy value, or a corrupt persisted store) falls back to the default
+ * rather than rendering an empty gauge.
+ */
+export const resolveCpuFormat = (
+  preference: CpuFormatPreference | null | undefined,
+  panelDefault: string | null | undefined,
+): CpuDisplayFormat => {
+  if (isCpuDisplayFormat(preference)) return preference;
+  if (isCpuDisplayFormat(panelDefault)) return panelDefault;
+  return DEFAULT_CPU_DISPLAY_FORMAT;
+};
 
 /** Allocated cores as a usable divisor; malformed or missing means one core. */
 export const resolveCpuCores = (allocatedCpuCores?: number | null): number => {
@@ -44,3 +89,50 @@ export const cpuPercentOfAllocation = (
 /** One-decimal, locale-aware cores reading: 2.6 cores out of 3. */
 export const formatCpuCores = (cores: number): string =>
   formatNumber(cores, { maximumFractionDigits: 1, useGrouping: false });
+
+export type CpuReading = {
+  /** The printed value, in the requested format. */
+  text: string;
+  /** Always the share of the allocation: what the bar draws and severity uses. */
+  share: number;
+  /** Cores in use (rounded to one decimal). */
+  cores: number;
+  /** Cores allocated to the server. */
+  allocated: number;
+  format: CpuDisplayFormat;
+};
+
+/**
+ * Render one CPU sample in any of the three formats.
+ *
+ * `compact` is for the servers-list column, which is ~104px wide and cannot
+ * afford "2.6 / 4 cores": it prints "2.6/4", "260%" or "65%" instead. Only the
+ * cores format gets shorter — the others are already terse.
+ */
+export const formatCpuReading = (
+  cpuPercent: number | null | undefined,
+  allocatedCpuCores: number | null | undefined,
+  format: CpuDisplayFormat = DEFAULT_CPU_DISPLAY_FORMAT,
+  { compact = false }: { compact?: boolean } = {},
+): CpuReading => {
+  const allocated = resolveCpuCores(allocatedCpuCores);
+  const cores = cpuCoresUsed(cpuPercent, allocated);
+  const share = cpuPercentOfAllocation(cpuPercent, allocated);
+
+  // Cores keep one decimal in both flavours so the value never jumps between
+  // "2.6 / 4 cores" and "3 / 4 cores" as load drifts.
+  const used = formatCpuCores(cores);
+  const total = formatCpuCores(allocated);
+  const percent = String(Math.round(share));
+
+  const text =
+    format === 'perCore'
+      ? `${Math.round(cores * 100)}%`
+      : format === 'share'
+        ? `${percent}%`
+        : compact
+          ? `${used}/${total}`
+          : `${used} / ${total} cores`;
+
+  return { text, share, cores, allocated, format };
+};

@@ -357,8 +357,17 @@
     "emptyTitle": "Aucun serveur"
   },
   "metrics": {
-    "cpuAllocation": "{{used}} / {{total}} cœurs",
-    "cpuPercentOfCores": "{{percent}} % des cœurs alloués",
+    "cpuAllocationDetail": "{{used}} / {{total}} cœurs · {{percent}} % des cœurs alloués",
+    "cpuFormats": {
+      "cores": "Cœurs",
+      "coresHint": "Cœurs utilisés, ex. 2,6 / 4 cœurs",
+      "panel": "Valeur du panneau",
+      "panelHint": "Suivre la valeur par défaut du panneau ({{format}})",
+      "perCore": "% par cœur",
+      "perCoreHint": "Un cœur = 100 %, donc un serveur 4 cœurs plafonne à 400 %",
+      "share": "Part du total",
+      "shareHint": "Pourcentage de l'allocation CPU totale du serveur"
+    },
     "labels": {
       "cpu": "CPU",
       "disk": "Disque",

@@ -355,8 +355,17 @@
     "emptyTitle": "No servers"
   },
   "metrics": {
-    "cpuAllocation": "{{used}} / {{total}} cores",
-    "cpuPercentOfCores": "{{percent}}% of allocated cores",
+    "cpuAllocationDetail": "{{used}} / {{total}} cores · {{percent}}% of allocated cores",
+    "cpuFormats": {
+      "cores": "Cores",
+      "coresHint": "Cores in use, e.g. 2.6 / 4 cores",
+      "panel": "Panel default",
+      "panelHint": "Follow the panel-wide default ({{format}})",
+      "perCore": "Per-core %",
+      "perCoreHint": "One core = 100%, so a 4-core server tops out at 400%",
+      "share": "Share of total",
+      "shareHint": "Percentage of the server's whole CPU allocation"
+    },
     "labels": {
       "cpu": "CPU",
       "disk": "Disk",

@@ -2,7 +2,7 @@ import { prisma } from '../db.js';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { fromNodeHeaders } from 'better-auth/node';
 import { auth, syncUserAdminRoleColumn } from '../auth';
-import { ErrorCodes, ServerState } from '../shared-types';
+import { ErrorCodes, ServerState, CPU_DISPLAY_FORMATS } from '../shared-types';
 import { apiError } from '../lib/http-error';
 import { ServerStateMachine } from '../services/state-machine';
 import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
@@ -4453,6 +4453,7 @@ export async function adminRoutes(app: FastifyInstance) {
         faviconUrl,
         defaultTheme,
         enabledThemes,
+        cpuDisplayFormat,
         customCss,
         primaryColor,
         secondaryColor,
@@ -4464,6 +4465,7 @@ export async function adminRoutes(app: FastifyInstance) {
         faviconUrl?: string | null;
         defaultTheme?: string;
         enabledThemes?: string[];
+        cpuDisplayFormat?: string;
         customCss?: string | null;
         primaryColor?: string;
         secondaryColor?: string;
@@ -4478,6 +4480,18 @@ export async function adminRoutes(app: FastifyInstance) {
 
       if (defaultTheme !== undefined && !['light', 'dark', 'system'].includes(defaultTheme)) {
         return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid default theme');
+      }
+
+      // CPU display formats. Keep this list in step with the frontend's
+      // CpuDisplayFormat union (utils/cpu.ts); an unknown value would render
+      // every gauge as the fallback format without telling anyone.
+      if (
+        cpuDisplayFormat !== undefined &&
+        !(CPU_DISPLAY_FORMATS as readonly string[]).includes(cpuDisplayFormat)
+      ) {
+        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Invalid CPU display format', {
+          params: { supported: CPU_DISPLAY_FORMATS.join(', ') },
+        });
       }
 
       if (enabledThemes !== undefined) {
@@ -4513,6 +4527,7 @@ export async function adminRoutes(app: FastifyInstance) {
       if (faviconUrl !== undefined) updateData.faviconUrl = faviconUrl;
       if (defaultTheme !== undefined) updateData.defaultTheme = defaultTheme;
       if (enabledThemes !== undefined) updateData.enabledThemes = enabledThemes;
+      if (cpuDisplayFormat !== undefined) updateData.cpuDisplayFormat = cpuDisplayFormat;
       if (customCss !== undefined) updateData.customCss = customCss;
       if (primaryColor !== undefined) updateData.primaryColor = primaryColor;
       if (secondaryColor !== undefined) updateData.secondaryColor = secondaryColor;

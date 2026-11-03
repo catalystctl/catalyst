@@ -162,6 +162,8 @@
     "accent": "Accent",
     "accentColors": "Accent colors",
     "changesApplyInstantly": "Changes apply instantly.",
+    "cpuFormat": "CPU display",
+    "cpuFormatDescription": "How CPU usage is written beside every gauge. The bar always shows the share of the server's own CPU allocation, whatever you pick here.",
     "dark": "Dark",
     "darkHint": "Always dark",
     "description": "Your personal theme for this browser — never affects other users",

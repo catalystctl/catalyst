@@ -170,6 +170,8 @@
     "accent": "Accent",
     "accentColors": "Couleurs d’accent",
     "changesApplyInstantly": "Les modifications s’appliquent instantanément.",
+    "cpuFormat": "Affichage CPU",
+    "cpuFormatDescription": "Comment l'utilisation CPU est écrite à côté de chaque jauge. La barre indique toujours la part de l'allocation CPU du serveur, quel que soit votre choix.",
     "dark": "Sombre",
     "darkHint": "Toujours sombre",
     "description": "Votre thème personnel pour ce navigateur — n’affecte jamais les autres utilisateurs",

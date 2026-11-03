@@ -574,6 +574,17 @@
     "configured": "已配置（{{source}}）",
     "contrastValue": "{{mode}} {{ratio}}:1",
     "copyJson": "复制 JSON",
+    "cpuFormat": "CPU 显示",
+    "cpuFormatDefault": "默认格式",
+    "cpuFormatDescription": "每处进度条旁服务器 CPU 使用率的写法。每位用户可在个人资料中覆盖此项。",
+    "cpuFormatOverrideHint": "用户可在“个人资料 → 外观”中覆盖此设置。",
+    "cpuFormatPreview": "预览",
+    "cpuFormatPreviewHint": "同一个 {{cores}} 核服务器在 260% 时的显示（占用 2.6 个核心）。",
+    "cpuFormats": {
+      "cores": "核心数（2.6 / 4 核心）",
+      "perCore": "单核心百分比（260%）",
+      "share": "占总配额比例（65%）"
+    },
     "customCss": "自定义 CSS",
     "customCssCounter": "{{used}} / 100,000 字符",
     "customCssDescription": "注入到每个页面的高级样式（最大 100 KB）",

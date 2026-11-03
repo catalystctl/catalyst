@@ -25,7 +25,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useVirtualizer } from '@/csync';
 import { serverStatusLabel } from '../../utils/constants';
-import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { useCpuFormat } from '../../hooks/useCpuFormat';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
 
@@ -95,22 +96,20 @@ function ServerRow({
   onMoveFocus: (dir: 1 | -1) => void;
 }) {
   const { t } = useTranslation('servers');
+  const { read } = useCpuFormat();
   const navigate = useNavigate();
   const running = server.status === 'running';
 
   // CPU arrives as per-core percent (100 = one core) against an allocation that
-  // can be several cores. The bar draws the share of the allocation while the
-  // reading stays in cores, so a 3-core server at 260% reads "2.6/3" and draws
-  // a bar with headroom instead of one pegged at a single busy core.
+  // can be several cores. The bar always draws the share of the allocation; the
+  // reading follows the operator's CPU display format ("2.6/4", "260%" or "65%")
+  // so a server no longer reads a full bar at a single busy core.
   const cpuCoresAllocated = resolveCpuCores(server.allocatedCpuCores);
   const cpu = running && server.cpuPercent != null ? server.cpuPercent : null;
   const cpuShare = cpu == null ? null : cpuPercentOfAllocation(cpu, cpuCoresAllocated);
-  const cpuReading =
-    cpu == null
-      ? '—'
-      : // Compact "2.6/3" — the column is 88px (bar + reading), so the words
-        // live in the cell's title instead of stealing width from the bar.
-        `${formatCpuCores(cpuCoresUsed(cpu, cpuCoresAllocated))}/${formatCpuCores(cpuCoresAllocated)}`;
+  // Compact: the column is 88px (bar + reading), so the long wording lives in
+  // the cell's tooltip instead of stealing width from the bar.
+  const cpuReading = cpu == null ? null : read(cpu, cpuCoresAllocated, { compact: true });
 
   const ramPct =
     running && server.memoryUsageMb != null && server.allocatedMemoryMb
@@ -196,17 +195,18 @@ function ServerRow({
       <span
         className="server-list-xl items-center gap-2"
         title={
-          cpu == null
-            ? undefined
-            : t('metrics.cpuAllocation', {
-                used: formatCpuCores(cpuCoresUsed(cpu, cpuCoresAllocated)),
-                total: formatCpuCores(cpuCoresAllocated),
+          cpuReading
+            ? t('metrics.cpuAllocationDetail', {
+                used: formatCpuCores(cpuReading.cores),
+                total: formatCpuCores(cpuReading.allocated),
+                percent: Math.round(cpuReading.share),
               })
+            : undefined
         }
       >
         <Meter value={cpuShare} width="w-7" />
         <Segmented muted={cpu == null} className={cn('tabular-nums', severityClass(cpuShare))}>
-          {cpuReading}
+          {cpuReading?.text ?? '—'}
         </Segmented>
       </span>
       <span className="server-list-xl items-center gap-2">

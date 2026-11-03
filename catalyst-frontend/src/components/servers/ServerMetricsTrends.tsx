@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { ServerMetricsPoint } from '../../types/server';
 import { formatBytes } from '../../utils/formatters';
 import { cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { useCpuFormat } from '../../hooks/useCpuFormat';
 import { cn } from '@/lib/utils';
 
 type TrendCard = {
@@ -45,10 +46,14 @@ function ServerMetricsTrends({
  timeRangeLabel?: string;
 }) {
  const { t } = useTranslation('servers');
+ const { format: cpuFormat, read } = useCpuFormat();
  const resolvedTimeRangeLabel = timeRangeLabel ?? t('metrics.last60Min');
- const cpuHistory = history.map((point) => point.cpuPercent);
- // The chart plots the share of the allocation, matching the gauge above it.
- const cpuShareHistory = cpuHistory.map((percent) => cpuPercentOfAllocation(percent, allocatedCpuCores));
+ const cpuCores = resolveCpuCores(allocatedCpuCores);
+ // The chart plots the share of the allocation, matching the gauge above it:
+ // the raw per-core figure would peg the line to the top of an auto-domain
+ // chart. The format preference changes only the printed value and tooltip.
+ const cpuShareHistory = history.map((point) => cpuPercentOfAllocation(point.cpuPercent, allocatedCpuCores));
+ const cpuLatest = read(latest?.cpuPercent ?? 0, cpuCores);
  const memoryHistory = history.map((point) => point.memoryUsageMb);
  const diskHistory = history.map((point) => point.diskUsageMb);
  const diskIoHistory = history.map((point) => point.diskIoMb ?? null);
@@ -74,17 +79,17 @@ function ServerMetricsTrends({
  const cards: TrendCard[] = [
  {
  label: t('metrics.labels.cpu'),
- // Share of the allocation, same scale as the gauge above it: the per-core
- // percentage would peg this line at the top of an auto-domain chart.
- value: `${cpuPercentOfAllocation(latest?.cpuPercent ?? 0, allocatedCpuCores).toFixed(1)}%`,
- color: percentTone(cpuPercentOfAllocation(latest?.cpuPercent ?? 0, allocatedCpuCores)),
+ // Same scale as the gauge above it; only the printed value follows the
+ // user's format preference.
+ value: cpuFormat === 'share' ? `${cpuLatest.share.toFixed(1)}%` : cpuLatest.text,
+ color: percentTone(cpuLatest.share),
  stroke: 'hsl(var(--primary))',
  data: toChartData(cpuShareHistory),
  formatTooltip: (value) => {
- const cores = resolveCpuCores(allocatedCpuCores);
- return t('metrics.cpuAllocation', {
- used: formatCpuCores((value / 100) * cores),
- total: formatCpuCores(cores),
+ return t('metrics.cpuAllocationDetail', {
+ used: formatCpuCores((value / 100) * cpuCores),
+ total: formatCpuCores(cpuCores),
+ percent: Math.round(value),
  });
  },
  },

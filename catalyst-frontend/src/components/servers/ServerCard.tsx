@@ -8,7 +8,8 @@ import { notifyError } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Meter, Segmented } from '../deck/primitives';
 import { cn } from '@/lib/utils';
-import { cpuCoresUsed, cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { cpuPercentOfAllocation } from '../../utils/cpu';
+import { useCpuFormat } from '../../hooks/useCpuFormat';
 import { ServerIcon, Globe, Terminal, ChevronRight } from 'lucide-react';
 
 const clampPercent = (value: number) => Math.min(100, Math.max(0, value));
@@ -25,6 +26,7 @@ const severityClass = (value: number | null) =>
 
 function ServerCard({ server }: { server: Server }) {
   const { t } = useTranslation('servers');
+  const { read } = useCpuFormat();
   const host =
     server.connection?.host ??
     server.primaryIp ??
@@ -38,13 +40,10 @@ function ServerCard({ server }: { server: Server }) {
       ? // Per-core percent against a multi-core allocation: draw the share.
         cpuPercentOfAllocation(server.cpuPercent, server.allocatedCpuCores)
       : null;
-  const cpuDisplay =
-    cpuPercent == null
-      ? '—'
-      : t('metrics.cpuAllocation', {
-          used: formatCpuCores(cpuCoresUsed(server.cpuPercent, server.allocatedCpuCores)),
-          total: formatCpuCores(resolveCpuCores(server.allocatedCpuCores)),
-        });
+  const cpuReading =
+    typeof server.cpuPercent === 'number'
+      ? read(server.cpuPercent, server.allocatedCpuCores, { compact: true })
+      : null;
 
   const memoryPercent =
     server.status === 'running' && server.memoryPercent != null && typeof server.memoryPercent === 'number'
@@ -73,11 +72,11 @@ function ServerCard({ server }: { server: Server }) {
 
   const metrics = useMemo(
     () => [
-      { label: t('metrics.labels.cpu'), value: cpuPercent, display: cpuDisplay },
+      { label: t('metrics.labels.cpu'), value: cpuPercent, display: cpuReading?.text ?? '—' },
       { label: t('metrics.labels.ram'), value: memoryPercent, display: memoryDisplay },
       { label: t('metrics.labels.disk'), value: diskPercent, display: diskDisplay },
     ],
-    [t, cpuPercent, cpuDisplay, memoryPercent, diskPercent, diskDisplay, memoryDisplay],
+    [t, cpuPercent, cpuReading, memoryPercent, diskPercent, diskDisplay, memoryDisplay],
   );
 
   return (

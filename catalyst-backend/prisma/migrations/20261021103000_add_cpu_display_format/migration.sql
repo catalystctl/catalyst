@@ -1,0 +1,14 @@
+-- Panel-wide default for how server CPU usage is rendered.
+--
+-- Three formats are supported and each is a different way of reading the same
+-- stored number (`cpuPercent`, which is per core: 100 = one busy core, ceiling
+-- = allocatedCpuCores * 100):
+--
+--   cores   — "2.6 / 4 cores"   (shipped default)
+--   perCore — "260%"            (one core = 100%, so the ceiling is cores * 100)
+--   share   — "65%"             (percentage of the server's whole allocation)
+--
+-- 'cores' is the default so existing installs render exactly as they do today;
+-- no behaviour changes until an admin (or a user, in their own preferences)
+-- picks something else. Users override this per account in their profile.
+ALTER TABLE "ThemeSettings" ADD COLUMN IF NOT EXISTS "cpuDisplayFormat" TEXT NOT NULL DEFAULT 'cores';

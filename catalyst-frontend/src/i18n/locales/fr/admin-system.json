@@ -600,6 +600,17 @@
     "configured": "Configuré ({{source}})",
     "contrastValue": "{{mode}} {{ratio}}:1",
     "copyJson": "Copier le JSON",
+    "cpuFormat": "Affichage CPU",
+    "cpuFormatDefault": "Format par défaut",
+    "cpuFormatDescription": "Comment l'utilisation CPU des serveurs est écrite à côté de chaque jauge. Chaque utilisateur peut la remplacer dans son profil.",
+    "cpuFormatOverrideHint": "Les utilisateurs peuvent le remplacer dans Profil → Apparence.",
+    "cpuFormatPreview": "Aperçu",
+    "cpuFormatPreviewHint": "Le même serveur de {{cores}} cœurs à 260 % (2,6 cœurs occupés).",
+    "cpuFormats": {
+      "cores": "Cœurs (2,6 / 4 cœurs)",
+      "perCore": "% par cœur (260 %)",
+      "share": "Part du total (65 %)"
+    },
     "customCss": "CSS personnalisé",
     "customCssCounter": "{{used}} / 100 000 caractères",
     "customCssDescription": "Styles avancés injectés dans chaque page (100 KB max)",

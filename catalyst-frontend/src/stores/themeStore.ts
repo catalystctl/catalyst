@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { PublicThemeSettings, ThemeColors } from '../services/api/theme';
+import type { CpuFormatPreference } from '../utils/cpu';
+import { isCpuFormatPreference } from '../utils/cpu';
 import { debugLog } from '../lib/debug-log';
 
 type Theme = 'light' | 'dark';
@@ -16,6 +18,12 @@ export interface PersonalColors {
 interface ThemeState {
   theme: Theme;
   themePreference: ThemePreference;
+  /**
+   * How this user prints CPU readings. 'panel' follows the panel-wide default
+   * from ThemeSettings.cpuDisplayFormat, exactly as themePreference 'panel'
+   * follows the admin's default theme.
+   */
+  cpuFormatPreference: CpuFormatPreference;
   personalColors: PersonalColors | null;
   sidebarCollapsed: boolean;
   /** Labelled, full-width navigation instead of the 56px icon rail. */
@@ -26,6 +34,7 @@ interface ThemeState {
 
   setTheme: (theme: Theme) => void;
   setThemePreference: (pref: ThemePreference) => void;
+  setCpuFormatPreference: (pref: CpuFormatPreference) => void;
   setPersonalColors: (colors: PersonalColors | null) => void;
   clearPersonalTheme: () => void;
   setServerViewMode: (mode: 'card' | 'list') => void;
@@ -48,6 +57,7 @@ const defaultThemeSettings: PublicThemeSettings = {
   logoUrl: null,
   faviconUrl: null,
   defaultTheme: 'dark',
+  cpuDisplayFormat: 'cores',
   enabledThemes: ['light', 'dark'],
   primaryColor: '#ff3d7f',
   secondaryColor: '#252b35',
@@ -525,6 +535,24 @@ function initialPersonalColors(): PersonalColors | null {
   return readPersistedPersonalColors();
 }
 
+/**
+ * The CPU format preference is persisted next to the theme preference so the
+ * first authenticated render (and an unauthenticated one) already uses it.
+ * An unrecognised stored value falls back to 'panel'.
+ */
+function initialCpuFormatPreference(): CpuFormatPreference {
+  if (typeof window === 'undefined') return 'panel';
+  try {
+    const raw = localStorage.getItem('catalyst-theme');
+    if (!raw) return 'panel';
+    const parsed = JSON.parse(raw) as { state?: { cpuFormatPreference?: unknown } };
+    const pref = parsed?.state?.cpuFormatPreference;
+    return isCpuFormatPreference(pref) ? pref : 'panel';
+  } catch {
+    return 'panel';
+  }
+}
+
 function initialTheme(): Theme {
   if (typeof window === 'undefined') return 'dark';
   const persisted = readPersistedThemeChoice();
@@ -546,6 +574,7 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       theme: initialTheme(),
       themePreference: initialThemePreference(),
+      cpuFormatPreference: initialCpuFormatPreference(),
       personalColors: initialPersonalColors(),
       sidebarCollapsed: false,
       navExpanded: true,
@@ -567,6 +596,10 @@ export const useThemeStore = create<ThemeState>()(
         set({ themePreference: pref, theme: resolved });
         get().applyTheme();
       },
+
+      // Rendering only — no theme re-application needed; every CPU surface
+      // subscribes to this slice and re-renders.
+      setCpuFormatPreference: (pref) => set({ cpuFormatPreference: pref }),
 
       setPersonalColors: (colors) => {
         const cleaned: PersonalColors | null = (() => {
@@ -722,6 +755,7 @@ export const useThemeStore = create<ThemeState>()(
       partialize: (state) => ({
         theme: state.theme,
         themePreference: state.themePreference,
+        cpuFormatPreference: state.cpuFormatPreference,
         personalColors: state.personalColors,
         sidebarCollapsed: state.sidebarCollapsed,
         navExpanded: state.navExpanded,

@@ -353,8 +353,17 @@
     "emptyTitle": "暂无服务器"
   },
   "metrics": {
-    "cpuAllocation": "{{used}} / {{total}} 核心",
-    "cpuPercentOfCores": "已分配核心的 {{percent}}%",
+    "cpuAllocationDetail": "{{used}} / {{total}} 核心 · 已分配核心的 {{percent}}%",
+    "cpuFormats": {
+      "cores": "核心数",
+      "coresHint": "已使用的核心数，例如 2.6 / 4 核心",
+      "panel": "面板默认",
+      "panelHint": "跟随面板全局默认值（{{format}}）",
+      "perCore": "单核心百分比",
+      "perCoreHint": "1 个核心 = 100%，因此 4 核服务器最高为 400%",
+      "share": "占总配额比例",
+      "shareHint": "占服务器全部 CPU 配额的百分比"
+    },
     "labels": {
       "cpu": "CPU",
       "disk": "磁盘",

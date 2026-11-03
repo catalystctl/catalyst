@@ -14,6 +14,17 @@ import { adminApi } from '../../services/api/admin';
 import { notifyError } from '../../utils/notify';
 import { formatNumber } from '../../i18n/format';
 import { useThemeStore, defaultThemeColors } from '../../stores/themeStore';
+import {
+ CPU_DISPLAY_FORMATS,
+ DEFAULT_CPU_DISPLAY_FORMAT,
+ formatCpuReading,
+ resolveCpuFormat,
+} from '../../utils/cpu';
+
+// A fixed sample for the format preview, so the admin sees how each option
+// prints the same load regardless of which servers exist.
+const CPU_PREVIEW_PERCENT = 260;
+const CPU_PREVIEW_CORES = 4;
 import type { ThemeColors } from '../../services/api/theme';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import { BracketLabel } from '../../components/deck/primitives';
@@ -503,6 +514,10 @@ function ThemeSettingsPage() {
  const [defaultTheme, setDefaultTheme] = useState('dark');
  const [enabledThemes, setEnabledThemes] = useState<string[]>(['light', 'dark']);
 
+ // ── CPU display format (panel-wide default) ──
+ const [cpuDisplayFormat, setCpuDisplayFormat] = useState<string>(DEFAULT_CPU_DISPLAY_FORMAT);
+ const resolvedCpuPreview = resolveCpuFormat('panel', cpuDisplayFormat);
+
  // ── Brand Colors ──
  const [primaryColor, setPrimaryColor] = useState<string>(DEFAULTS.primaryColor);
  const [secondaryColor, setSecondaryColor] = useState<string>(DEFAULTS.secondaryColor);
@@ -660,6 +675,7 @@ function ThemeSettingsPage() {
  setFaviconUrl(settings.faviconUrl || '');
  setDefaultTheme(settings.defaultTheme || 'dark');
  setEnabledThemes(settings.enabledThemes || ['light', 'dark']);
+ setCpuDisplayFormat(settings.cpuDisplayFormat || DEFAULT_CPU_DISPLAY_FORMAT);
  setPrimaryColor(settings.primaryColor || DEFAULTS.primaryColor);
  setSecondaryColor(settings.secondaryColor || DEFAULTS.secondaryColor);
  setAccentColor(settings.accentColor || DEFAULTS.accentColor);
@@ -716,6 +732,7 @@ function ThemeSettingsPage() {
  logoUrl: data.logoUrl,
  faviconUrl: data.faviconUrl,
  defaultTheme: data.defaultTheme,
+ cpuDisplayFormat: data.cpuDisplayFormat,
  enabledThemes: data.enabledThemes,
  primaryColor: data.primaryColor,
  secondaryColor: data.secondaryColor,
@@ -744,6 +761,7 @@ function ThemeSettingsPage() {
  faviconUrl: faviconUrl.trim() || null,
  defaultTheme,
  enabledThemes,
+ cpuDisplayFormat,
  primaryColor,
  secondaryColor,
  accentColor,
@@ -762,6 +780,7 @@ function ThemeSettingsPage() {
  setFaviconUrl(settings.faviconUrl || '');
  setDefaultTheme(settings.defaultTheme || 'dark');
  setEnabledThemes(settings.enabledThemes || ['light', 'dark']);
+ setCpuDisplayFormat(settings.cpuDisplayFormat || DEFAULT_CPU_DISPLAY_FORMAT);
  setPrimaryColor(settings.primaryColor || DEFAULTS.primaryColor);
  setSecondaryColor(settings.secondaryColor || DEFAULTS.secondaryColor);
  setAccentColor(settings.accentColor || DEFAULTS.accentColor);
@@ -995,6 +1014,42 @@ function ThemeSettingsPage() {
  {id === 'dark' ? t('theme.dark') : t('theme.light')}
  </label>
  ))}
+ </div>
+ </div>
+
+ {/* Panel-wide CPU display format. Users may override it in their own
+     profile; this is the default they inherit. */}
+ <PanelSectionHeader
+ title={t('theme.cpuFormat')}
+ description={t('theme.cpuFormatDescription')}
+ />
+ <div className="grid gap-4 sm:grid-cols-2">
+ <div>
+ <label htmlFor="cpu-display-format" className="type-overline mb-1.5 block">
+ {t('theme.cpuFormatDefault')}
+ </label>
+ <select
+ id="cpu-display-format"
+ value={cpuDisplayFormat}
+ onChange={(e) => setCpuDisplayFormat(e.target.value)}
+ className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 text-mini text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ >
+ {CPU_DISPLAY_FORMATS.map((format) => (
+ <option key={format} value={format}>
+ {t(`theme.cpuFormats.${format}`)}
+ </option>
+ ))}
+ </select>
+ <p className="type-meta mt-1.5">{t('theme.cpuFormatOverrideHint')}</p>
+ </div>
+ <div>
+ <span className="type-overline mb-1.5 block">{t('theme.cpuFormatPreview')}</span>
+ <div className="rounded-sm border border-border/40 bg-card px-3 py-2">
+ <span className="type-numeric text-data tabular-nums">
+ {formatCpuReading(CPU_PREVIEW_PERCENT, CPU_PREVIEW_CORES, resolvedCpuPreview).text}
+ </span>
+ <p className="type-meta mt-1">{t('theme.cpuFormatPreviewHint', { cores: CPU_PREVIEW_CORES })}</p>
+ </div>
  </div>
  </div>
  </div>
