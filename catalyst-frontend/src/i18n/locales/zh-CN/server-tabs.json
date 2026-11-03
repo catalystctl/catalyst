@@ -160,6 +160,7 @@
       "modified": "修改时间",
       "name": "名称",
       "scanning": "正在扫描目录…",
+      "selectAll": "选择所有文件",
       "selected_other": "已选择 {{count}} 项",
       "size": "大小",
       "totalSize": "· 共 {{size}}"

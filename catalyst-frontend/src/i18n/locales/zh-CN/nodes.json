@@ -160,7 +160,8 @@
     "step2Title": "节点详情",
     "step3Description": "使用以下脚本在节点上安装代理。",
     "stepDetails": "详情",
-    "success": "节点已注册"
+    "success": "节点已注册",
+    "unmetSteps": "请先满足以下条件再继续："
   },
   "delete": {
     "confirm": "确定要删除 {{name}} 吗？此操作无法撤销。",

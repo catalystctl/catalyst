@@ -1107,9 +1107,10 @@ function ServerDetailsPage() {
       : !isPluginTab && activeTab === 'files'
         ? 'flex min-h-0 flex-1 flex-col overflow-y-auto'
         : 'min-h-0 flex-1 overflow-y-auto';
+  const shortViewportTabClass = '[@media(max-height:600px)]:min-h-[20rem] [@media(max-height:600px)]:shrink-0';
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden [@media(max-height:600px)]:overflow-y-auto">
       {/* Cached server stays on screen when a background refetch fails. */}
       {isError && (
         <TabErrorState
@@ -1120,6 +1121,7 @@ function ServerDetailsPage() {
         />
       )}
       <WorkspaceHeader
+        className="shrink-0"
         icon={Terminal}
         variant={isSuspended ? 'danger' : server?.status === 'running' ? 'success' : 'default'}
         title={
@@ -1228,7 +1230,7 @@ function ServerDetailsPage() {
           </div>
         }
       >
-        <div className={tabScrollClass}>
+        <div className={`${tabScrollClass} ${shortViewportTabClass}`}>
 
 
           <Suspense fallback={<TabSkeleton />}>

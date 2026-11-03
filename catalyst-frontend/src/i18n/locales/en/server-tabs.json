@@ -163,6 +163,7 @@
       "modified": "Modified",
       "name": "Name",
       "scanning": "Scanning directory…",
+      "selectAll": "Select all files",
       "selected_one": "{{count}} selected",
       "selected_other": "{{count}} selected",
       "size": "Size",

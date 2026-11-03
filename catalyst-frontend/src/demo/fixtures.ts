@@ -537,8 +537,9 @@ export function demoMetricsHistory(points = 24) {
       memoryUsageMb: 2000 + Math.round(300 * Math.sin(i / 4)),
       diskIoMb: 12,
       diskUsageMb: 6144,
-      networkRxBytes: 1024 * (100 + i),
-      networkTxBytes: 1024 * (80 + i),
+      // Historical metric fields are rates in MB/s, despite their legacy names.
+      networkRxBytes: 0.1 + i * 0.001,
+      networkTxBytes: 0.08 + i * 0.001,
       timestamp: new Date(Date.now() - i * 60_000).toISOString(),
     });
   }

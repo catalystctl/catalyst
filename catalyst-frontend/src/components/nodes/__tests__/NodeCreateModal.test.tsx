@@ -34,6 +34,7 @@ vi.mock('../../../utils/notify', () => ({
 import { queryClient } from '../../../lib/queryClient';
 import { QueryClientProvider } from '../../../csync';
 import NodeCreateModal from '../NodeCreateModal';
+import i18n from '../../../i18n';
 
 function renderModal() {
   return render(
@@ -109,6 +110,17 @@ describe('NodeCreateModal', () => {
     ).toBeInTheDocument();
     for (const field of ['Name', 'Location', 'Hostname', 'Public address']) {
       expect(within(strip).getByText(field)).toBeInTheDocument();
+    }
+  });
+
+  it('translates requirements without relying on the lazily loaded servers namespace', () => {
+    const servers = i18n.getResourceBundle('en', 'servers');
+    i18n.removeResourceBundle('en', 'servers');
+    try {
+      openModal();
+      expect(within(screen.getByRole('status')).getByText('Complete these requirements before continuing:')).toBeInTheDocument();
+    } finally {
+      i18n.addResourceBundle('en', 'servers', servers);
     }
   });
 

@@ -1609,7 +1609,7 @@ function UsersPage() {
  <span className="hidden truncate text-micro text-muted-foreground md:inline">
  {editingUserId ? t('users.leavePasswordBlank') : t('users.allFieldsRequired')}
  </span>
- <div className="flex flex-wrap items-center gap-1.5">
+ <div className="hidden flex-wrap items-center gap-1.5 sm:flex">
  {accountRequirements.map((req) => (
  <div
  key={req.label}

@@ -520,7 +520,7 @@ export default function ProfilePage() {
  ) : (
  <TabEmptyState title={t('apiKeysCard.emptyTitle')} description={t('apiKeysCard.emptyDescription')} />
  )}
- <Link to="/admin/api-keys"><Button variant="outline" size="sm" className="mt-2 h-8 w-full gap-1.5 px-3 text-mini"><KeyRound className="h-3.5 w-3.5" />{t('apiKeysCard.manage')}</Button></Link>
+ <Button asChild variant="outline" size="sm" className="mt-2 h-8 w-full gap-1.5 px-3 text-mini"><Link to="/admin/api-keys"><KeyRound className="h-3.5 w-3.5" />{t('apiKeysCard.manage')}</Link></Button>
  </ServerTabCard>
 
  {/* Activity Log */}

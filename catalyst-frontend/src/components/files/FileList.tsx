@@ -250,6 +250,9 @@ function FileList({
  <div className="flex items-center">
  <button
  type="button"
+ role="checkbox"
+ aria-label={t('files.list.selectAll')}
+ aria-checked={allSelected ? true : selectedPaths.size > 0 ? 'mixed' : false}
  onClick={onSelectAll}
  className="flex h-8 min-h-8 w-7 items-center justify-center"
  >

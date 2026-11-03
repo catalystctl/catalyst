@@ -6,6 +6,7 @@ import { Ticket, Plug } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogTitle,
 } from '../ui/dialog';
@@ -28,7 +29,6 @@ export default function NavSectionsMenu({
   const user = useAuthStore((s) => s.user);
   const pluginTabs = usePluginTabs('admin');
   const { pathname } = useLocation();
-  const isActive = (to: string) => pathname === to || pathname.startsWith(`${to}/`);
 
   const groups = useMemo(() => {
     const permissions = user?.permissions ?? [];
@@ -58,6 +58,11 @@ export default function NavSectionsMenu({
   }, [t, user?.permissions, pluginTabs]);
 
   const main = buildMain(t);
+  const activeTarget = [...main, ...groups.flatMap((group) => group.links)]
+    .map((link) => link.to)
+    .filter((to) => pathname === to || pathname.startsWith(`${to}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (to: string) => to === activeTarget;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -65,7 +70,7 @@ export default function NavSectionsMenu({
         <DialogHeader>
           <DialogTitle>{t('shell.sections')}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 px-5 pb-5">
+        <DialogBody className="space-y-4 pt-0 pb-5">
           <div className="flex flex-wrap gap-1.5">
             {main.map((link) => {
               const active = isActive(link.to);
@@ -108,7 +113,7 @@ export default function NavSectionsMenu({
               </div>
             ))}
           </div>
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   );

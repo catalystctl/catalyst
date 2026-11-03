@@ -35,7 +35,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const dialogContentVariants = cva(
   [
     'pointer-events-auto relative flex w-full flex-col overflow-hidden',
-    'max-h-[92dvh] border border-border/80 bg-card text-card-foreground shadow-elevated outline-none',
+    'max-h-[min(92dvh,100%)] border border-border/80 bg-card text-card-foreground shadow-elevated outline-none',
     'rounded-t-md sm:rounded-md',
     'duration-normal',
     'data-[state=open]:animate-in data-[state=closed]:animate-out',

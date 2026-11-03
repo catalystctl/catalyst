@@ -709,7 +709,7 @@ function NodeCreateModal(_props: Props) {
               role="status"
               className="shrink-0 border-t border-warning/30 bg-warning/5 px-5 py-2.5 text-micro text-warning"
             >
-              <p className="font-medium">{t('servers:createServer.validation.unmetSteps')}</p>
+              <p className="font-medium">{t('create.unmetSteps')}</p>
               <ul className="mt-1 list-inside list-disc">
                 {missing.map((label) => (
                   <li key={label}>{label}</li>

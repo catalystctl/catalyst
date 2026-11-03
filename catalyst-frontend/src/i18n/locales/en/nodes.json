@@ -161,7 +161,8 @@
     "step2Title": "Node details",
     "step3Description": "Install the agent on your node using the script below.",
     "stepDetails": "Details",
-    "success": "Node registered"
+    "success": "Node registered",
+    "unmetSteps": "Complete these requirements before continuing:"
   },
   "delete": {
     "confirm": "Are you sure you want to delete {{name}}? This action cannot be undone.",

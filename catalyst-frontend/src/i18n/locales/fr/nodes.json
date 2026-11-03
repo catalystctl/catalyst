@@ -162,7 +162,8 @@
     "step2Title": "Détails du nœud",
     "step3Description": "Installez l’agent sur votre nœud à l’aide du script ci-dessous.",
     "stepDetails": "Détails",
-    "success": "Nœud enregistré"
+    "success": "Nœud enregistré",
+    "unmetSteps": "Remplissez ces conditions avant de continuer :"
   },
   "delete": {
     "confirm": "Voulez-vous vraiment supprimer {{name}} ? Cette action est irréversible.",

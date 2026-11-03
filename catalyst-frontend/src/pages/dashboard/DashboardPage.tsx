@@ -198,7 +198,7 @@ function DashboardPage() {
           </p>
         </div>
         {alertsUnacked > 0 && (
-          <span className="flex h-8 items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 font-display text-mini text-warning">
+          <span className="flex h-8 items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 font-display text-mini text-foreground">
             <StatusLed tone="hazard" pulse />
             {t('pendingAlerts', { count: alertsUnacked })}
           </span>

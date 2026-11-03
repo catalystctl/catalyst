@@ -119,7 +119,7 @@ function Breadcrumbs() {
         </Link>
       )}
       {crumbs.map((crumb, index) => (
-        <div key={crumb.href} className="flex min-w-0 items-center gap-1">
+        <div key={crumb.href} className="flex shrink-0 items-center gap-1">
           {(index > 0 || !skipDashboardHome) && (
             <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />
           )}

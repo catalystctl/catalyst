@@ -130,6 +130,18 @@ describe('RoleCreatorDialog', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows the no-boundary summary and switches it for a scoped boundary', () => {
+    renderDialog();
+    expect(screen.getByText('roles.creator.summary.boundaryPanel')).toBeInTheDocument();
+    expect(screen.getByText('roles.creator.riskNoBoundary')).toBeInTheDocument();
+    fireEvent.click(chip('roles.permissionLabels.serverStart'));
+    expect(screen.getByText('roles.creator.badgeGlobal')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /roles.creator.boundary.nodesTitle/ }));
+    expect(screen.getByText('roles.creator.summary.boundaryNone')).toBeInTheDocument();
+    expect(screen.getByText('roles.creator.riskBoundary')).toBeInTheDocument();
+    expect(screen.getByText('roles.creator.badgeScoped')).toBeInTheDocument();
+  });
+
   it('submits panel-wide permissions with no boundary as global grants', () => {
     const { onSubmit } = renderDialog();
     fireEvent.change(screen.getByPlaceholderText('roles.namePlaceholder'), {

@@ -166,6 +166,7 @@
       "modified": "Modifié",
       "name": "Nom",
       "scanning": "Analyse du dossier…",
+      "selectAll": "Sélectionner tous les fichiers",
       "selected_one": "{{count}} sélectionné",
       "selected_many": "{{count}} sélectionnés",
       "selected_other": "{{count}} sélectionnés",
