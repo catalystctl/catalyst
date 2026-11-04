@@ -171,7 +171,7 @@ function ColorPicker({
  value={value}
  onChange={(e) => onChange(e.target.value)}
  placeholder="#000"
- className={`w-[72px] rounded-sm border px-2 py-1 font-mono text-micro transition-colors focus:outline-none focus:ring-1 ${
+ className={`h-8 w-[76px] rounded-sm border px-2 font-mono text-micro transition-colors focus:outline-none focus:ring-1 ${
  isValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
  : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
@@ -211,7 +211,7 @@ function ColorPicker({
  value={value}
  onChange={(e) => onChange(e.target.value)}
  placeholder="#000000"
- className={`flex-1 rounded-sm border bg-card px-3 py-2 font-mono text-mini transition-colors focus:outline-none focus:ring-2 ${
+ className={`min-w-0 flex-1 rounded-sm border bg-card px-3 py-2 font-mono text-mini transition-colors focus:outline-none focus:ring-2 ${
  isValid
  ? 'border-border/40 text-foreground focus:border-primary focus:ring-primary/20'
  : 'border-danger/40 text-danger focus:border-danger focus:ring-danger/20'
@@ -998,7 +998,7 @@ function ThemeSettingsPage() {
  ].map(({ id, icon: Icon, color }) => (
  <label
  key={id}
- className={`flex cursor-pointer items-center gap-2 rounded-sm border px-3 py-2 text-sm transition-all ${
+ className={`flex h-8 cursor-pointer items-center gap-2 rounded-sm border px-3 text-mini transition-all ${
  enabledThemes.includes(id)
  ? 'border-primary bg-primary/5 text-foreground'
  : 'border-border/30 text-muted-foreground hover:border-primary/30'
@@ -1010,10 +1010,11 @@ function ThemeSettingsPage() {
  onChange={() => toggleTheme(id)}
  className="sr-only"
  />
- <Icon className={`h-4 w-4 ${color}`} />
+ <Icon className={`h-3.5 w-3.5 ${color}`} />
  {id === 'dark' ? t('theme.dark') : t('theme.light')}
  </label>
  ))}
+ </div>
  </div>
  </div>
 
@@ -1049,7 +1050,6 @@ function ThemeSettingsPage() {
  {formatCpuReading(CPU_PREVIEW_PERCENT, CPU_PREVIEW_CORES, resolvedCpuPreview).text}
  </span>
  <p className="type-meta mt-1">{t('theme.cpuFormatPreviewHint', { cores: CPU_PREVIEW_CORES })}</p>
- </div>
  </div>
  </div>
  </div>
@@ -1204,10 +1204,9 @@ function ThemeSettingsPage() {
  ).map(({ label, key }) => (
  <span
  key={label}
- className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-mini font-medium"
+ className="inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-mini font-medium text-foreground"
  style={{
  backgroundColor: `${generatedPalette.themeColors[key]}18`,
- color: generatedPalette.themeColors[key],
  }}
  >
  <span
@@ -1225,7 +1224,7 @@ function ThemeSettingsPage() {
  <p className="mb-2 type-overline">
  {t('theme.darkSurfaces')}
  </p>
- <div className="rounded-sm bg-surface-0 p-3">
+ <div className="rounded-sm border border-border/30 bg-surface-0 p-3">
  <div className="flex gap-1">
  {[
  { label: 'BG', key: 'darkBackground' as const },
@@ -1308,7 +1307,7 @@ function ThemeSettingsPage() {
  </div>
  <div className="mb-4 flex gap-1">
  {[preset.themeColors.darkBackground, preset.themeColors.darkSurface2, preset.themeColors.lightBackground, preset.themeColors.lightSurface2].map((c, i) => (
- <div key={i} className="h-5 flex-1 rounded-sm ring-1 ring-border" style={{ backgroundColor: c }} />
+ <div key={i} className="h-5 flex-1 rounded-sm inset-ring-1 inset-ring-border" style={{ backgroundColor: c }} />
  ))}
  </div>
  <button
@@ -1374,7 +1373,7 @@ function ThemeSettingsPage() {
  placeholder='{"version": 1, "primaryColor": "#c48d5a", ...}'
  rows={8}
  spellCheck={false}
- className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 font-mono text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="block w-full resize-y rounded-sm border border-border/40 bg-card px-3 py-2 font-mono text-mini leading-relaxed text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  {importError && (
  <p className="flex items-center gap-1.5 text-mini text-danger">
@@ -1659,7 +1658,7 @@ function ThemeSettingsPage() {
  placeholder="/* Your custom CSS here */&#10;.my-custom-class {&#10; color: red;&#10;}"
  rows={14}
  spellCheck={false}
- className="w-full h-8 rounded-sm border border-border/40 bg-card px-3 font-mono text-mini text-foreground placeholder:text-muted-foreground transition-colors focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+ className="block w-full resize-y rounded-sm border border-border/40 bg-card px-3 py-2 font-mono text-mini leading-relaxed text-foreground transition-colors placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
  />
  <p className="text-micro text-muted-foreground">{t('theme.customCssCounter', { used: formatNumber(customCss.length) })}</p>
  <div className="flex items-center gap-2">
@@ -1747,7 +1746,7 @@ function ThemeSettingsPage() {
  <div className="flex h-5 items-center gap-1">
  <span className="text-micro font-medium text-muted-foreground">{t('theme.surfacesTitle')}</span>
  </div>
- <div className="flex gap-[2px]">
+ <div className="flex gap-1">
  {(currentTheme === 'dark'
  ? [
  themeColors.darkBackground,
@@ -1764,7 +1763,7 @@ function ThemeSettingsPage() {
  ).map((c, i) => (
  <div
  key={i}
- className="h-5 flex-1 rounded-sm ring-1 ring-border"
+ className="h-5 flex-1 rounded-sm inset-ring-1 inset-ring-border"
  style={{ backgroundColor: c || 'hsl(var(--muted-foreground))' }}
  title={t('theme.elevationLevel', { level: i })}
  />
@@ -1817,12 +1816,12 @@ function ThemeSettingsPage() {
  title={t('theme.title')}
  description={t('theme.description')}
  actions={
- <div className="flex items-center gap-2">
+ <div className="flex flex-wrap items-center gap-2">
  <LastUpdated queryKey={qk.adminThemeSettings()} />
  <button
  type="button"
  onClick={handleResetAll}
- className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
+ className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
  {t('theme.resetAll')}
@@ -1831,7 +1830,7 @@ function ThemeSettingsPage() {
  type="button"
  onClick={handleSave}
  disabled={updateMutation.isPending}
- className="inline-flex h-8 items-center gap-2 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+ className="inline-flex h-8 shrink-0 items-center gap-2 whitespace-nowrap rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
  >
  {updateMutation.isPending ? (
  <>

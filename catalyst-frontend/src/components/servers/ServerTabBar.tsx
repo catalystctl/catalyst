@@ -152,8 +152,9 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
                   <span className="absolute inset-x-1.5 bottom-0 h-[2px] bg-primary" aria-hidden />
                 )}
                 <MoreHorizontal className="h-3.5 w-3.5" />
-                <span className="text-mini">{t('common:actions.more')}</span>
-                {overflowActiveTab && <span className="sr-only"> · {overflowActiveTab.label}</span>}
+                <span className="text-mini">
+                  {overflowActiveTab ? overflowActiveTab.label : t('common:actions.more')}
+                </span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">

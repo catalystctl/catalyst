@@ -105,7 +105,7 @@ function InlineRenameInput({
  return (
  <input
  ref={inputRef}
- className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-0.5 font-mono text-mini text-foreground outline-none"
+ className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-1 font-mono text-mini text-foreground outline-none"
  value={value}
  onChange={(e) => setValue(e.target.value)}
  onBlur={() => onSubmit(entry, value)}

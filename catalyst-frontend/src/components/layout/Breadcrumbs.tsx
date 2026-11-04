@@ -73,6 +73,10 @@ function formatSegment(t: TFunction, segment: string): string | null {
       return t('layout:sections.configuration');
     case 'settings':
       return t('layout:breadcrumbs.settings');
+    case 'modManager':
+      return t('layout:search.serverTabs.modManager.label');
+    case 'pluginManager':
+      return t('layout:search.serverTabs.pluginManager.label');
     case 'invites':
       return t('layout:breadcrumbs.invites');
     default:

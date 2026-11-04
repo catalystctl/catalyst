@@ -814,6 +814,7 @@ export default function ServerModManagerTab({
  </div>
 
  {/* Provider */}
+ {availableModProviderOptions.length > 0 && (
  <select
  aria-label={t('tabs.mods.providerLabel')}
  className="h-7 rounded-sm border border-border/60 bg-background/40 px-2 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
@@ -826,6 +827,7 @@ export default function ServerModManagerTab({
  </option>
  ))}
  </select>
+ )}
 
  {/* Loader */}
  {supportsModLoaderFilter ? (

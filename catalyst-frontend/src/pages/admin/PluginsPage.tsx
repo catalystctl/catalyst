@@ -743,7 +743,7 @@ export default function PluginsPage() {
                 className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
               />
             </label>
-            <div className="flex items-center gap-0.5" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
+            <div className="flex flex-wrap items-center gap-0.5" role="tablist" aria-label={t('pluginsAdmin.filterAria')}>
               {filterOptions.map(({ key, label, count, icon }) => (
                 <button
                   key={key}

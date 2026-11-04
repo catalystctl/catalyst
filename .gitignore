@@ -6,6 +6,10 @@ catalyst-frontend/playwright-report/
 catalyst-frontend/docs/mocks/
 docs.md
 
+# Local planning/handoff notes (agent scratch, not shipped docs)
+docs/release-changelog/
+docs/handoff/
+
 # Local architecture/review notes (not for commit, root only so .github/prompts stays tracked)
 /review-*.md
 EXHAUSTIVE_REVIEW_REPORT.md

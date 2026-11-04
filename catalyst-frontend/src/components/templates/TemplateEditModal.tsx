@@ -614,7 +614,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
            <label className="mt-3 block space-y-1">
             <span className="type-overline">{t('form.description')}</span>
             <textarea
-             className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+             className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
              rows={2}
              value={description}
              onChange={(event) => setDescription(event.target.value)}
@@ -772,7 +772,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
           <label className="block space-y-1">
            <span className="type-overline">{t('form.startupCommand')}</span>
            <textarea
-            className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+            className="min-h-[4rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
             rows={2}
             value={startup}
             onChange={(event) => setStartup(event.target.value)}
@@ -805,7 +805,7 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
           <label className="block space-y-1">
            <span className="type-overline">{t('form.installScript')}</span>
            <textarea
-            className="min-h-[7rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+            className="min-h-[7rem] w-full rounded-sm border border-border/60 bg-background/40 px-2.5 py-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
             rows={5}
             value={installScript}
             onChange={(event) => setInstallScript(event.target.value)}

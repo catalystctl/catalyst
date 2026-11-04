@@ -33,7 +33,7 @@ export function BracketLabel({
 // Only abnormal load earns colour; healthy values stay neutral so the eye is
 // not pulled by fifteen bars per screen.
 const toneBar = (value: number) =>
-  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-muted-foreground/70';
+  value >= 90 ? 'bg-danger' : value >= 75 ? 'bg-warning' : 'bg-muted-foreground';
 
 /**
  * ActivityBars — the signature element: three discrete bars showing a live

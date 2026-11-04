@@ -680,7 +680,7 @@ function SummaryRow({ label, value }: { label: string; value?: string | null }) 
   return (
     <div className="flex items-baseline justify-between gap-2 py-0.5">
       <span className="type-overline shrink-0 text-muted-foreground">{label}</span>
-      <span className="min-w-0 truncate text-right font-mono text-micro tabular-nums text-foreground">
+      <span className="min-w-0 break-words text-right font-mono text-micro tabular-nums text-foreground">
         {value ?? '—'}
       </span>
     </div>
