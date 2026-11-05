@@ -183,6 +183,93 @@ function powerFailureStatus(result: PowerSendResult): number {
   return 502;
 }
 
+/** Publish INSTALLING with an optimistic-concurrency claim before dispatch.
+ * Both the initial claim and rollback include the updatedAt token: a status-only
+ * CAS is vulnerable to ABA after a fast install/cancel/reinstall lifecycle. */
+export class InstallClaimConflictError extends Error {
+  constructor() {
+    super("Server changed before the installation command could be claimed");
+    this.name = "InstallClaimConflictError";
+  }
+}
+
+type InstallationStatusStore = {
+  updateMany(args: {
+    where: {
+      id: string;
+      nodeId: string;
+      status: ServerState;
+      updatedAt: Date;
+    };
+    data: { status: ServerState; updatedAt?: Date };
+  }): Promise<{ count: number }>;
+  findUnique(args: {
+    where: { id: string };
+    select: { nodeId: true; status: true; updatedAt: true };
+  }): Promise<{ nodeId: string; status: string; updatedAt: Date } | null>;
+};
+
+export async function dispatchInstallCommand(
+  serverId: string,
+  previousStatus: ServerState,
+  gateway: { sendToAgent(nodeId: string, command: Record<string, unknown>): Promise<boolean> },
+  nodeId: string,
+  command: Record<string, unknown>,
+  expectedUpdatedAt: Date,
+  store: InstallationStatusStore = prisma.server,
+): Promise<boolean> {
+  // Prisma normally supplies @updatedAt automatically. Supplying a strictly
+  // increasing token as part of this guarded write also covers same-millisecond
+  // transitions and makes an old rollback distinguishable from a newer claim.
+  const claimUpdatedAt = new Date(Math.max(Date.now(), expectedUpdatedAt.getTime() + 1));
+  const claim = await store.updateMany({
+    where: {
+      id: serverId,
+      nodeId,
+      status: previousStatus,
+      updatedAt: expectedUpdatedAt,
+    },
+    data: { status: ServerState.INSTALLING, updatedAt: claimUpdatedAt },
+  });
+  if (claim.count !== 1) throw new InstallClaimConflictError();
+
+  // Do not infer a token from a second clock or proceed on an ambiguous read.
+  // If the row already moved, fail closed and leave that newer state untouched.
+  const claimed = await store.findUnique({
+    where: { id: serverId },
+    select: { nodeId: true, status: true, updatedAt: true },
+  });
+  if (
+    !claimed ||
+    claimed.nodeId !== nodeId ||
+    claimed.status !== ServerState.INSTALLING ||
+    !(claimed.updatedAt instanceof Date) ||
+    claimed.updatedAt.getTime() !== claimUpdatedAt.getTime()
+  ) {
+    throw new InstallClaimConflictError();
+  }
+
+  const restorePreviousStatus = async () => {
+    await store.updateMany({
+      where: {
+        id: serverId,
+        nodeId,
+        status: ServerState.INSTALLING,
+        updatedAt: claimed.updatedAt,
+      },
+      data: { status: previousStatus },
+    });
+  };
+  try {
+    if (await gateway.sendToAgent(nodeId, command)) return true;
+  } catch (error) {
+    await restorePreviousStatus();
+    throw error;
+  }
+  await restorePreviousStatus();
+  return false;
+}
+
 export async function serverPowerRoutes(app: FastifyInstance) {
   app.post(
     "/:serverId/install",
@@ -232,7 +319,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       // install, reinstall and configuration-clone paths cannot drift.
       let payload: ReturnType<typeof buildInstallCommand>;
       try {
-        payload = buildInstallCommand(server, "install_server");
+        payload = buildInstallCommand(server, "install_server", {
+          trust: checkIsAdmin(request, "admin.write") ? "admin" : "non-admin",
+        });
       } catch (error: any) {
         if (error instanceof InstallPayloadError) {
           return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
@@ -242,17 +331,26 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Install is long-running — fire-and-forget with delivery check.
       // Final status arrives via server_state_update from the agent.
-      const success = await gateway.sendToAgent(server.nodeId, payload.command);
+      let success: boolean;
+      try {
+        success = await dispatchInstallCommand(
+          serverId,
+          currentState,
+          gateway,
+          server.nodeId,
+          payload.command,
+          server.updatedAt,
+        );
+      } catch (error) {
+        if (error instanceof InstallClaimConflictError) {
+          return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, "Server changed before installation could start; retry the request");
+        }
+        throw error;
+      }
 
       if (!success) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
-
-      // Update server status
-      await prisma.server.update({
-        where: { id: serverId },
-        data: { status: "installing" },
-      });
 
       await prisma.serverLog.create({
         data: {
@@ -329,7 +427,9 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       // install, reinstall and configuration-clone paths cannot drift.
       let payload: ReturnType<typeof buildInstallCommand>;
       try {
-        payload = buildInstallCommand(server, "reinstall_server");
+        payload = buildInstallCommand(server, "reinstall_server", {
+          trust: checkIsAdmin(request, "admin.write") ? "admin" : "non-admin",
+        });
       } catch (error: any) {
         if (error instanceof InstallPayloadError) {
           return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
@@ -339,17 +439,26 @@ export async function serverPowerRoutes(app: FastifyInstance) {
 
       // Reinstall is long-running — fire-and-forget with delivery check.
       // Final status arrives via server_state_update from the agent.
-      const success = await gateway.sendToAgent(server.nodeId, payload.command);
+      let success: boolean;
+      try {
+        success = await dispatchInstallCommand(
+          serverId,
+          currentState,
+          gateway,
+          server.nodeId,
+          payload.command,
+          server.updatedAt,
+        );
+      } catch (error) {
+        if (error instanceof InstallClaimConflictError) {
+          return apiError(reply, 409, ErrorCodes.SERVER_STATE_TRANSITION_INVALID, "Server changed before reinstallation could start; retry the request");
+        }
+        throw error;
+      }
 
       if (!success) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");
       }
-
-      // Update server status
-      await prisma.server.update({
-        where: { id: serverId },
-        data: { status: "installing" },
-      });
 
       await prisma.serverLog.create({
         data: {
@@ -596,76 +705,21 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
-      // Automatically add SERVER_DIR to environment
-      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
-      const fullServerDir = `${serverDir}/${server.uuid}`;
-
-      const templateVariables = (server.template.variables as any[]) || [];
-      const templateDefaults = templateVariables.reduce((acc, variable) => {
-        if (variable?.name && variable?.default !== undefined) {
-          acc[variable.name] = String(variable.default);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-
-      const environment = {
-        ...templateDefaults,
-        ...(server.environment as Record<string, string>),
-        SERVER_DIR: fullServerDir,
-      };
-      if (server.template?.image) {
-        const resolvedImage = resolveTemplateImage(server.template, environment);
-        environment.TEMPLATE_IMAGE = resolvedImage;
-      }
-      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-        environment.CATALYST_NETWORK_IP = server.primaryIp;
-      }
-      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-        try {
-          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-        } catch (error: any) {
+      // Rebuild used to duplicate the installer environment assembly and could
+      // therefore forward stored keys rejected by the install/reinstall paths.
+      let payload: ReturnType<typeof buildInstallCommand>;
+      try {
+        payload = buildInstallCommand(server, "rebuild_server", {
+          trust: checkIsAdmin(request, "admin.write") ? "admin" : "non-admin",
+        });
+      } catch (error: any) {
+        if (error instanceof InstallPayloadError) {
           return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
         }
-      }
-      const runtimeTemplate = patchTemplateForRuntime(server.template);
-      if (server.startupCommand) {
-        runtimeTemplate.startup = server.startupCommand;
+        throw error;
       }
 
-      // Sync port environment variables with primaryPort
-      const portBindings = parseStoredPortBindings(server.portBindings);
-      let syncedEnvironment = syncPortEnvironmentVariables(
-        environment,
-        server.primaryPort,
-        portBindings
-      );
-      syncedEnvironment = injectPterodactylCompatibilityVars(
-        syncedEnvironment,
-        {
-          uuid: server.uuid,
-          name: server.name,
-          primaryIp: server.primaryIp,
-          primaryPort: server.primaryPort,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedDiskMb: server.allocatedDiskMb,
-        },
-        portBindings,
-        { startupCommand: runtimeTemplate.startup },
-      );
-
-      const success = await gateway.sendToAgent(server.nodeId, {
-        type: "rebuild_server",
-        serverId: server.id,
-        serverUuid: server.uuid,
-        template: runtimeTemplate,
-        environment: syncedEnvironment,
-        allocatedMemoryMb: server.allocatedMemoryMb,
-        allocatedCpuCores: server.allocatedCpuCores,
-        allocatedDiskMb: server.allocatedDiskMb,
-        primaryPort: server.primaryPort,
-        portBindings: portBindings,
-        networkMode: server.networkMode,
-      });
+      const success = await gateway.sendToAgent(server.nodeId, payload.command);
 
       if (!success) {
         return apiError(reply, 503, ErrorCodes.AGENT_COMMAND_FAILED, "Failed to send command to agent");

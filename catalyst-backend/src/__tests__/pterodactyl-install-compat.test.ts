@@ -42,6 +42,16 @@ interface PterodactylEgg {
 	};
 }
 
+interface LocatedEgg {
+	egg: PterodactylEgg;
+	rel: string;
+}
+
+interface FixtureInventory {
+	javaEggs: readonly string[];
+	nonStandardImages: readonly string[];
+}
+
 // ============================================================================
 // Tool availability per image (verified via podman/podman inspection)
 // ============================================================================
@@ -132,7 +142,7 @@ const EGGS_DIR = path.resolve(process.cwd(), '..', 'eggs');
 function discoverFiles(): string[] {
 	const files: string[] = [];
 	if (!fs.existsSync(EGGS_DIR)) {
-		console.warn(`[pterodactyl-install-compat] eggs/ directory not found at ${EGGS_DIR}`);
+		console.warn(`[pterodactyl-install-compat] Optional mounted eggs/ directory not found at ${EGGS_DIR}; pinned static contracts will still run`);
 		return files;
 	}
 	function walk(dir: string) {
@@ -153,7 +163,7 @@ const allFiles = discoverFiles();
 // Helper functions
 // ============================================================================
 
-function parseEgg(fp: string): { egg: PterodactylEgg; rel: string } | null {
+function parseEgg(fp: string): LocatedEgg | null {
 	try {
 		const raw = fs.readFileSync(fp, 'utf-8');
 		const egg = JSON.parse(raw) as PterodactylEgg;
@@ -253,10 +263,113 @@ function extractToolUsage(script: string): Set<string> {
 }
 
 // ============================================================================
+// Minimal checked-in fixtures (required in clean CI)
+// ============================================================================
+
+/**
+ * Synthetic inputs for representative shell/image/schema shapes, plus Alpine
+ * and Debian shell cases. They are authored compatibility cases for the static
+ * contract suite, not byte-exact or hash-pinned upstream snippets, and TypeScript
+ * still cannot execute the Rust installer runtime. The optional mounted eggs/
+ * checkout independently runs the actual upstream JSON corpus.
+ */
+function pinnedEgg(name: string, container: string, script: string): LocatedEgg {
+	return {
+		egg: {
+			name,
+			startup: './server',
+			docker_images: { [container]: container },
+			scripts: { installation: { script, container } },
+		},
+		rel: `pinned/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.json`,
+	};
+}
+
+const STATIC_CONTRACT_EGGS: readonly LocatedEgg[] = [
+	pinnedEgg(
+		'Fabric',
+		'eclipse-temurin:21-jdk-jammy',
+		'#!/bin/bash\r\napt update\r\napt install -y curl wget\r\nmkdir -p /mnt/server\r\ncd /mnt/server\r\nif [[ -n "${HOME}" ]]; then\r\n  java -jar fabric-installer.jar server\r\nfi\r\necho "Install Complete"\r\n',
+	),
+	pinnedEgg(
+		'VanillaCord',
+		'eclipse-temurin:8-jdk-jammy',
+		'#!/bin/ash\r\napk add curl jq\r\ncd /mnt/server\r\ncurl -o vanillacord.jar https://example.invalid/vanillacord.jar\r\njava -jar vanillacord.jar latest\r\n',
+	),
+	pinnedEgg(
+		'LeagueSandbox',
+		'bitnami/dotnet-sdk:6-debian-11',
+		'#!/bin/bash\r\napt update\r\napt install -y git\r\ncd /mnt/server\r\ngit clone https://example.invalid/GameServer.git\r\n',
+	),
+	pinnedEgg(
+		'starmade',
+		'eclipse-temurin:16-jdk-focal',
+		'#!/bin/bash\r\napt update\r\napt -y install curl\r\ncd /mnt/server\r\nwget -O starter.jar https://example.invalid/starter.jar\r\njava -jar starter.jar -nogui\r\n',
+	),
+	pinnedEgg(
+		'Pinned Alpine Bash',
+		'alpine:latest',
+		'#!/bin/bash\r\ncd /mnt/server\r\nif [[ -d /mnt/server ]]; then\r\n  echo ready\r\nfi\r\n',
+	),
+	pinnedEgg(
+		'Pinned Debian Ash',
+		'debian:bullseye-slim',
+		'#!/bin/ash\r\ncd /mnt/server\r\n',
+	),
+];
+
+const STATIC_INVENTORY: FixtureInventory = {
+	javaEggs: ['Fabric', 'VanillaCord', 'starmade'],
+	nonStandardImages: [
+		'alpine:latest',
+		'bitnami/dotnet-sdk:6-debian-11',
+		'debian:bullseye-slim',
+		'eclipse-temurin:8-jdk-jammy',
+		'eclipse-temurin:16-jdk-focal',
+		'eclipse-temurin:21-jdk-jammy',
+	],
+};
+
+const MOUNTED_INVENTORY: FixtureInventory = {
+	javaEggs: [
+		'CurseForge Generic',
+		'Fabric',
+		'Forge Enhanced',
+		'Glowstone',
+		'Modrinth Generic',
+		'Quilt',
+		'SpongeForge',
+		'VanillaCord',
+		'starmade',
+	],
+	nonStandardImages: [
+		'alpine:latest',
+		'bitnami/dotnet-sdk:6-debian-11',
+		'debian:bullseye-slim',
+		'eclipse-temurin:8-jdk',
+		'eclipse-temurin:8-jdk-jammy',
+		'eclipse-temurin:16-jdk-focal',
+		'eclipse-temurin:17-jdk',
+		'eclipse-temurin:18-jdk-jammy',
+		'eclipse-temurin:21-jdk-jammy',
+		'ghcr.io/ptero-eggs/installers:ubuntu',
+		'node:16-bookworm',
+		'node:21-bookworm-slim',
+	],
+};
+
+const mountedEggs = allFiles
+	.map(parseEgg)
+	.filter((parsed): parsed is LocatedEgg => parsed !== null);
+
+// ============================================================================
 // Tests
 // ============================================================================
 
-describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility', () => {
+function defineFixtureCompatibilityTests(
+	eggs: readonly LocatedEgg[],
+	inventory: FixtureInventory,
+) {
 
 	describe('Path compatibility (/mnt/server → /data)', () => {
 
@@ -264,10 +377,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			let total = 0;
 			let withMntServer = 0;
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg } = parsed;
+			for (const { egg } of eggs) {
 				const script = getInstallScript(egg);
 				if (!script.trim()) continue;
 
@@ -285,11 +395,11 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			expect(withMntServer).toBe(total);
 		});
 
-		it.concurrent('install wrapper creates /mnt/server symlink before script runs', () => {
+		it.concurrent('install wrapper uses trusted utility paths before the script runs', () => {
 			// Documentation contract — must stay in sync with container_ops.rs wrapper:
 			//   1. trap EXIT → chown -R 1000:1000 /data
 			//   2. set -e for preamble only
-			//   3. rm -rf /mnt/server && ln -s /data /mnt/server
+			//   3. trusted /usr/bin utilities preserve paths before the script
 			//   4. ensure /home/container → /data (bind or symlink)
 			//   5. export HOME=/data
 			//   6. set +e  (Pterodactyl scripts are NOT run with set -e)
@@ -298,60 +408,25 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/container_ops.rs'),
 				'utf-8',
 			);
-			expect(wrapperSrc).toContain('rm -rf /mnt/server && ln -s /data /mnt/server');
+			expect(wrapperSrc).toContain('/bin/rm -rf /mnt/server && /bin/ln -s /data /mnt/server');
 			expect(wrapperSrc).toContain('export HOME=/data');
 			expect(wrapperSrc).toContain('set +e');
 			expect(wrapperSrc).toContain('chown -R 1000:1000 /data');
 			// Symlink setup must appear before the script interpolation point
 			const symlinkIdx = wrapperSrc.indexOf('ln -s /data /mnt/server');
-			const scriptIdx = wrapperSrc.indexOf('{},\n            container_id, script');
-			// Fallback: the format! ends with script as last arg
-			const altScriptIdx = wrapperSrc.indexOf('container_id, script');
-			const endIdx = scriptIdx >= 0 ? scriptIdx : altScriptIdx;
+			const endIdx = wrapperSrc.indexOf('script\n        );');
 			expect(symlinkIdx).toBeGreaterThan(0);
 			expect(endIdx).toBeGreaterThan(symlinkIdx);
 		});
 
-		it.concurrent('install containers inherit the image environment (java is reachable)', () => {
-			// Wings starts the install container from the image config and then
-			// appends the egg/server env, so image-provided PATH/JAVA_HOME
-			// survive. Building the env from scratch dropped them, and
-			// `eclipse-temurin:*` ships java ONLY at /opt/java/openjdk/bin/java
-			// (no /usr/bin/java) — the Fabric egg's `java -jar fabric-installer.jar`
-			// then failed with "command not found", the script (no `set -e`, ends
-			// with `echo "Install Complete"`) reported success, and the server
-			// crash-looped on start with "Unable to access jarfile server.jar".
-			const installerSrc = fs.readFileSync(
-				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/container_ops.rs'),
-				'utf-8',
-			);
-			const specSrc = fs.readFileSync(
-				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/image_and_spec.rs'),
-				'utf-8',
-			);
+	});
 
-			// The installer env must be built from the image env, not a literal PATH.
-			const installerFn = installerSrc.slice(
-				installerSrc.indexOf('pub async fn spawn_installer_container'),
-			);
-			const installerFnBody = installerFn.slice(
-				0,
-				installerFn.indexOf('let mut spec = serde_json::json!'),
-			);
-			expect(installerFnBody).toContain('get_image_env(&qualified_image)');
-			expect(installerFnBody).toContain('build_installer_env(&image_env, env)');
-			expect(installerFnBody).not.toContain(
-				'"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"',
-			);
-
-			// And a JVM image's bin dir must be forced onto PATH even when the
-			// image env probe fails or an egg overrides PATH.
-			expect(specSrc).toContain('JAVA_BIN_DIR: &str = "/opt/java/openjdk/bin"');
-			expect(specSrc).toContain('ensure_java_on_path(&mut env_map)');
-			// Every egg whose install script runs `java` must be covered by it.
-			const javaEggs = allFiles
-				.map(parseEgg)
-				.filter((p): p is { egg: PterodactylEgg; rel: string } => Boolean(p))
+	describe('JVM install fixture inventory', () => {
+		it.concurrent('identifies every Temurin install script that invokes java', () => {
+			// This is deliberately only an inventory assertion. The effective OCI
+			// process.env must be tested in Rust; scanning Rust source from this
+			// TypeScript suite cannot establish that java is actually reachable.
+			const javaEggs = eggs
 				.map((p) => {
 					const body = getInstallScript(p.egg)
 						.replace(/\r\n/g, '\n')
@@ -361,23 +436,10 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 					return { ...p, usesJava: /(^|[\s;&|(])java\s/.test(body) };
 				})
 				.filter((p) => p.usesJava)
-				// Eggs installed from a JVM-only image: the JDK is at
-				// /opt/java/openjdk/bin, so nothing but the image PATH (or
-				// ensure_java_on_path) can resolve `java`.
 				.filter((p) => getInstallContainer(p.egg).startsWith('eclipse-temurin'));
 
-			expect(javaEggs.map((e) => e.egg.name).sort()).toEqual(
-				[
-					'CurseForge Generic',
-					'Fabric',
-					'Forge Enhanced',
-					'Glowstone',
-					'Modrinth Generic',
-					'Quilt',
-					'SpongeForge',
-					'VanillaCord',
-					'starmade',
-				].sort(),
+			expect(javaEggs.map((e) => e.egg.name || e.rel).sort()).toEqual(
+				[...inventory.javaEggs].sort(),
 			);
 		});
 	});
@@ -387,10 +449,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('ash scripts on Debian images use bash (ash unavailable on Debian)', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -410,10 +469,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('ash scripts on Alpine images use sh (busybox ash)', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -433,10 +489,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('bash scripts on non-Alpine images use bash', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -457,10 +510,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('bash scripts on Alpine images use sh (no bash binary)', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -481,10 +531,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('scripts using [[ ]] on Debian images get bash (not dash)', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -503,10 +550,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		it.concurrent('scripts using [[ ]] on Alpine images work with sh (busybox ash supports [[ ]])', () => {
 			const failures: string[] = [];
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg, rel } = parsed;
+			for (const { egg, rel } of eggs) {
 				const script = getInstallScript(egg);
 				const container = getInstallContainer(egg);
 				if (!script.trim() || !container) continue;
@@ -532,10 +576,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 		}> = [];
 
 		// Collect non-standard eggs in a beforeAll-like setup
-		for (const fp of allFiles) {
-			const parsed = parseEgg(fp);
-			if (!parsed) continue;
-			const { egg, rel } = parsed;
+		for (const { egg, rel } of eggs) {
 			const script = getInstallScript(egg);
 			const container = getInstallContainer(egg);
 			if (!script.trim() || !container) continue;
@@ -544,7 +585,7 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 
 			const toolsUsed = extractToolUsage(script);
 			nonStandardEggs.push({
-				name: egg.name || path.basename(fp, '.json'),
+				name: egg.name || path.basename(rel, '.json'),
 				rel,
 				container,
 				script,
@@ -556,22 +597,9 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			const uniqueImages = [...new Set(nonStandardEggs.map(e => e.container))];
 			expect(uniqueImages.length).toBeGreaterThan(0);
 
-			// Document the non-standard images we know about
-			const expectedImages = [
-				'alpine:latest',
-				'bitnami/dotnet-sdk:6-debian-11',
-				'debian:bullseye-slim',
-				'eclipse-temurin:8-jdk',
-				'eclipse-temurin:8-jdk-jammy',
-				'eclipse-temurin:16-jdk-focal',
-				'eclipse-temurin:17-jdk',
-				'eclipse-temurin:18-jdk-jammy',
-				'eclipse-temurin:21-jdk-jammy',
-				'ghcr.io/ptero-eggs/installers:ubuntu',
-				'node:16-bookworm',
-				'node:21-bookworm-slim',
-			];
-			for (const img of expectedImages) {
+			// Both the pinned set and a mounted checkout declare the inventory
+			// they must contain, so an empty or incomplete set fails explicitly.
+			for (const img of inventory.nonStandardImages) {
 				expect(uniqueImages).toContain(img);
 			}
 		});
@@ -673,42 +701,31 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 
 	describe('HOME variable compatibility', () => {
 
-		it.concurrent('install wrapper sets HOME=/data for scripts that use $HOME', () => {
+		it.concurrent('HOME-using install script inventory is non-empty', () => {
 			let homeUsers = 0;
-			let homeSetters = 0;
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg } = parsed;
+			for (const { egg } of eggs) {
 				const script = getInstallScript(egg);
 				if (!script.trim()) continue;
 
 				if (script.includes('$HOME') || script.includes('${HOME}')) {
 					homeUsers++;
-					// Check if script sets HOME itself
-					if (/export\s+HOME/.test(script) || /HOME=/.test(script)) {
-						homeSetters++;
-					}
 				}
 			}
 
-			// Our wrapper sets HOME=/data, so even scripts that don't
-			// explicitly set HOME will have it available
+			// The checked-in wrapper contract above pins export HOME=/data;
+			// this assertion keeps the corresponding fixture coverage non-vacuous.
 			expect(homeUsers).toBeGreaterThan(0);
 		});
 	});
 
 	describe('Windows line endings', () => {
 
-		it.concurrent('agent strips \\r\\n before script execution', () => {
+		it.concurrent('CRLF install script inventory is non-empty', () => {
 			let withCrlf = 0;
 			let total = 0;
 
-			for (const fp of allFiles) {
-				const parsed = parseEgg(fp);
-				if (!parsed) continue;
-				const { egg } = parsed;
+			for (const { egg } of eggs) {
 				const script = getInstallScript(egg);
 				if (!script.trim()) continue;
 				total++;
@@ -718,11 +735,26 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 				}
 			}
 
-			// Many Pterodactyl eggs have \r\n in JSON strings
+			// This inventory keeps CRLF coverage non-vacuous; normalization is
+			// websocket_handler.rs behavior and is not executed by this TS test.
+			expect(total).toBeGreaterThan(0);
 			expect(withCrlf).toBeGreaterThan(0);
-			// The agent strips these: final_script.replace("\r\n", "\n").replace('\r', "\n")
-			// This test documents the expectation — actual fix is in websocket_handler.rs
-			expect(true).toBe(true);
+			expect(withCrlf).toBeLessThanOrEqual(total);
 		});
 	});
+}
+
+describe('Static installer contracts with synthetic fixtures', () => {
+	defineFixtureCompatibilityTests(STATIC_CONTRACT_EGGS, STATIC_INVENTORY);
 });
+
+describe.skipIf(mountedEggs.length === 0)(
+	'Mounted upstream eggs/ fixture sweep (all discovered JSON files)',
+	() => {
+		it('discovers the actual mounted fixture set', () => {
+			expect(mountedEggs.length).toBeGreaterThan(0);
+			expect(mountedEggs.length).toBeLessThanOrEqual(allFiles.length);
+		});
+		defineFixtureCompatibilityTests(mountedEggs, MOUNTED_INVENTORY);
+	},
+);

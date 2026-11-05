@@ -34,6 +34,7 @@ import {
   type CloneRequest,
 } from "../../services/server-clone.js";
 import { serverClonePreflightSchema } from "../../lib/validation.js";
+import { findDisallowedServerEnvironmentKeys } from "../../lib/server-environment.js";
 import {
   claimIdempotency,
   completeIdempotency,
@@ -122,6 +123,7 @@ async function buildCloneAuth(
     canSetOwner: isAdmin || checkPerm(request, 'user.create'),
     canTransfer: isAdmin || checkPerm(request, 'server.transfer'),
     canManageSuspended: isAdmin,
+    canSetArbitraryEnvironment: isAdmin,
     canAccessTargetNode: nodeAccess,
   };
 }
@@ -345,8 +347,8 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       // Creation gate: server.create (or admin.write), or the node_manage
       // path — node assignment + node.server_manage (legacy node.update).
       // Bare node assignment alone grants nothing (decideServerAccess contract).
-      const canCreate =
-        checkIsAdmin(request, "admin.write") || checkPerm(request, "server.create");
+      const isAdmin = checkIsAdmin(request, "admin.write");
+      const canCreate = isAdmin || checkPerm(request, "server.create");
       const assignedToNode = await hasNodeAccess(prisma, userId, nodeId);
       const nodeManage =
         assignedToNode &&
@@ -399,6 +401,18 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         required?: boolean;
         rules?: string[];
       }>) || [];
+      if (!isAdmin) {
+        const disallowed = findDisallowedServerEnvironmentKeys(environment, templateVariables);
+        if (disallowed.length > 0) {
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.SERVER_VARIABLE_INVALID,
+            `Environment variables are not declared by the template: ${disallowed.join(", ")}`,
+            { params: { name: disallowed.join(", ") } },
+          );
+        }
+      }
       const appId =
         environment?.SRCDS_APPID ||
         environment?.STEAM_APPID ||
@@ -1248,7 +1262,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
 
         let installQueued = false;
         try {
-          await startCloneInstall(cloneServerId, gateway);
+          await startCloneInstall(cloneServerId, gateway, {
+            // This is a system-owned code path acting for the requester, not a
+            // trusted system install. Preserve the source actor's trust level.
+            trust: auth.canSetArbitraryEnvironment ? 'admin' : 'non-admin',
+          });
           installQueued = true;
         } catch (err: any) {
           await prisma.server.update({
@@ -1855,6 +1873,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const userId = request.user.userId;
+      const isAdmin = checkIsAdmin(request, "admin.write");
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },
@@ -1955,7 +1974,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
       // Deliberately REACHABLE where the gate above is not: node managers pass
       // via the node_manage branch, but every field family still demands an
       // explicit grant (row or global/scoped role).
-      if (touchedPermissions.length > 0 && server.ownerId !== userId && !checkIsAdmin(request, "admin.write")) {
+      if (touchedPermissions.length > 0 && server.ownerId !== userId && !isAdmin) {
         const sensitiveAccess = await prisma.serverAccess.findFirst({
           where: { serverId, userId },
           select: { permissions: true },
@@ -1969,6 +1988,22 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         );
         if (missing.length > 0) {
           return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "Forbidden");
+        }
+      }
+
+      if (!isAdmin && environment !== undefined) {
+        const disallowed = findDisallowedServerEnvironmentKeys(
+          environment,
+          server.template?.variables,
+        );
+        if (disallowed.length > 0) {
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.SERVER_VARIABLE_INVALID,
+            `Environment variables are not declared by the template: ${disallowed.join(", ")}`,
+            { params: { name: disallowed.join(", ") } },
+          );
         }
       }
 

@@ -3621,34 +3621,47 @@ export class WebSocketGateway {
             component.includes("backup") ||
             (typeof message.backupId === "string" && message.backupId) ||
             (typeof message.backupPath === "string" && message.backupPath);
-          if (isBackupError) {
+          const installError = component.match(
+            /^agent:(install|reinstall|rebuild)_server(?::([^:]+))?$/,
+          );
+          const isInstallError =
+            installError !== null &&
+            (installError[2] === undefined || installError[2] === errorServerId);
+          if (isBackupError || isInstallError) {
             const server = await this.prisma.server.findFirst({
               where: { id: errorServerId, nodeId },
               select: { id: true, status: true },
             });
-            if (server && (server.status === ServerState.CREATING_BACKUP || server.status === ServerState.RESTORING)) {
-              await this.prisma.server.update({
-                where: { id: server.id },
+            const eligibleStatus = isInstallError
+              ? server?.status === ServerState.INSTALLING
+              : server && (server.status === ServerState.CREATING_BACKUP || server.status === ServerState.RESTORING);
+            if (server && eligibleStatus) {
+              const transitioned = await this.prisma.server.updateMany({
+                where: { id: errorServerId, nodeId, status: server.status },
                 data: { status: ServerState.ERROR },
               });
-              await this.prisma.serverLog.create({
-                data: {
+              // The earlier read is only for an accurate log/reason. A late
+              // cancel, host transfer, or terminal state must win instead.
+              if (transitioned.count === 1) {
+                await this.prisma.serverLog.create({
+                  data: {
+                    serverId: server.id,
+                    stream: "system",
+                    data: `[Agent Error] ${isInstallError ? "Installation" : "Backup/restore"} failed: ${errorMessage}. Transitioned from ${server.status} to ERROR.`,
+                  },
+                });
+                await this.routeToClients(server.id, {
+                  type: "server_state_update",
                   serverId: server.id,
-                  stream: "system",
-                  data: `[Agent Error] Backup/restore failed: ${errorMessage}. Transitioned from ${server.status} to ERROR.`,
-                },
-              });
-              await this.routeToClients(server.id, {
-                type: "server_state_update",
-                serverId: server.id,
-                state: ServerState.ERROR,
-                reason: `Agent error during ${server.status}: ${errorMessage.slice(0, 200)}`,
-                timestamp: Date.now(),
-              });
-              this.logger.info(
-                { serverId: server.id, fromStatus: server.status },
-                "Reverted stuck state to ERROR after agent error"
-              );
+                  state: ServerState.ERROR,
+                  reason: `Agent error during ${server.status}: ${errorMessage.slice(0, 200)}`,
+                  timestamp: Date.now(),
+                });
+                this.logger.info(
+                  { serverId: server.id, fromStatus: server.status },
+                  "Reverted stuck state to ERROR after agent error"
+                );
+              }
             }
           }
         }

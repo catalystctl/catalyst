@@ -14,8 +14,16 @@ import {
   resolveTemplateImage,
   syncPortEnvironmentVariables,
 } from '../routes/servers/_helpers.js';
+import {
+  resolveStoredServerEnvironment,
+  type ServerEnvironmentExecutionTrust,
+} from '../lib/server-environment.js';
 
-export type InstallCommandType = 'install_server' | 'reinstall_server';
+export type InstallCommandType = 'install_server' | 'reinstall_server' | 'rebuild_server';
+
+export interface InstallExecutionContext {
+  trust: ServerEnvironmentExecutionTrust;
+}
 
 /**
  * Thrown when the host-network IP cannot be resolved. Callers translate the
@@ -50,6 +58,8 @@ export type ServerForInstall = {
     stopCommand?: string | null;
     sendSignalTo?: string | null;
     installImage?: string | null;
+    installEntrypoint?: string | null;
+    installScript?: string | null;
     variables?: unknown;
   } | null;
   node: { serverDataDir: string | null; publicAddress: string };
@@ -64,6 +74,7 @@ export type ServerForInstall = {
 export function buildInstallCommand(
   server: ServerForInstall,
   type: InstallCommandType,
+  context: InstallExecutionContext,
 ): { command: Record<string, unknown>; environment: Record<string, string> } {
   const serverDir = server.node.serverDataDir || '/var/lib/catalyst/servers';
   const fullServerDir = `${serverDir}/${server.uuid}`;
@@ -80,7 +91,7 @@ export function buildInstallCommand(
 
   const environment: Record<string, string> = {
     ...templateDefaults,
-    ...((server.environment as Record<string, string>) || {}),
+    ...resolveStoredServerEnvironment(server.environment, templateVariables, context.trust),
     SERVER_DIR: fullServerDir,
   };
 
@@ -144,6 +155,7 @@ export function buildInstallCommand(
       allocatedDiskMb: server.allocatedDiskMb,
       primaryPort: server.primaryPort,
       portBindings,
+      networkMode: server.networkMode,
     },
   };
 }

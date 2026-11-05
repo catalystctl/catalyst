@@ -38,6 +38,11 @@ import {
 } from '../routes/servers/_helpers.js';
 import { ErrorCodes } from '../shared-types';
 import {
+  findDisallowedServerEnvironmentKeys,
+  resolveStoredServerEnvironment,
+  type ServerEnvironmentExecutionTrust,
+} from '../lib/server-environment.js';
+import {
   requestedCgroupMemoryMb,
   SERVER_CGROUP_MEMORY_SELECT,
   sumCgroupMemoryMb,
@@ -82,6 +87,8 @@ export interface CloneAuth {
   canTransfer: boolean;
   /** admin.write — may clone a suspended source / copy backup credentials. */
   canManageSuspended: boolean;
+  /** admin.write — may override undeclared process-environment keys. */
+  canSetArbitraryEnvironment: boolean;
   /** Caller can reach the target node. */
   canAccessTargetNode: boolean;
 }
@@ -502,7 +509,33 @@ export async function buildClonePlan(args: {
     }
     return acc;
   }, {});
-  const sourceEnvironment = (source.environment as Record<string, string>) || {};
+  const rawSourceEnvironment = (source.environment as Record<string, string>) || {};
+  const executionTrust: ServerEnvironmentExecutionTrust = auth.canSetArbitraryEnvironment
+    ? 'admin'
+    : 'non-admin';
+  // The source row may predate request-time authorization or have been edited
+  // directly. Do not carry its undeclared keys into a non-admin clone: for a
+  // configuration clone those keys would otherwise reach a root installer.
+  const sourceEnvironment = resolveStoredServerEnvironment(
+    rawSourceEnvironment,
+    templateVariables,
+    executionTrust,
+  );
+  const droppedSourceKeys = auth.canSetArbitraryEnvironment
+    ? []
+    : findDisallowedServerEnvironmentKeys(rawSourceEnvironment, templateVariables);
+
+  if (!auth.canSetArbitraryEnvironment && raw.environment !== undefined) {
+    const disallowed = findDisallowedServerEnvironmentKeys(raw.environment, templateVariables);
+    if (disallowed.length > 0) {
+      blockers.push({
+        code: ErrorCodes.SERVER_VARIABLE_INVALID,
+        message: `Environment variables are not declared by the template: ${disallowed.join(', ')}`,
+        field: 'environment',
+        params: { name: disallowed.join(', ') },
+      });
+    }
+  }
 
   const resolvedEnvironment: Record<string, string> = {
     ...templateDefaults,
@@ -513,17 +546,21 @@ export async function buildClonePlan(args: {
   delete resolvedEnvironment.TEMPLATE_IMAGE;
 
   const declaredNames = new Set(templateVariables.map((v) => String(v.name)));
-  const staleKeys = Object.keys(sourceEnvironment).filter(
-    (key) => !declaredNames.has(key) && key !== 'CATALYST_NETWORK_IP' && key !== 'TEMPLATE_IMAGE',
-  );
+  const staleKeys = auth.canSetArbitraryEnvironment
+    ? Object.keys(rawSourceEnvironment).filter(
+        (key) => !declaredNames.has(key) && key !== 'CATALYST_NETWORK_IP' && key !== 'TEMPLATE_IMAGE',
+      )
+    : droppedSourceKeys;
   if (staleKeys.length > 0) {
     warnings.push({
       code: 'CLONE_SOURCE_ENV_STALE',
-      message: `These variables are no longer declared by the template and will be carried over: ${staleKeys.join(', ')}`,
+      message: auth.canSetArbitraryEnvironment
+        ? `These variables are no longer declared by the template and will be carried over: ${staleKeys.join(', ')}`
+        : `These undeclared stored variables were omitted from the clone: ${staleKeys.join(', ')}`,
       field: 'environment',
     });
   }
-  if (sourceEnvironment.CATALYST_NETWORK_IP || sourceEnvironment.TEMPLATE_IMAGE) {
+  if (rawSourceEnvironment.CATALYST_NETWORK_IP || rawSourceEnvironment.TEMPLATE_IMAGE) {
     warnings.push({
       code: 'CLONE_SOURCE_ENV_DROPPED',
       message: 'Runtime-injected variables (CATALYST_NETWORK_IP, TEMPLATE_IMAGE) are re-resolved for the clone.',
@@ -1459,7 +1496,11 @@ export async function copyCloneData(args: {
  * `POST /:serverId/install` route but sends directly (the caller already holds
  * the server row and has set `status = installing`).
  */
-export async function startCloneInstall(serverId: string, gateway: any): Promise<void> {
+export async function startCloneInstall(
+  serverId: string,
+  gateway: any,
+  context: { trust: ServerEnvironmentExecutionTrust },
+): Promise<void> {
   const server = await prisma.server.findUnique({
     where: { id: serverId },
     include: { template: true, node: true },
@@ -1473,7 +1514,7 @@ export async function startCloneInstall(serverId: string, gateway: any): Promise
   if (!gateway) {
     throw new ClonePlanError(ErrorCodes.GATEWAY_NOT_AVAILABLE, 'WebSocket gateway not available', 500);
   }
-  const payload = buildInstallCommand(server as any, 'install_server');
+  const payload = buildInstallCommand(server as any, 'install_server', context);
   const ok = await gateway.sendToAgent(server.nodeId, payload.command);
   if (!ok) {
     throw new ClonePlanError(ErrorCodes.AGENT_COMMAND_FAILED, 'Failed to send install command to agent', 503);

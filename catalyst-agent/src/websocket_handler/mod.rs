@@ -873,12 +873,13 @@ pub struct WebSocketHandler {
     pub(crate) pending_startup_errors: Arc<tokio::sync::RwLock<Vec<String>>>,
     /// PID of the ctr events subprocess, for explicit cleanup during shutdown.
     pub(crate) ctr_event_pid: Arc<tokio::sync::Mutex<Option<u32>>>,
-    /// Active installer containers keyed by server_id. Lets cancel_install_server
-    /// kill the exact container for a stuck install.
+    /// Per-attempt installer registrations keyed by server_id. Values encode an
+    /// attempt token plus pending state or exact container ID; see server_lifecycle.
     pub(crate) active_installs: Arc<RwLock<HashMap<String, String>>>,
-    /// Server ids with a pending install cancel. Checked by the install task so
-    /// a killed installer does not emit an error state over the panel reset.
-    pub(crate) cancelled_installs: Arc<RwLock<HashSet<String>>>,
+    /// Cancelled attempt ids keyed by server_id. Multiple generations can be
+    /// finishing after an immediate reinstall; each must consume only its own
+    /// cancellation. Mutated while holding active_installs for atomic transitions.
+    pub(crate) cancelled_installs: Arc<RwLock<HashMap<String, HashSet<String>>>>,
     /// Shutdown signal sender — used by restart_agent command to trigger graceful shutdown.
     /// Set after construction via set_shutdown_tx(). Uses RwLock for interior mutability.
     pub(crate) shutdown_tx: Arc<RwLock<Option<broadcast::Sender<()>>>>,
@@ -916,6 +917,8 @@ pub struct WebSocketHandler {
 //  14. retry_after_seconds
 //  15. backend_connected (rarely contended, almost always read)
 //  16. shutdown_tx (read-only in restart_agent, never held with other locks)
+//  17. active_installs
+//  18. cancelled_installs (always acquired after active_installs)
 //
 // Rule: never hold lock N while attempting to acquire lock M where M < N.
 
@@ -1015,7 +1018,7 @@ impl WebSocketHandler {
             pending_startup_errors: Arc::new(RwLock::new(Vec::new())),
             ctr_event_pid: Arc::new(tokio::sync::Mutex::new(None)),
             active_installs: Arc::new(RwLock::new(HashMap::new())),
-            cancelled_installs: Arc::new(RwLock::new(HashSet::new())),
+            cancelled_installs: Arc::new(RwLock::new(HashMap::new())),
             shutdown_tx: Arc::new(RwLock::new(None)),
             handshake_nonce: Arc::new(RwLock::new(String::new())),
             handshake_verified: Arc::new(RwLock::new(false)),
@@ -2018,7 +2021,7 @@ impl WebSocketHandler {
 
         // SEC-H-01: global in-flight bound. Non-blocking: panels get a busy
         // response instead of unbounded task/memory growth.
-        let _slot = match self.inflight_slots.try_acquire() {
+        let _slot = match self.inflight_slots.clone().try_acquire_owned() {
             Ok(p) => p,
             Err(_) => {
                 if let Some(rid) = msg.get("requestId").and_then(|v| v.as_str()) {
@@ -2037,82 +2040,49 @@ impl WebSocketHandler {
         };
 
         match msg["type"].as_str() {
+            Some("server_control") if msg["action"].as_str() == Some("install") => {
+                self.dispatch_install_operation(
+                    msg.clone(),
+                    server_lifecycle::InstallOperation::Install,
+                    _slot,
+                )
+                .await;
+            }
             Some("server_control") => self.handle_server_control(&msg).await?,
             Some("install_server") => {
-                let handler = self.clone();
-                let msg = msg.clone();
-                self.connection_tasks.lock().await.spawn(async move {
-                    // SEC-H-01: per-server lock across validate->mutate->exec.
-                    let __srv = msg
-                        .get("serverId")
-                        .or_else(|| msg.get("serverUuid"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let __lock = handler.server_lock(&__srv).await;
-                    let _guard = __lock.lock().await;
-                    if let Err(e) = handler.install_server(&msg).await {
-                        error!("Error in install_server handler: {}", e);
-                        let server_id = msg["serverId"].as_str().unwrap_or("unknown");
-                        handler
-                            .report_error(
-                                ErrorLevel::Error,
-                                &format!("agent:install_server:{}", server_id),
-                                &format!("{}", e),
-                                None,
-                                None,
-                            )
-                            .await;
-                    }
-                });
+                self.dispatch_install_operation(
+                    msg.clone(),
+                    server_lifecycle::InstallOperation::Install,
+                    _slot,
+                )
+                .await;
             }
             Some("reinstall_server") => {
-                let handler = self.clone();
-                let msg = msg.clone();
-                self.connection_tasks.lock().await.spawn(async move {
-                    // SEC-H-01: per-server lock across validate->mutate->exec.
-                    let __srv = msg
-                        .get("serverId")
-                        .or_else(|| msg.get("serverUuid"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let __lock = handler.server_lock(&__srv).await;
-                    let _guard = __lock.lock().await;
-                    if let Err(e) = handler.reinstall_server(&msg).await {
-                        error!("Error in reinstall_server handler: {}", e);
-                        handler
-                            .report_error(
-                                ErrorLevel::Error,
-                                "agent:reinstall_server",
-                                &format!("{}", e),
-                                None,
-                                None,
-                            )
-                            .await;
-                    }
-                });
+                self.dispatch_install_operation(
+                    msg.clone(),
+                    server_lifecycle::InstallOperation::Reinstall,
+                    _slot,
+                )
+                .await;
             }
             Some("cancel_install_server") => {
                 let handler = self.clone();
                 let msg = msg.clone();
-                self.connection_tasks.lock().await.spawn(async move {
-                    // SEC-H-01: per-server lock across validate->mutate->exec.
-                    let __srv = msg
-                        .get("serverId")
-                        .or_else(|| msg.get("serverUuid"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let __lock = handler.server_lock(&__srv).await;
-                    let _guard = __lock.lock().await;
-                    if let Err(e) = handler.cancel_install_server(&msg).await {
-                        error!("Error in cancel_install_server handler: {}", e);
+                // Cancellation must outlive the connection and cannot take the
+                // install's per-server lock. server_lifecycle serializes only
+                // the small registration transition with active_installs.
+                self.spawn_installation_task(async move {
+                    let _inflight_slot = _slot;
+                    if let Err(error) = handler.cancel_install_server(&msg).await {
+                        error!(
+                            "cancel_install_server failed (reason: {} bytes; content withheld)",
+                            error.to_string().len()
+                        );
                         handler
                             .report_error(
                                 ErrorLevel::Error,
                                 "agent:cancel_install_server",
-                                &format!("{}", e),
+                                &error.to_string(),
                                 None,
                                 None,
                             )
@@ -2121,31 +2091,12 @@ impl WebSocketHandler {
                 });
             }
             Some("rebuild_server") => {
-                let handler = self.clone();
-                let msg = msg.clone();
-                self.connection_tasks.lock().await.spawn(async move {
-                    // SEC-H-01: per-server lock across validate->mutate->exec.
-                    let __srv = msg
-                        .get("serverId")
-                        .or_else(|| msg.get("serverUuid"))
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let __lock = handler.server_lock(&__srv).await;
-                    let _guard = __lock.lock().await;
-                    if let Err(e) = handler.rebuild_server(&msg).await {
-                        error!("Error in rebuild_server handler: {}", e);
-                        handler
-                            .report_error(
-                                ErrorLevel::Error,
-                                "agent:rebuild_server",
-                                &format!("{}", e),
-                                None,
-                                None,
-                            )
-                            .await;
-                    }
-                });
+                self.dispatch_install_operation(
+                    msg.clone(),
+                    server_lifecycle::InstallOperation::Rebuild,
+                    _slot,
+                )
+                .await;
             }
             Some("start_server") => {
                 let handler = self.clone();

@@ -16,6 +16,7 @@ import { SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../utils/java-me
 import { parsePaginationParams, buildPaginationMeta } from "../lib/pagination.js";
 import { apiError } from "../lib/http-error";
 import { ErrorCodes } from "../shared-types";
+import { findDisallowedServerEnvironmentKeys } from "../lib/server-environment.js";
 import { config } from "../config.js";
 
 // ID format validation — accepts UUID, Cuid2, and other safe identifier formats.
@@ -2476,6 +2477,18 @@ export async function nodeRoutes(app: FastifyInstance) {
 
 			// Resolve environment with template defaults
 			const templateVariables = (template.variables as any[]) || [];
+			if (!hasGrant(actorPerms, "admin.write")) {
+				const disallowed = findDisallowedServerEnvironmentKeys(environment, templateVariables);
+				if (disallowed.length > 0) {
+					return apiError(
+						reply,
+						400,
+						ErrorCodes.SERVER_VARIABLE_INVALID,
+						`Environment variables are not declared by the template: ${disallowed.join(", ")}`,
+						{ params: { name: disallowed.join(", ") } },
+					);
+				}
+			}
 			const templateDefaults = templateVariables.reduce((acc: Record<string, string>, variable: any) => {
 				if (variable?.name && variable?.default !== undefined) {
 					acc[variable.name] = String(variable.default);

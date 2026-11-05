@@ -314,6 +314,134 @@ pub struct EventStream {
     pub receiver: tonic::Streaming<containerd_client::types::Envelope>,
 }
 
+const INSTALLER_CLEANUP_RPC_TIMEOUT: Duration = Duration::from_secs(3);
+const INSTALLER_CLEANUP_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InstallerCleanupOperation {
+    TaskKill,
+    TaskWait,
+    TaskDelete,
+    ContainerDelete,
+    SnapshotRemove,
+    IoDirRemove,
+}
+
+impl InstallerCleanupOperation {
+    fn context(self) -> (&'static str, &'static str) {
+        match self {
+            Self::TaskKill => ("task", "kill"),
+            Self::TaskWait => ("task", "wait"),
+            Self::TaskDelete => ("task", "delete"),
+            Self::ContainerDelete => ("container", "delete"),
+            Self::SnapshotRemove => ("snapshot", "remove"),
+            Self::IoDirRemove => ("I/O directory", "remove"),
+        }
+    }
+}
+
+/// Whether an RPC response already establishes the state cleanup needs.
+///
+/// containerd normally maps missing resources to `NotFound`, but runc/shim
+/// errors can arrive as `Unknown` or `FailedPrecondition`. In contrast, an
+/// `Unavailable` response says nothing about the resource and must remain an
+/// error even if a transport message happens to contain "not found".
+fn installer_cleanup_status_is_complete(
+    operation: InstallerCleanupOperation,
+    status: &tonic::Status,
+) -> bool {
+    let message = status.message().to_ascii_lowercase();
+
+    // An unknown snapshotter is not the same as an absent snapshot: the
+    // snapshot may still be present and needs a later retry.
+    if operation == InstallerCleanupOperation::SnapshotRemove
+        && message.contains("snapshotter")
+        && (message.contains("not found") || message.contains("does not exist"))
+    {
+        return false;
+    }
+
+    if status.code() == tonic::Code::NotFound {
+        return true;
+    }
+
+    if matches!(
+        status.code(),
+        tonic::Code::Unknown | tonic::Code::Internal | tonic::Code::FailedPrecondition
+    ) && (message.contains("not found")
+        || message.contains("does not exist")
+        || message.contains("no such task")
+        || message.contains("no such container")
+        || message.contains("no such snapshot"))
+    {
+        return true;
+    }
+
+    // SIGKILL after an installer has exited is successful for cleanup's
+    // purposes. A delete, however, must really remove the stopped task, so
+    // this terminal-process response is benign only for kill and wait.
+    matches!(
+        operation,
+        InstallerCleanupOperation::TaskKill | InstallerCleanupOperation::TaskWait
+    ) && matches!(
+        status.code(),
+        tonic::Code::Unknown | tonic::Code::FailedPrecondition
+    ) && (message.contains("process already finished")
+        || (operation == InstallerCleanupOperation::TaskKill
+            && message.contains("task is not running")))
+}
+
+#[derive(Default)]
+struct InstallerCleanupFailures {
+    messages: Vec<String>,
+}
+
+impl InstallerCleanupFailures {
+    fn push(&mut self, operation: InstallerCleanupOperation, detail: String) {
+        let (resource, action) = operation.context();
+        let message = format!("{resource} {action}: {detail}");
+        error!("Installer cleanup {message}");
+        self.messages.push(message);
+    }
+
+    fn grpc(&mut self, operation: InstallerCleanupOperation, status: tonic::Status) {
+        if installer_cleanup_status_is_complete(operation, &status) {
+            return;
+        }
+        // Deliberately exclude Status's Debug representation and metadata:
+        // cleanup errors need actionable diagnostics, not credentials or other
+        // transport headers. Resource/action context is supplied separately.
+        self.push(
+            operation,
+            format!("containerd {:?}: {}", status.code(), status.message()),
+        );
+    }
+
+    fn timeout(&mut self, operation: InstallerCleanupOperation, duration: Duration) {
+        self.push(operation, format!("timed out after {duration:?}"));
+    }
+
+    fn io(&mut self, error: std::io::Error) {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            return;
+        }
+        // Do not include the host path; std::io::Error already supplies the
+        // actionable OS reason without exposing the console directory layout.
+        self.push(InstallerCleanupOperation::IoDirRemove, error.to_string());
+    }
+
+    fn finish(self) -> AgentResult<()> {
+        if self.messages.is_empty() {
+            Ok(())
+        } else {
+            Err(AgentError::ContainerError(format!(
+                "installer cleanup incomplete: {}",
+                self.messages.join("; ")
+            )))
+        }
+    }
+}
+
 /// Installer container handle for interactive install scripts
 pub struct InstallerHandle {
     pub(crate) container_id: String,
@@ -322,6 +450,8 @@ pub struct InstallerHandle {
     pub stdout_path: PathBuf,
     pub stderr_path: PathBuf,
     console_log_dir: PathBuf,
+    // Keep containerd's FIFO reader from blocking forever waiting for a writer.
+    _stdin: File,
 }
 
 impl InstallerHandle {
@@ -337,15 +467,18 @@ impl InstallerHandle {
     }
 
     pub async fn cleanup(&self) -> AgentResult<()> {
-        // Best-effort full-stack teardown mirroring remove_container's order:
-        // SIGKILL a possibly still-running installer, then delete the task,
-        // the container record, the snapshot, and the I/O directory.
+        // Full-stack teardown mirroring remove_container's order. Every stage
+        // runs even when an earlier one fails, and every RPC is individually
+        // bounded so this can be used on both successful and failed installs.
+        // Repeating cleanup is safe: already-absent resources are successful.
         //
         // NOTE: CNI teardown must run BEFORE this call while the task netns
         // is still alive (teardown_cni_network issues DEL against the live
         // netns; after the task is deleted only the lease-file fallback
         // remains). Callers must call teardown_cni_network first.
+        let mut failures = InstallerCleanupFailures::default();
         let mut tasks = TasksClient::new(self.channel.clone());
+
         let kill_req = TaskKillRequest {
             container_id: self.container_id.clone(),
             signal: 9,
@@ -353,35 +486,94 @@ impl InstallerHandle {
             ..Default::default()
         };
         let kill_req = with_namespace!(kill_req, &self.namespace);
-        let _ = tasks.kill(kill_req).await;
-        // Bounded wait so a wedged shim can't stall cleanup; deletion
-        // proceeds regardless.
-        let _ = tokio::time::timeout(Duration::from_secs(3), self.wait()).await;
+        match tokio::time::timeout(INSTALLER_CLEANUP_RPC_TIMEOUT, tasks.kill(kill_req)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(status)) => failures.grpc(InstallerCleanupOperation::TaskKill, status),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::TaskKill,
+                INSTALLER_CLEANUP_RPC_TIMEOUT,
+            ),
+        }
 
-        let req = DeleteTaskRequest {
+        // Do not depend indefinitely on Wait: some shims return Unavailable,
+        // and a wedged shim may never answer. After the bounded wait, Delete
+        // is still attempted and provides an independent, bounded check that
+        // the task has terminated (containerd rejects deletion of a live task).
+        // Its concrete outcome is retained alongside any wait failure.
+        let wait_req = WaitRequest {
+            container_id: self.container_id.clone(),
+            ..Default::default()
+        };
+        let wait_req = with_namespace!(wait_req, &self.namespace);
+        match tokio::time::timeout(INSTALLER_CLEANUP_WAIT_TIMEOUT, tasks.wait(wait_req)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(status)) => failures.grpc(InstallerCleanupOperation::TaskWait, status),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::TaskWait,
+                INSTALLER_CLEANUP_WAIT_TIMEOUT,
+            ),
+        }
+
+        let delete_req = DeleteTaskRequest {
             container_id: self.container_id.clone(),
         };
-        let req = with_namespace!(req, &self.namespace);
-        let _ = tasks.delete(req).await;
+        let delete_req = with_namespace!(delete_req, &self.namespace);
+        match tokio::time::timeout(INSTALLER_CLEANUP_RPC_TIMEOUT, tasks.delete(delete_req)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(status)) => failures.grpc(InstallerCleanupOperation::TaskDelete, status),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::TaskDelete,
+                INSTALLER_CLEANUP_RPC_TIMEOUT,
+            ),
+        }
 
         let mut containers = ContainersClient::new(self.channel.clone());
-        let req = DeleteContainerRequest {
+        let delete_req = DeleteContainerRequest {
             id: self.container_id.clone(),
         };
-        let req = with_namespace!(req, &self.namespace);
-        let _ = containers.delete(req).await;
+        let delete_req = with_namespace!(delete_req, &self.namespace);
+        match tokio::time::timeout(INSTALLER_CLEANUP_RPC_TIMEOUT, containers.delete(delete_req))
+            .await
+        {
+            Ok(Ok(_)) => {}
+            Ok(Err(status)) => failures.grpc(InstallerCleanupOperation::ContainerDelete, status),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::ContainerDelete,
+                INSTALLER_CLEANUP_RPC_TIMEOUT,
+            ),
+        }
 
         let mut snaps = SnapshotsClient::new(self.channel.clone());
-        let req = RemoveSnapshotRequest {
+        let remove_req = RemoveSnapshotRequest {
             snapshotter: "overlayfs".to_string(),
             key: format!("{}-snap", self.container_id),
         };
-        let req = with_namespace!(req, &self.namespace);
-        let _ = snaps.remove(req).await;
+        let remove_req = with_namespace!(remove_req, &self.namespace);
+        match tokio::time::timeout(INSTALLER_CLEANUP_RPC_TIMEOUT, snaps.remove(remove_req)).await {
+            Ok(Ok(_)) => {}
+            Ok(Err(status)) => failures.grpc(InstallerCleanupOperation::SnapshotRemove, status),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::SnapshotRemove,
+                INSTALLER_CLEANUP_RPC_TIMEOUT,
+            ),
+        }
 
         let io_dir = self.console_log_dir.join(&self.container_id);
-        let _ = fs::remove_dir_all(&io_dir);
-        Ok(())
+        match tokio::time::timeout(
+            INSTALLER_CLEANUP_RPC_TIMEOUT,
+            tokio::fs::remove_dir_all(&io_dir),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => failures.io(error),
+            Err(_) => failures.timeout(
+                InstallerCleanupOperation::IoDirRemove,
+                INSTALLER_CLEANUP_RPC_TIMEOUT,
+            ),
+        }
+
+        failures.finish()
     }
 }
 
@@ -578,6 +770,151 @@ pub(crate) fn ensure_state_dirs(config: &ContainerdRuntimeConfig) -> AgentResult
         })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod installer_cleanup_tests {
+    use super::*;
+    use tonic::{Code, Status};
+
+    const ALL_OPERATIONS: [InstallerCleanupOperation; 6] = [
+        InstallerCleanupOperation::TaskKill,
+        InstallerCleanupOperation::TaskWait,
+        InstallerCleanupOperation::TaskDelete,
+        InstallerCleanupOperation::ContainerDelete,
+        InstallerCleanupOperation::SnapshotRemove,
+        InstallerCleanupOperation::IoDirRemove,
+    ];
+
+    #[test]
+    fn missing_resources_make_retries_successful() {
+        for operation in ALL_OPERATIONS {
+            assert!(installer_cleanup_status_is_complete(
+                operation,
+                &Status::not_found("resource not found")
+            ));
+            assert!(installer_cleanup_status_is_complete(
+                operation,
+                &Status::unknown("runc: resource does not exist")
+            ));
+        }
+
+        for operation in [
+            InstallerCleanupOperation::TaskKill,
+            InstallerCleanupOperation::TaskWait,
+        ] {
+            assert!(installer_cleanup_status_is_complete(
+                operation,
+                &Status::failed_precondition("process already finished")
+            ));
+        }
+    }
+
+    #[test]
+    fn transient_and_terminal_task_errors_are_not_absence() {
+        for operation in ALL_OPERATIONS {
+            assert!(!installer_cleanup_status_is_complete(
+                operation,
+                &Status::unavailable("transport unavailable: resolver not found")
+            ));
+        }
+        assert!(!installer_cleanup_status_is_complete(
+            InstallerCleanupOperation::TaskWait,
+            &Status::unavailable("shim unavailable")
+        ));
+        assert!(!installer_cleanup_status_is_complete(
+            InstallerCleanupOperation::TaskDelete,
+            &Status::failed_precondition("process already finished")
+        ));
+        assert!(!installer_cleanup_status_is_complete(
+            InstallerCleanupOperation::TaskDelete,
+            &Status::failed_precondition("task is running")
+        ));
+    }
+
+    #[test]
+    fn unknown_snapshotter_is_not_an_absent_snapshot() {
+        assert!(!installer_cleanup_status_is_complete(
+            InstallerCleanupOperation::SnapshotRemove,
+            &Status::not_found("snapshotter overlayfs not found")
+        ));
+        assert!(installer_cleanup_status_is_complete(
+            InstallerCleanupOperation::SnapshotRemove,
+            &Status::not_found("snapshot installer-snap not found")
+        ));
+    }
+
+    #[test]
+    fn failures_keep_every_resource_and_action_in_one_error() {
+        let mut failures = InstallerCleanupFailures::default();
+        failures.grpc(
+            InstallerCleanupOperation::TaskKill,
+            Status::unavailable("shim unavailable"),
+        );
+        failures.timeout(InstallerCleanupOperation::TaskWait, Duration::from_secs(3));
+        failures.grpc(
+            InstallerCleanupOperation::TaskDelete,
+            Status::failed_precondition("task is running"),
+        );
+        failures.grpc(
+            InstallerCleanupOperation::ContainerDelete,
+            Status::internal("metadata locked"),
+        );
+        failures.grpc(
+            InstallerCleanupOperation::SnapshotRemove,
+            Status::data_loss("snapshot data damaged"),
+        );
+        failures.io(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "permission denied",
+        ));
+
+        let error = failures.finish().expect_err("all failures are returned");
+        let AgentError::ContainerError(message) = error else {
+            panic!("cleanup must return one scalar container error");
+        };
+        for expected in [
+            "task kill: containerd Unavailable: shim unavailable",
+            "task wait: timed out after 3s",
+            "task delete: containerd FailedPrecondition: task is running",
+            "container delete: containerd Internal: metadata locked",
+            "snapshot remove: containerd DataLoss: snapshot data damaged",
+            "I/O directory remove: permission denied",
+        ] {
+            assert!(
+                message.contains(expected),
+                "missing {expected:?}: {message}"
+            );
+        }
+        assert_eq!(message.matches("installer cleanup incomplete:").count(), 1);
+    }
+
+    #[test]
+    fn benign_absence_and_io_not_found_do_not_fail_cleanup() {
+        let mut failures = InstallerCleanupFailures::default();
+        failures.grpc(
+            InstallerCleanupOperation::TaskDelete,
+            Status::not_found("task not found"),
+        );
+        failures.io(std::io::Error::from(std::io::ErrorKind::NotFound));
+        assert!(failures.finish().is_ok());
+    }
+
+    #[test]
+    fn aggregate_errors_do_not_include_rpc_metadata() {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        metadata.insert("authorization", "secret-token".parse().unwrap());
+        let mut failures = InstallerCleanupFailures::default();
+        failures.grpc(
+            InstallerCleanupOperation::TaskKill,
+            Status::with_metadata(Code::Unavailable, "transport failed", metadata),
+        );
+
+        let message = failures.finish().unwrap_err().to_string();
+        assert!(message.contains("transport failed"));
+        assert!(!message.contains("secret-token"));
+        assert!(!message.contains("authorization"));
+    }
 }
 
 #[cfg(test)]

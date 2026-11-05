@@ -765,7 +765,7 @@ mod tests {
         );
         assert_eq!(
             ContainerdRuntime::qualify_image_ref("user/repo:latest"),
-            "user/repo:latest"
+            "docker.io/user/repo:latest"
         );
     }
 }

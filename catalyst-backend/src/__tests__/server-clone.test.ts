@@ -49,6 +49,7 @@ const adminAuth: CloneAuth = {
   canSetOwner: true,
   canTransfer: true,
   canManageSuspended: true,
+  canSetArbitraryEnvironment: true,
   canAccessTargetNode: true,
 };
 
