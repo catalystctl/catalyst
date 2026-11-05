@@ -389,6 +389,67 @@ pub fn installer_namespaces() -> Vec<serde_json::Value> {
     ]
 }
 
+/// Where JVM base images put their JDK. `eclipse-temurin:*` (and the ptero
+/// `yolks`/`hytale` images) install the JDK here and expose it only through the
+/// image's own `PATH` entry — there is no `/usr/bin/java`.
+pub const JAVA_BIN_DIR: &str = "/opt/java/openjdk/bin";
+
+/// PATH used when neither the image nor the panel supplies one.
+const DEFAULT_PATH: &str =
+    "/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
+
+/// Make sure `PATH` can resolve a JDK.
+///
+/// Images that ship a JVM put it in [`JAVA_BIN_DIR`] and rely on their own
+/// `PATH` to expose it; anything that builds a process environment from
+/// scratch (or lets a template override `PATH`) loses that entry and every
+/// `java` call fails with "command not found".
+pub fn ensure_java_on_path(env: &mut HashMap<String, String>) {
+    let path_value = env
+        .get("PATH")
+        .map(|v| v.trim().to_string())
+        .unwrap_or_default();
+    if path_value.is_empty() {
+        env.insert("PATH".to_string(), DEFAULT_PATH.to_string());
+    } else if !path_value.split(':').any(|segment| segment == JAVA_BIN_DIR) {
+        env.insert(
+            "PATH".to_string(),
+            format!("{}:{}", JAVA_BIN_DIR, path_value),
+        );
+    }
+}
+
+/// Process environment for an install container.
+///
+/// Wings starts the install container from the image's own config and appends
+/// the egg/server variables, so image-provided `PATH`, `JAVA_HOME` and locale
+/// survive. Building the env from scratch instead (the old behaviour here)
+/// dropped `PATH` entries the install script depends on: an egg installed from
+/// `eclipse-temurin:21-jdk-jammy` could not run `java` at all, and a script
+/// that does not `exit` on that failure reports "Install Complete" while
+/// producing no server jar (#fabric).
+pub fn build_installer_env(
+    image_env: &[String],
+    overrides: &HashMap<String, String>,
+) -> Vec<String> {
+    let mut env_map: HashMap<String, String> = HashMap::new();
+    for entry in image_env {
+        if let Some((k, v)) = entry.split_once('=') {
+            env_map.insert(k.to_string(), v.to_string());
+        }
+    }
+    // Egg/server env wins over the image, matching Wings (panel env is appended).
+    for (k, v) in overrides {
+        env_map.insert(k.clone(), v.clone());
+    }
+    ensure_java_on_path(&mut env_map);
+    env_map.insert("TERM".to_string(), "xterm".to_string());
+    env_map
+        .into_iter()
+        .map(|(k, v)| format!("{}={}", k, v))
+        .collect()
+}
+
 /// Capabilities for installer containers. Installers stay uid 0 because egg
 /// scripts call chown/chmod/useradd and the wrapper's exit trap does a final
 /// `chown -R 1000:1000 /data`; noNewPrivileges + seccomp still apply.
@@ -773,23 +834,10 @@ impl ContainerdRuntime {
         for (k, v) in config.env {
             env_map.insert(k.to_string(), v.to_string());
         }
-        // Ensure PATH is usable for JVM-based images even if image env probing fails
-        // or template/server env accidentally overrides PATH.
+        // Ensure PATH is usable for JVM-based images even if image env probing
+        // fails or template/server env accidentally overrides PATH.
         // The Pterodactyl Hytale image provides java at /opt/java/openjdk/bin/java.
-        const DEFAULT_PATH: &str =
-            "/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-        let path_value = env_map.get("PATH").map(|v| v.trim()).unwrap_or("");
-        if path_value.is_empty() {
-            env_map.insert("PATH".to_string(), DEFAULT_PATH.to_string());
-        } else if !path_value
-            .split(':')
-            .any(|segment| segment == "/opt/java/openjdk/bin")
-        {
-            env_map.insert(
-                "PATH".to_string(),
-                format!("/opt/java/openjdk/bin:{}", path_value),
-            );
-        }
+        ensure_java_on_path(&mut env_map);
         env_map.insert("TERM".to_string(), "xterm".to_string());
         // Runtime container runs as 1000:1000; set HOME to the data dir
         env_map.insert("HOME".to_string(), "/data".to_string());
@@ -1253,6 +1301,154 @@ mod tests {
         ] {
             assert!(!caps.contains(&dropped), "{} must be dropped", dropped);
         }
+    }
+
+    // ── Install-container environment ───────────────────────────────────
+    //
+    // Regression: the installer env used to be built from scratch with a fixed
+    // PATH (`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`) and
+    // the image's own env was dropped. `eclipse-temurin:21-jdk-jammy` — the
+    // install image of the Pterodactyl Fabric egg — ships java ONLY at
+    // /opt/java/openjdk/bin/java (verified: no /usr/bin/java, /bin/java or
+    // /usr/local/bin/java in any image layer), so the Fabric install script's
+    // `java -jar fabric-installer.jar …` died with "java: command not found".
+    // The script has no `set -e` (Pterodactyl semantics) and ends with
+    // `echo -e "Install Complete"`, so the install reported success with no
+    // server.jar and the server then crash-looped on start.
+
+    fn env_map_of(pairs: &[&str]) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        for pair in pairs {
+            match pair.split_once('=') {
+                Some((k, v)) => map.insert(k.to_string(), v.to_string()),
+                None => panic!("bad env pair {}", pair),
+            };
+        }
+        map
+    }
+
+    #[test]
+    fn installer_env_keeps_the_image_jdk_on_path() {
+        // The eclipse-temurin image config, verbatim.
+        let image_env = s(&[
+            "PATH=/opt/java/openjdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+            "JAVA_HOME=/opt/java/openjdk",
+            "LANG=en_US.UTF-8",
+            "JAVA_VERSION=jdk-21.0.13+9",
+        ]);
+        let egg_env = env_map_of(&[
+            "MC_VERSION=latest",
+            "FABRIC_VERSION=latest",
+            "LOADER_VERSION=latest",
+            "SERVER_JARFILE=server.jar",
+        ]);
+
+        let built: HashMap<String, String> = build_installer_env(&image_env, &egg_env)
+            .into_iter()
+            .map(|e| {
+                let (k, v) = e.split_once('=').expect("KEY=VALUE");
+                (k.to_string(), v.to_string())
+            })
+            .collect();
+
+        // This is the assertion that fails on the old code: `java` was not on
+        // PATH at all, because the image PATH was discarded.
+        let path = built.get("PATH").expect("PATH must be set");
+        assert!(
+            path.split(':').any(|seg| seg == JAVA_BIN_DIR),
+            "install PATH must resolve java, got {}",
+            path
+        );
+        assert_eq!(
+            built.get("JAVA_HOME").map(String::as_str),
+            Some("/opt/java/openjdk")
+        );
+        // Image env survives (locale warnings, mysql/apt tooling, …).
+        assert_eq!(built.get("LANG").map(String::as_str), Some("en_US.UTF-8"));
+        // Egg variables are exported to the install script.
+        assert_eq!(
+            built.get("FABRIC_VERSION").map(String::as_str),
+            Some("latest")
+        );
+        assert_eq!(
+            built.get("SERVER_JARFILE").map(String::as_str),
+            Some("server.jar")
+        );
+        assert_eq!(built.get("TERM").map(String::as_str), Some("xterm"));
+    }
+
+    #[test]
+    fn installer_env_prefers_egg_values_but_still_resolves_java() {
+        // An egg may legitimately set PATH; Wings appends panel env after the
+        // image's, so the panel value wins — but java must stay reachable.
+        let image_env = s(&["PATH=/usr/bin:/bin"]);
+        let egg_env = env_map_of(&["PATH=/data/bin:/usr/bin:/bin", "RCON_PASSWORD=x"]);
+
+        let built: HashMap<String, String> = build_installer_env(&image_env, &egg_env)
+            .into_iter()
+            .map(|e| {
+                let (k, v) = e.split_once('=').expect("KEY=VALUE");
+                (k.to_string(), v.to_string())
+            })
+            .collect();
+
+        let path = built.get("PATH").expect("PATH must be set");
+        assert_eq!(path, "/opt/java/openjdk/bin:/data/bin:/usr/bin:/bin");
+        assert_eq!(built.get("RCON_PASSWORD").map(String::as_str), Some("x"));
+    }
+
+    #[test]
+    fn installer_env_without_image_env_still_has_a_sane_path() {
+        let built: HashMap<String, String> = build_installer_env(&[], &env_map_of(&["A=1"]))
+            .into_iter()
+            .map(|e| {
+                let (k, v) = e.split_once('=').expect("KEY=VALUE");
+                (k.to_string(), v.to_string())
+            })
+            .collect();
+        assert_eq!(built.get("PATH").map(String::as_str), Some(DEFAULT_PATH));
+        assert_eq!(built.get("A").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn ensure_java_on_path_is_idempotent() {
+        let mut env = env_map_of(&["PATH=/opt/java/openjdk/bin:/usr/bin:/bin"]);
+        ensure_java_on_path(&mut env);
+        assert_eq!(
+            env.get("PATH").map(String::as_str),
+            Some("/opt/java/openjdk/bin:/usr/bin:/bin"),
+            "an existing java entry must not be duplicated"
+        );
+        // A substring match is not enough — only a whole PATH segment counts.
+        let mut tricked = env_map_of(&["PATH=/usr/bin:/opt/java/openjdk/binaries"]);
+        ensure_java_on_path(&mut tricked);
+        assert_eq!(
+            tricked.get("PATH").map(String::as_str),
+            Some("/opt/java/openjdk/bin:/usr/bin:/opt/java/openjdk/binaries")
+        );
+    }
+
+    #[tokio::test]
+    async fn runtime_env_still_forces_java_onto_a_template_path() {
+        // build_oci_spec and the installer now share ensure_java_on_path; make
+        // sure the runtime path behaviour is unchanged.
+        let env = env_map_of(&["PATH=/usr/bin:/bin"]);
+        let bindings = HashMap::new();
+        let config = test_container_config(&env, &bindings);
+        let spec = test_runtime()
+            .build_oci_spec(&config, Path::new("/tmp"), true, &[], None, None)
+            .expect("spec");
+        let env_list = spec["process"]["env"]
+            .as_array()
+            .expect("env array")
+            .iter()
+            .map(|v| v.as_str().unwrap_or(""))
+            .collect::<Vec<_>>();
+        assert!(
+            env_list.contains(&"PATH=/opt/java/openjdk/bin:/usr/bin:/bin"),
+            "runtime PATH must keep java reachable: {:?}",
+            env_list
+        );
     }
 
     fn test_runtime() -> ContainerdRuntime {

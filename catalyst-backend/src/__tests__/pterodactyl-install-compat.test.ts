@@ -311,6 +311,75 @@ describe.skipIf(allFiles.length === 0)('Pterodactyl Install Script Compatibility
 			expect(symlinkIdx).toBeGreaterThan(0);
 			expect(endIdx).toBeGreaterThan(symlinkIdx);
 		});
+
+		it.concurrent('install containers inherit the image environment (java is reachable)', () => {
+			// Wings starts the install container from the image config and then
+			// appends the egg/server env, so image-provided PATH/JAVA_HOME
+			// survive. Building the env from scratch dropped them, and
+			// `eclipse-temurin:*` ships java ONLY at /opt/java/openjdk/bin/java
+			// (no /usr/bin/java) — the Fabric egg's `java -jar fabric-installer.jar`
+			// then failed with "command not found", the script (no `set -e`, ends
+			// with `echo "Install Complete"`) reported success, and the server
+			// crash-looped on start with "Unable to access jarfile server.jar".
+			const installerSrc = fs.readFileSync(
+				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/container_ops.rs'),
+				'utf-8',
+			);
+			const specSrc = fs.readFileSync(
+				path.resolve(process.cwd(), '..', 'catalyst-agent/src/runtime_manager/image_and_spec.rs'),
+				'utf-8',
+			);
+
+			// The installer env must be built from the image env, not a literal PATH.
+			const installerFn = installerSrc.slice(
+				installerSrc.indexOf('pub async fn spawn_installer_container'),
+			);
+			const installerFnBody = installerFn.slice(
+				0,
+				installerFn.indexOf('let mut spec = serde_json::json!'),
+			);
+			expect(installerFnBody).toContain('get_image_env(&qualified_image)');
+			expect(installerFnBody).toContain('build_installer_env(&image_env, env)');
+			expect(installerFnBody).not.toContain(
+				'"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"',
+			);
+
+			// And a JVM image's bin dir must be forced onto PATH even when the
+			// image env probe fails or an egg overrides PATH.
+			expect(specSrc).toContain('JAVA_BIN_DIR: &str = "/opt/java/openjdk/bin"');
+			expect(specSrc).toContain('ensure_java_on_path(&mut env_map)');
+			// Every egg whose install script runs `java` must be covered by it.
+			const javaEggs = allFiles
+				.map(parseEgg)
+				.filter((p): p is { egg: PterodactylEgg; rel: string } => Boolean(p))
+				.map((p) => {
+					const body = getInstallScript(p.egg)
+						.replace(/\r\n/g, '\n')
+						.split('\n')
+						.filter((line) => !line.trim().startsWith('#'))
+						.join('\n');
+					return { ...p, usesJava: /(^|[\s;&|(])java\s/.test(body) };
+				})
+				.filter((p) => p.usesJava)
+				// Eggs installed from a JVM-only image: the JDK is at
+				// /opt/java/openjdk/bin, so nothing but the image PATH (or
+				// ensure_java_on_path) can resolve `java`.
+				.filter((p) => getInstallContainer(p.egg).startsWith('eclipse-temurin'));
+
+			expect(javaEggs.map((e) => e.egg.name).sort()).toEqual(
+				[
+					'CurseForge Generic',
+					'Fabric',
+					'Forge Enhanced',
+					'Glowstone',
+					'Modrinth Generic',
+					'Quilt',
+					'SpongeForge',
+					'VanillaCord',
+					'starmade',
+				].sort(),
+			);
+		});
 	});
 
 	describe('Shell interpreter detection', () => {

@@ -458,8 +458,9 @@ pub use helpers::{
 };
 
 pub use image_and_spec::{
-    base_mounts, default_seccomp_profile, detect_install_interpreter, installer_capabilities,
-    installer_namespaces, masked_paths, readonly_paths, MAX_CPU_CORES, MAX_MEMORY_MB,
+    base_mounts, build_installer_env, default_seccomp_profile, detect_install_interpreter,
+    installer_capabilities, installer_namespaces, masked_paths, readonly_paths, MAX_CPU_CORES,
+    MAX_MEMORY_MB,
 };
 pub mod image_and_spec;
 

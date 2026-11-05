@@ -354,13 +354,13 @@ impl ContainerdRuntime {
         // world-readable or non-root install steps (steamcmd) lose DNS.
         set_dir_perms(&resolv_path, 0o644);
 
-        let mut env_list = vec![
-            "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
-            "TERM=xterm".to_string(),
-        ];
-        for (k, v) in env {
-            env_list.push(format!("{}={}", k, v));
-        }
+        // Start from the image's own environment (Wings semantics) so image
+        // PATH entries survive — `eclipse-temurin:*` ships `java` only at
+        // /opt/java/openjdk/bin/java, and eggs such as Fabric/Forge/Quilt run
+        // `java -jar <installer>` from their install script. Then overlay the
+        // egg/server env, then force a JDK onto PATH.
+        let image_env = self.get_image_env(&qualified_image).await;
+        let env_list = build_installer_env(&image_env, env);
         // Install containers need broader capabilities than runtime containers because
         // install scripts commonly fix file ownership/permissions for the runtime user.
         // They stay uid 0 (egg scripts call chown/chmod/useradd and the wrapper's
