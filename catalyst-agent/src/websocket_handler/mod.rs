@@ -1286,38 +1286,78 @@ impl WebSocketHandler {
         Ok(())
     }
 
+    fn flatten_buffered_metric_chunk(chunk: &[Value]) -> Vec<Value> {
+        // Buffered periodic reports are already batches. Flatten them into one
+        // list of samples: the panel expects metrics to contain entries, not
+        // nested resource_stats_batch envelopes.
+        let mut flattened = Vec::new();
+        for value in chunk {
+            let entries = value.get("metrics").and_then(Value::as_array);
+            if value.get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch") {
+                flattened.extend(
+                    entries
+                        .iter()
+                        .flat_map(|values| values.iter())
+                        .filter(|metric| metric.is_object())
+                        .cloned(),
+                );
+            } else if value.is_object() {
+                flattened.push(value.clone());
+            } else {
+                warn!("Skipping buffered metric record that is not an object");
+            }
+        }
+        flattened
+    }
+
+    fn buffered_metric_payloads(chunk: &[Value]) -> Vec<Value> {
+        let metrics = Self::flatten_buffered_metric_chunk(chunk);
+        // A source batch may contain several entries: its line count is not
+        // its sample count. Keep each payload within the panel's 500 cap.
+        metrics
+            .chunks(500)
+            .map(|chunk| {
+                json!({
+                    "type": "resource_stats_batch",
+                    "metrics": chunk,
+                    "timestamp": chunk
+                        .last()
+                        .and_then(|metric| metric.get("timestamp").and_then(Value::as_i64)),
+                })
+            })
+            .collect()
+    }
+
     async fn send_buffered_metric_chunk(
         write: &Arc<tokio::sync::Mutex<WsWrite>>,
         chunk: &[Value],
     ) -> bool {
-        let payload_text = if chunk.len() == 1
-            && chunk[0].get("type").and_then(|t| t.as_str()) == Some("resource_stats_batch")
-        {
-            match serde_json::to_string(&chunk[0]) {
-                Ok(s) => s,
+        for payload in Self::buffered_metric_payloads(chunk) {
+            let payload_text = match serde_json::to_string(&payload) {
+                Ok(text) => text,
                 Err(e) => {
                     warn!("Failed to serialize metrics: {}", e);
                     return true;
                 }
-            }
-        } else {
-            json!({ "type": "resource_stats_batch", "metrics": chunk }).to_string()
-        };
-        let send_result = {
-            let mut w = write.lock().await;
-            tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into()))).await
-        };
-        match send_result {
-            Ok(Ok(())) => true,
-            Ok(Err(e)) => {
-                warn!("Failed to send buffered metrics batch: {}", e);
-                false
-            }
-            Err(_) => {
-                warn!("Timed out sending buffered metrics batch; will retry on next connect");
-                false
+            };
+            let send_result = {
+                let mut w = write.lock().await;
+                tokio::time::timeout(WS_SEND_TIMEOUT, w.send(Message::Text(payload_text.into())))
+                    .await
+            };
+            match send_result {
+                Ok(Ok(())) => {}
+                Ok(Err(e)) => {
+                    warn!("Failed to send buffered metrics batch: {}", e);
+                    return false;
+                }
+                Err(_) => {
+                    warn!("Timed out sending buffered metrics batch; will retry on next connect");
+                    return false;
+                }
             }
         }
+        true
     }
 
     pub async fn connect_and_listen(&self) -> AgentResult<()> {
@@ -5171,6 +5211,49 @@ mod memory_parse_tests {
         assert!(!is_physical_interface("lxcbr0"));
         assert!(!is_physical_interface("cni0"));
         assert!(!is_physical_interface("podman0"));
+    }
+
+    #[test]
+    fn buffered_batch_replay_flattens_every_sample() {
+        use super::{json, Value, WebSocketHandler};
+        let sample_a = json!({ "serverUuid": "server-1", "timestamp": 1000 });
+        let sample_b = json!({ "serverUuid": "server-1", "timestamp": 6000 });
+        let raw = json!([
+            { "type": "resource_stats_batch", "metrics": [sample_a.clone()], "timestamp": 1000 },
+            { "type": "resource_stats_batch", "metrics": [sample_b.clone()], "timestamp": 6000 },
+        ]);
+        let chunk: Vec<Value> = serde_json::from_value(raw).unwrap();
+        let payload = WebSocketHandler::flatten_buffered_metric_chunk(&chunk);
+        assert_eq!(payload.len(), 2);
+        assert_eq!(payload[0], sample_a);
+        assert_eq!(payload[1], sample_b);
+    }
+
+    #[test]
+    fn buffered_replay_caps_expanded_batches_at_500_samples() {
+        use super::{json, Value, WebSocketHandler};
+        let samples: Vec<Value> = (0..750)
+            .map(|i| json!({ "serverUuid": "server-1", "timestamp": i }))
+            .collect();
+        let chunk = vec![
+            json!({ "type": "resource_stats_batch", "metrics": samples }),
+            json!(null),
+            json!(true),
+        ];
+        let payloads = WebSocketHandler::buffered_metric_payloads(&chunk);
+        assert_eq!(payloads.len(), 2);
+        for (index, payload) in payloads.iter().enumerate() {
+            let start = index * 500;
+            assert_eq!(payload["type"], "resource_stats_batch");
+            let metrics = payload["metrics"].as_array().unwrap();
+            assert_eq!(metrics[0]["timestamp"], start);
+            assert_eq!(
+                metrics[metrics.len() - 1]["timestamp"],
+                start + metrics.len() - 1
+            );
+        }
+        assert_eq!(payloads[0]["metrics"].as_array().unwrap().len(), 500);
+        assert_eq!(payloads[1]["metrics"].as_array().unwrap().len(), 250);
     }
 
     #[test]

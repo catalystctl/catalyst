@@ -52,7 +52,9 @@ function ServerMetricsTrends({
  // The chart plots the share of the allocation, matching the gauge above it:
  // the raw per-core figure would peg the line to the top of an auto-domain
  // chart. The format preference changes only the printed value and tooltip.
- const cpuShareHistory = history.map((point) => cpuPercentOfAllocation(point.cpuPercent, allocatedCpuCores));
+ const cpuShareHistory = history.map((point) => point.cpuPercent == null
+  ? null
+  : cpuPercentOfAllocation(point.cpuPercent, allocatedCpuCores));
  const cpuLatest = read(latest?.cpuPercent ?? 0, cpuCores);
  const memoryHistory = history.map((point) => point.memoryUsageMb);
  const diskHistory = history.map((point) => point.diskUsageMb);

@@ -1,9 +1,10 @@
 import 'dotenv/config';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { nanoid } from 'nanoid';
 import { prisma } from '../db.js';
 import { metricsRoutes } from '../routes/metrics.js';
+import { WebSocketGateway } from '../websocket/gateway.js';
 
 let userId = '';
 let serverId = '';
@@ -70,7 +71,89 @@ async function getHistory(query = '') {
   return response.json();
 }
 
+function sampleMetrics(count: number) {
+  const startedAt = Date.now() - 120_000;
+  return Array.from({ length: count }, (_, i) => ({
+    serverUuid: serverId,
+    cpuPercent: 12 + i,
+    memoryUsageMb: 923 + i,
+    networkRxBytes: 10_000 + i,
+    networkTxBytes: 20_000 + i,
+    diskIoMb: 5 + i,
+    diskUsageMb: 2_300 + i,
+    timestamp: startedAt + i * 5_000,
+  }));
+}
+
+async function ingestBatch(metrics: any[], failBatch = false) {
+  await prisma.serverMetrics.deleteMany({ where: { serverId } });
+  const logger = { child: () => logger, info: () => {}, warn: vi.fn(), error: () => {}, debug: () => {} };
+  const db = Object.create(prisma);
+  db.serverStat = { create: async () => ({}) };
+  if (failBatch) db.$executeRaw = async () => { throw new Error('forced batch write failure'); };
+  const gateway = new WebSocketGateway(db, logger as any);
+  (gateway as any).routeToClients = vi.fn(async () => {});
+  const socket = { send: () => {}, readyState: 1 };
+  (gateway as any).agents.set(nodeId, { socket, authenticated: true, lastHeartbeat: Date.now() });
+  try {
+    await (gateway as any).handleAgentMessage(nodeId, socket, JSON.stringify({
+      type: 'resource_stats_batch', metrics, timestamp: Date.now(),
+    }));
+    return {
+      gateway,
+      logger,
+      saved: await prisma.serverMetrics.findMany({ where: { serverId }, orderBy: { timestamp: 'asc' } }),
+    };
+  } catch (error) {
+    gateway.destroy();
+    throw error;
+  }
+}
+
 describe('server metrics SQL aggregation', () => {
+  it('persists every buffered sample without applying the live fan-out throttle', async () => {
+    const { gateway, saved } = await ingestBatch(sampleMetrics(3));
+    try {
+      expect(saved).toHaveLength(3);
+      expect(saved.map((row) => row.memoryUsageMb)).toEqual([923, 924, 925]);
+      expect(saved.map((row) => row.diskUsageMb)).toEqual([2_300, 2_301, 2_302]);
+      expect(saved.map((row) => row.networkRxBytes)).toEqual([10_000n, 10_001n, 10_002n]);
+      expect((gateway as any).routeToClients).toHaveBeenCalledTimes(1);
+      expect((gateway as any).routeToClients.mock.calls[0][1].memoryUsageMb).toBe(925);
+    } finally {
+      gateway.destroy();
+      await prisma.serverMetrics.deleteMany({ where: { serverId } });
+    }
+  });
+
+  it('does not truncate buffered history when the batch write needs its fallback', async () => {
+    const { gateway, saved } = await ingestBatch(sampleMetrics(21), true);
+    try {
+      expect(saved).toHaveLength(21);
+      expect(saved.map((row) => row.memoryUsageMb)).toEqual(Array.from({ length: 21 }, (_, i) => 923 + i));
+    } finally {
+      gateway.destroy();
+      await prisma.serverMetrics.deleteMany({ where: { serverId } });
+    }
+  });
+
+  it('rejects malformed batch shapes and entries without throwing', async () => {
+    const { gateway, saved } = await ingestBatch([null, 42, [], 'invalid', sampleMetrics(1)[0]]);
+    try {
+      expect(saved).toHaveLength(1);
+    } finally {
+      gateway.destroy();
+      await prisma.serverMetrics.deleteMany({ where: { serverId } });
+    }
+    const invalid = await ingestBatch(null as any);
+    try {
+      expect(invalid.saved).toHaveLength(0);
+      expect(invalid.logger.warn).toHaveBeenCalledWith('resource_stats_batch.metrics is not an array');
+    } finally {
+      invalid.gateway.destroy();
+    }
+  });
+
   it('returns the stable empty response shape when there is no history', async () => {
     const body = await getHistory('?hours=1&limit=5');
     expect(body).toEqual({ success: true, data: { latest: null, averages: null, history: [], count: 0 } });

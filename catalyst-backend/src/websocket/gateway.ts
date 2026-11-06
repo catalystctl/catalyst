@@ -2298,15 +2298,15 @@ export class WebSocketGateway {
         this.latestResourceStats.set(server.id, payload);
         await this.routeToClients(server.id, payload);
       } else if (message.type === "resource_stats_batch") {
+        // Validate before indexing or charging the per-node metrics limiter.
+        if (!Array.isArray(message.metrics)) {
+          this.logger.warn('resource_stats_batch.metrics is not an array');
+          return;
+        }
         if (!this.allowAgentMetrics(nodeId, message.metrics.length)) {
           if (this.shouldWarnRateLimit(nodeId, this.agentMetricsLimit.windowMs)) {
             this.logger.warn({ nodeId }, "Agent metrics rate limit exceeded");
           }
-          return;
-        }
-        // message.metrics is expected to be an array of metric objects
-        if (!Array.isArray(message.metrics)) {
-          this.logger.warn('resource_stats_batch.metrics is not an array');
           return;
         }
         if (message.metrics.length > 500) {
@@ -2321,6 +2321,7 @@ export class WebSocketGateway {
         // timestamps remain accepted by design (offline backfill).
         const MAX_FUTURE_SKEW_MS = 5 * 60 * 1000;
         for (const m of message.metrics) {
+          if (!m || typeof m !== 'object' || Array.isArray(m)) continue;
           if (!m.serverUuid || !m.timestamp) continue;
           if (!Number.isFinite(Number(m.timestamp))) continue;
           // Reject values outside the JS Date range (e.g. 1e20 or -1e20):
@@ -2366,10 +2367,9 @@ export class WebSocketGateway {
         for (const s of servers) diskMbByServer.set(s.id, s.allocatedDiskMb ?? 0);
         const allowed = new Set(coresByServer.keys());
         const filtered = items.filter((item) => {
-          if (!allowed.has(item.serverId)) {
-            return false;
-          }
-          return this.allowServerMetrics(item.serverId);
+          // Historical batches retain every stored sample. The live per-server
+          // throttle belongs on fan-out below, not on backfill persistence.
+          return allowed.has(item.serverId);
         });
         if (!filtered.length) {
           return;
@@ -2417,13 +2417,10 @@ export class WebSocketGateway {
           }).catch(() => {});
           this.logger.error({ err }, 'Failed to upsert batched metrics, falling back to per-item safe upsert');
 
-          // Fallback: upsert each item individually (safe but slower). We attempt
-          // to preserve spike semantics by keeping max(memory, disk, network) where applicable.
-          const MAX_FALLBACK_ITEMS = 20;
-          if (filtered.length > MAX_FALLBACK_ITEMS) {
-            this.logger.warn({ count: filtered.length }, 'Batch metrics fallback limited to 20 items');
-          }
-          for (const it of filtered.slice(0, MAX_FALLBACK_ITEMS)) {
+          // Fallback: upsert every item individually (safe but slower). The
+          // incoming batch already has a hard 500-sample limit, so retaining
+          // only the first few here would silently lose the rest on a DB error.
+          for (const it of filtered) {
             try {
               const existing = await this.prisma.serverMetrics.findUnique({
                 where: {
@@ -2484,6 +2481,8 @@ export class WebSocketGateway {
         // Broadcast latest metrics for affected servers
         const filteredIds = Array.from(new Set(filtered.map((i) => i.serverId)));
         for (const sid of filteredIds) {
+          // One live fan-out per window; no history rows are discarded.
+          if (!this.allowServerMetrics(sid)) continue;
           const latest = await this.prisma.serverMetrics.findFirst({ where: { serverId: sid }, orderBy: { timestamp: 'desc' } });
           if (latest) {
             const payload = {

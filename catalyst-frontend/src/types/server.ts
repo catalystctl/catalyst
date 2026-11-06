@@ -361,10 +361,10 @@ export interface ServerMetrics {
 }
 
 export interface ServerMetricsPoint {
-  cpuPercent: number;
-  memoryUsageMb: number;
-  diskIoMb?: number;
-  diskUsageMb: number;
+  cpuPercent: number | null;
+  memoryUsageMb: number | null;
+  diskIoMb?: number | null;
+  diskUsageMb: number | null;
   networkRxBytes: string | number | null;
   networkTxBytes: string | number | null;
   timestamp: string;
