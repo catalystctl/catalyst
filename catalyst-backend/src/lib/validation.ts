@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { ZodIssue } from 'zod';
 import { describeError } from '../utils/describe-error.js';
 import { isValidPermission } from './permissions-catalog.js';
+import { ErrorCodes } from '../shared-types.js';
 
 /**
  * Password complexity requirements
@@ -88,6 +89,30 @@ export const serverEnvironmentSchema = z.record(
 );
 
 /**
+ * Network modes a server may run under. Shared by create/clone/update so a new
+ * mode only has to be added here. Declared before its first use because the
+ * schemas evaluate it at module load.
+ */
+export const SERVER_NETWORK_MODES = ['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic'] as const;
+/** @deprecated name kept for existing importers — use SERVER_NETWORK_MODES. */
+export const CLONE_NETWORK_MODES = SERVER_NETWORK_MODES;
+
+/**
+ * Database quota a server may be granted. Shared by create/clone/update: the
+ * update route accepted 1024 while create and clone accepted 1048576, so the
+ * same value could be rejected by one endpoint and stored by another.
+ */
+const databaseAllocationSchema = z.number().int().min(0).max(1024).optional();
+
+/**
+ * Storage resize body. The route used to read `allocatedDiskMb` off an untyped
+ * body with only a `> 0` check, so a string reached the agent as the quota.
+ */
+export const storageResizeSchema = z.object({
+  allocatedDiskMb: z.number().int().min(1024).max(1048576),
+});
+
+/**
  * Server creation validation
  */
 export const serverCreateSchema = z.object({
@@ -106,15 +131,10 @@ export const serverCreateSchema = z.object({
   allocatedCpuCores: z.number().int().min(1).max(128),
   allocatedDiskMb: z.number().int().min(1024).max(1048576),
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
-  databaseAllocation: z.number().int().min(0).max(1048576).optional(),
-  networkMode: z.enum(['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic']).default('mc-lan-static'),
+  databaseAllocation: databaseAllocationSchema,
+  networkMode: z.enum(SERVER_NETWORK_MODES).default('mc-lan-static'),
 });
 
-/**
- * Network modes a server may run under. Shared by create/clone/update so a new
- * mode only has to be added here.
- */
-export const CLONE_NETWORK_MODES = ['bridge', 'macvlan', 'host', 'mc-lan-static', 'mc-lan-dynamic'] as const;
 
 /**
  * Clone modes:
@@ -143,11 +163,11 @@ const cloneOverrideFields = {
   allocatedSwapMb: z.number().int().min(0).max(131072).optional(),
   ioWeight: z.number().int().min(10).max(1000).optional(),
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
-  databaseAllocation: z.number().int().min(0).max(1048576).optional(),
+  databaseAllocation: databaseAllocationSchema,
   environment: serverEnvironmentSchema.optional(),
   ownerId: z.string().min(1).optional(),
   allocationId: z.string().min(1).optional(),
-  networkMode: z.enum(CLONE_NETWORK_MODES).optional(),
+  networkMode: z.enum(SERVER_NETWORK_MODES).optional(),
   backupStorageMode: z.enum(['local', 's3', 'stream']).optional(),
   /** Admin-only: carry S3/SFTP backup credentials to the clone. */
   copyBackupCredentials: z.boolean().default(false),
@@ -205,11 +225,11 @@ export const serverUpdateSchema = z.object({
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
-  databaseAllocation: z.number().int().min(0).max(1024).optional(),
+  databaseAllocation: databaseAllocationSchema,
   primaryPort: z.number().int().min(1).max(65535).optional(),
   primaryIp: z.string().max(45).nullable().optional(),
   allocationId: z.string().max(64).optional(),
-  networkMode: z.enum(['bridge', 'macvlan', 'host']).optional(),
+  networkMode: z.enum(SERVER_NETWORK_MODES).optional(),
 });
 
 /**
@@ -309,14 +329,21 @@ export const validateRequestBody = <T extends z.ZodSchema>(
     try {
       request.body = schema.parse(request.body);
     } catch (error) {
+      // Always carry the stable code and the field-level details. Without them
+      // the panel could only show the bare "Invalid request body" in every
+      // locale, which made a real schema/client mismatch undiagnosable (see
+      // the empty-environment-value regression this file's environment schema
+      // documents).
       if (error instanceof z.ZodError) {
         return reply.status(400).send({
           error: 'Invalid request body',
+          code: ErrorCodes.VALIDATION_ERROR,
           details: formatZodIssues(error.issues),
         });
       }
       return reply.status(400).send({
         error: 'Invalid request body',
+        code: ErrorCodes.VALIDATION_ERROR,
         details: (describeError(error)),
       });
     }

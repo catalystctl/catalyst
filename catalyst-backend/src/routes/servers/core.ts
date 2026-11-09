@@ -33,7 +33,7 @@ import {
   type CloneProbe,
   type CloneRequest,
 } from "../../services/server-clone.js";
-import { serverClonePreflightSchema } from "../../lib/validation.js";
+import { serverClonePreflightSchema, storageResizeSchema } from "../../lib/validation.js";
 import { findDisallowedServerEnvironmentKeys } from "../../lib/server-environment.js";
 import {
   claimIdempotency,
@@ -2362,15 +2362,11 @@ export async function serverCoreRoutes(app: FastifyInstance) {
   // Resize server storage (grow online, shrink requires stop)
   app.post(
     "/:serverId/storage/resize",
-    { schema: { summary: "Resize server storage", description: "Resize server storage.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { requiredPermission: "server.storage" } },
+    { schema: { summary: "Resize server storage", description: "Resize server storage.", tags: ["Core"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], preHandler: [validateRequestBody(storageResizeSchema)], config: { requiredPermission: "server.storage" } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
-      const { allocatedDiskMb } = request.body as { allocatedDiskMb?: number };
+      const { allocatedDiskMb } = request.body as { allocatedDiskMb: number };
       const userId = request.user.userId;
-
-      if (!allocatedDiskMb || allocatedDiskMb <= 0) {
-        return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid disk size");
-      }
 
       const server = await prisma.server.findUnique({
         where: { id: serverId },

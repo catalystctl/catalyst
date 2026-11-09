@@ -71,6 +71,7 @@ import EulaModal from '../../components/servers/EulaModal';
 import InviteLinkModal from '../../components/servers/InviteLinkModal';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
+import { SERVER_NAME_PATTERN, MAX_SERVER_NAME_LENGTH } from '../../lib/serverLimits';
 
 
 
@@ -751,6 +752,14 @@ function ServerDetailsPage() {
  if (!nextName) {
  reportSystemError({ level: 'error', component: 'ServerDetailsPage', message: 'Server name is required', metadata: { context: 'renameServerMutation' } });
  throw new Error('Server name is required');
+ }
+ // The backend's serverNameSchema is the authority; without this check a name
+ // with e.g. "#" or ":" was sent anyway and came back as an opaque
+ // "Invalid request body". Migrated Pterodactyl servers can already hold such
+ // names, so renaming one is reachable. Throwing the specific message keeps a
+ // single toast (onError) instead of a generic one.
+ if (!SERVER_NAME_PATTERN.test(nextName) || nextName.length > MAX_SERVER_NAME_LENGTH) {
+ throw new Error(t('createServer.validation.invalidName'));
  }
  return serversApi.update(serverId, { name: nextName });
  },

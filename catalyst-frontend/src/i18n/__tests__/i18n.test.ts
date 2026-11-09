@@ -126,6 +126,48 @@ describe('api error translation', () => {
     expect(getApiErrorParams(error)).toEqual({ maxMb: 8 });
   });
 
+  it('names the offending field instead of a bare "Invalid request body"', async () => {
+    // The regression this guards: validateRequestBody answered with only
+    // { error: 'Invalid request body' }, so a schema/client mismatch was
+    // undiagnosable from the panel. The field path and reason now ride along.
+    const error = {
+      response: {
+        data: {
+          code: 'VALIDATION_ERROR',
+          error: 'Invalid request body',
+          details: [
+            { field: 'environment.SEED', message: 'Too big', code: 'VALIDATION_TOO_LONG', params: { max: 4096 } },
+          ],
+        },
+      },
+    };
+    expect(getLocalizedErrorMessage(error)).toBe(
+      'Invalid request body: environment.SEED: Must be at most 4096 characters',
+    );
+    await i18n.changeLanguage('zh-CN');
+    expect(getLocalizedErrorMessage(error)).toContain('environment.SEED');
+    await i18n.changeLanguage('en');
+  });
+
+  it('caps the field list so a large payload does not fill the toast', () => {
+    const details = Array.from({ length: 5 }, (_, index) => ({
+      field: `environment.VAR_${index}`,
+      code: 'VALIDATION_TOO_LONG',
+      params: { max: 4096 },
+    }));
+    const message = getLocalizedErrorMessage({
+      response: { data: { code: 'VALIDATION_ERROR', error: 'Invalid request body', details } },
+    });
+    expect(message).toContain('environment.VAR_0');
+    expect(message).not.toContain('environment.VAR_3');
+    expect(message.endsWith('(+2)')).toBe(true);
+  });
+
+  it('leaves messages without details untouched', () => {
+    const error = { response: { data: { code: 'SERVER_NOT_FOUND', error: 'Server not found' } } };
+    expect(getLocalizedErrorMessage(error)).toBe('Server not found');
+  });
+
   it('translates field-level validation codes and keeps unknown fields as sent', async () => {
     const error = {
       response: {

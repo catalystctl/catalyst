@@ -60,6 +60,7 @@ import type {
  PterodactylServerInfo,
 } from '../../types/migration';
 import { MIGRATION_PHASES } from '../../types/migration';
+import { getLocalizedErrorMessage } from '../../i18n/api-errors';
 
 // Stable empty default — inline `[]` creates a new array every render and
 // trips the React 19 prev-state sync into an infinite loop while jobs load.
@@ -865,7 +866,7 @@ export default function MigrationPage() {
  }
  },
  onError: (err: any) => {
- setTestResult({ success: false, error: err.response?.data?.error || err.message });
+ setTestResult({ success: false, error: getLocalizedErrorMessage(err) });
  notifyError(t('migration.toast.connectionTestFailed'));
  },
  });

@@ -533,7 +533,9 @@ export default function ServerModManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || t('tabs.mods.removeFailed'));
+ // Pass the error object: extracting .error dropped the backend code and
+ // the field details, so a validation failure showed only a summary line.
+ notifyError(error);
  },
  });
 
@@ -557,7 +559,7 @@ export default function ServerModManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
- notifyError(error?.response?.data?.error || t('tabs.mods.installFailed'));
+ notifyError(error);
  },
  });
 

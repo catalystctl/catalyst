@@ -377,11 +377,8 @@ export default function ServerAdminTab({
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  },
  onError: (error: any) =>
- notifyError(
- error?.response?.data?.error ||
- error?.message ||
- t('tabs.admin.envUpdateFailed'),
- ),
+ // Pass the error object so the backend code and field details survive.
+ notifyError(error),
  });
 
  // ── Derived ──

@@ -5,6 +5,7 @@ import { Save, RotateCcw, AlertCircle, CheckCircle2, Cog } from 'lucide-react';
 import { qk } from '../../../lib/queryKeys';
 import { serversApi } from '../../../services/api/servers';
 import { notifyError, notifySuccess } from '../../../utils/notify';
+import { getLocalizedErrorMessage } from '../../../i18n/api-errors';
 import type { ServerStartupVariable } from '../../../types/server';
 import SectionHeader from './SectionHeader';
 
@@ -67,7 +68,9 @@ export default function ServerStartupVariablesSection({
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  },
  onError: (error: any) => {
- const message = error?.response?.data?.error || error?.message || t('tabs.startup.saveFailed');
+ // Resolve through the shared helper so a coded backend error is translated
+ // and any field details are named, instead of showing a bare sentence.
+ const message = getLocalizedErrorMessage(error, 'tabs.startup.saveFailed');
  const fields = error?.response?.data?.fields as Record<string, string> | undefined;
  if (fields) {
  setLocalErrors(fields);

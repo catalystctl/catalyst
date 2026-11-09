@@ -25,10 +25,25 @@ export const queryClient = new QueryClient({
   },
   mutationCache: new MutationCache({
     onError: ({ error, mutation }) => {
+      // A schema rejection carries the offending fields in `details`; without
+      // them the System Errors row is a bare "Invalid request body" and cannot
+      // be acted on (this is how the image-variant regression was reported).
+      const details = (error as { response?: { data?: { details?: unknown } } })?.response?.data?.details;
+      const fieldSummary =
+        Array.isArray(details) && details.length > 0
+          ? ` [${details
+              .slice(0, 5)
+              .map((detail: any) =>
+                detail && typeof detail === 'object'
+                  ? `${detail.field ? `${detail.field}: ` : ''}${detail.message ?? ''}`.trim()
+                  : String(detail),
+              )
+              .join('; ')}${details.length > 5 ? ` (+${details.length - 5})` : ''}]`
+          : '';
       reportSystemError({
         level: 'error',
         component: describeMutationComponent(mutation.options.mutationKey, error),
-        message: describeError(error),
+        message: `${describeError(error)}${fieldSummary}`,
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { mutationKey: String(mutation.options.mutationKey ?? 'unknown') },
       });

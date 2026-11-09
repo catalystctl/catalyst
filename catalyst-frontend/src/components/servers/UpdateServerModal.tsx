@@ -25,6 +25,14 @@ import {
 import { FormSection } from '@/components/ui/form-section';
 import { BracketLabel } from '@/components/deck/primitives';
 import { cn } from '@/lib/utils';
+import {
+  MIN_MEMORY_MB,
+  MAX_MEMORY_MB,
+  MIN_CPU_CORES,
+  MAX_CPU_CORES,
+  MAX_DATABASE_ALLOCATION,
+  MAX_BACKUP_ALLOCATION_MB,
+} from '../../lib/serverLimits';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
 const fieldClass =
@@ -392,7 +400,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                         value={memory}
                         onChange={(e) => setMemory(e.target.value)}
                         type="number"
-                        min={256}
+                        min={MIN_MEMORY_MB}
+                        max={MAX_MEMORY_MB}
                       />
                     </label>
                     <label className="block space-y-1.5">
@@ -404,7 +413,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                         value={cpu}
                         onChange={(e) => setCpu(e.target.value)}
                         type="number"
-                        min={1}
+                        min={MIN_CPU_CORES}
+                        max={MAX_CPU_CORES}
                         step={1}
                       />
                     </label>
@@ -438,6 +448,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                         onChange={(e) => setDatabaseAllocation(e.target.value)}
                         type="number"
                         min={0}
+                        max={MAX_DATABASE_ALLOCATION}
                         step={1}
                       />
                       <span className="type-meta">
@@ -454,6 +465,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                         onChange={(e) => setBackupAllocationMb(e.target.value)}
                         type="number"
                         min={0}
+                        max={MAX_BACKUP_ALLOCATION_MB}
                         step={128}
                       />
                       <span className="type-meta">

@@ -35,6 +35,7 @@ non-trivial, all of them:
 | Rust | `cargo fmt --manifest-path catalyst-agent/Cargo.toml -- --check`, `cargo clippy --manifest-path catalyst-agent/Cargo.toml -- -D warnings`, `cargo test --manifest-path catalyst-agent/Cargo.toml` |
 | Builds | `pnpm run build:backend`, `pnpm run build:frontend` |
 | Translations | `pnpm i18n:check`, `pnpm i18n:hardcoded`, `pnpm --filter catalyst-frontend run i18n:verify` |
+| API contract | `pnpm --filter catalyst-backend run openapi:check` (fails when `api/openapi.json` no longer matches the route source; regenerate with `openapi:export`) |
 
 `./run-workflow.sh` emulates the whole pipeline locally (`EVENT=push TARGET=all ./run-workflow.sh`); keep it in sync with `.github/workflows/ci.yml`.
 
@@ -62,6 +63,21 @@ non-trivial, all of them:
 - The zh-CN and fr catalogs were produced by machine translation; wording fixes from native speakers are wanted (issue #251).
 
 ## Conventions
+
+- A request-body schema must accept what the panel legitimately sends back. The
+  panel round-trips stored values (the whole environment map, a server's own
+  name, its `networkMode`, its allocation quotas), and stored data can predate
+  the current form: imported eggs carry `"default_value": ""`, Pterodactyl
+  migration keeps names with characters the name pattern rejects, and legacy
+  rows hold non-string scalars. A schema stricter than that data rejects a value
+  the UI offered and the user sees only "Invalid request body" (the 1.88.x
+  image-variant bug). Keep form limits and schema bounds in step —
+  `catalyst-frontend/src/lib/serverLimits.ts` mirrors `lib/validation.ts`, and
+  `src/__tests__/validation-contract.test.ts` pins both sides.
+- `node scripts/audit-validation-contract.mjs` (in `catalyst-backend`) lists
+  every validated request body, its bounds, and whether a rejection carries a
+  stable code plus field details. Run it when adding a validated route or a new
+  form field; it exits non-zero on an opaque rejection.
 
 - Conventional commits: the release workflow derives minor/patch bumps from them (`feat:` minor, `fix:` and `chore(deps):` patch — dependency overhauls must ship; other `chore`/`ci`/`build`/`style` never bump).
 - Tests live next to the code (`src/__tests__/`, `src/**/__tests__/`). Backend tests hit the real dev database and must clean up the rows they create.

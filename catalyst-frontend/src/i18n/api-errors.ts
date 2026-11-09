@@ -70,13 +70,35 @@ function isNetworkFailure(error: unknown): boolean {
 export function getLocalizedErrorMessage(error: unknown, fallbackKey = 'generic'): string {
   const code = getApiErrorCode(error);
   const translated = code ? translateCode(code, getApiErrorParams(error)) : undefined;
-  if (translated !== undefined && activeLocale() !== 'en') return translated;
+  if (translated !== undefined && activeLocale() !== 'en') return withFieldDetails(error, translated);
   if (translated === undefined && isNetworkFailure(error)) {
     return i18n.t('NETWORK_ERROR', { ns: 'errors' });
   }
   const serverMessage = getErrorMessage(error, '');
-  if (translated !== undefined && !looksUserFacing(serverMessage)) return translated;
-  return serverMessage || translated || i18n.t(fallbackKey, { ns: 'errors' });
+  if (translated !== undefined && !looksUserFacing(serverMessage)) return withFieldDetails(error, translated);
+  return withFieldDetails(
+    error,
+    serverMessage || translated || i18n.t(fallbackKey, { ns: 'errors' }),
+  );
+}
+
+/**
+ * Append the offending fields to a validation message.
+ *
+ * A schema rejection arrives as `{ error, code, details: [{ field, code, params }] }`.
+ * Without this the panel showed only the summary text — the "Invalid request
+ * body" that made a real schema/client mismatch undiagnosable. Field paths are
+ * technical identifiers and stay literal; the reason comes from the translated
+ * `validation` catalog. Capped so a large map does not fill the toast.
+ */
+function withFieldDetails(error: unknown, message: string): string {
+  const details = (error as { response?: { data?: { details?: unknown } } })?.response?.data?.details;
+  if (!Array.isArray(details) || details.length === 0) return message;
+  const fields = getLocalizedFieldErrors(error);
+  if (fields.length === 0) return message;
+  const head = fields.slice(0, 3).map(({ field, message: text }) => (field ? `${field}: ${text}` : text));
+  const extra = fields.length > head.length ? ` (+${fields.length - head.length})` : '';
+  return `${message}: ${head.join('; ')}${extra}`;
 }
 
 /** A field-level validation failure: which input, and what to tell the user. */

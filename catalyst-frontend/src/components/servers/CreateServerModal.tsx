@@ -27,6 +27,17 @@ import { useQuery } from '@/csync';
 import type { AdminUser } from '../../types/admin';
 import Combobox from '@/components/ui/combobox';
 import { cn } from '@/lib/utils';
+import {
+  MIN_MEMORY_MB,
+  MAX_MEMORY_MB,
+  MIN_CPU_CORES,
+  MAX_CPU_CORES,
+  MIN_DISK_MB,
+  MAX_DISK_MB,
+  MAX_DATABASE_ALLOCATION,
+  MAX_BACKUP_ALLOCATION_MB,
+  SERVER_NAME_PATTERN,
+} from '../../lib/serverLimits';
 import { BracketLabel } from '@/components/deck/primitives';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
@@ -460,12 +471,12 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
   const parsedSwap = allocatedSwapMb.trim() === '' ? undefined : Number(allocatedSwapMb);
   const detailsValid =
     Boolean(name.trim()) &&
-    /^[a-zA-Z0-9\-_ .()&']+$/.test(name) &&
+    SERVER_NAME_PATTERN.test(name) &&
     Boolean(templateId) &&
     Boolean(nodeId);
   const resourcesValid =
     Number.isFinite(parsedMemory) &&
-    parsedMemory >= 256 &&
+    parsedMemory >= MIN_MEMORY_MB &&
     Number.isFinite(parsedCpu) &&
     parsedCpu >= 1 &&
     Number.isFinite(parsedDisk) &&
@@ -484,7 +495,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
   const locationMissing = Boolean(nodeId) && !locationId;
   const unmetSteps = [
     !name.trim() ? t('createServer.validation.required', { field: t('createServer.fields.name') }) :
-      !/^[a-zA-Z0-9\-_ .()&']+$/.test(name) ? t('createServer.validation.invalidName') : null,
+      !SERVER_NAME_PATTERN.test(name) ? t('createServer.validation.invalidName') : null,
     !templateId ? t('createServer.validation.required', { field: t('createServer.fields.template') }) : null,
     !nodeId ? t('createServer.validation.required', { field: t('createServer.fields.node') }) : null,
     locationMissing ? t('createServer.validation.required', { field: 'locationId' }) : null,
@@ -617,15 +628,15 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                     <div className="grid gap-3 sm:grid-cols-3">
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.memoryMb')}</span>
-                        <input className={monoFieldClass} value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={256}/>
+                        <input className={monoFieldClass} value={memory} onChange={(e) => setMemory(e.target.value)} type="number" min={MIN_MEMORY_MB} max={MAX_MEMORY_MB}/>
                       </label>
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.cpuCores')}</span>
-                        <input className={monoFieldClass} value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={1} step={1}/>
+                        <input className={monoFieldClass} value={cpu} onChange={(e) => setCpu(e.target.value)} type="number" min={MIN_CPU_CORES} max={MAX_CPU_CORES} step={1}/>
                       </label>
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.diskMb')}</span>
-                        <input className={monoFieldClass} value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={1024} step={1024}/>
+                        <input className={monoFieldClass} value={disk} onChange={(e) => setDisk(e.target.value)} type="number" min={MIN_DISK_MB} max={MAX_DISK_MB} step={1024}/>
                       </label>
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.swapMb')}</span>
@@ -634,12 +645,12 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                       </label>
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.backupMb')}</span>
-                        <input className={monoFieldClass} value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} step={128}/>
+                        <input className={monoFieldClass} value={backupAllocationMb} onChange={(e) => setBackupAllocationMb(e.target.value)} type="number" min={0} max={MAX_BACKUP_ALLOCATION_MB} step={128}/>
                         <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
                       </label>
                       <label className="block space-y-1.5">
                         <span className="type-overline">{t('fields.databaseAllocation')}</span>
-                        <input className={monoFieldClass} value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} step={1}/>
+                        <input className={monoFieldClass} value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} max={MAX_DATABASE_ALLOCATION} step={1}/>
                         <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
                       </label>
                     </div>

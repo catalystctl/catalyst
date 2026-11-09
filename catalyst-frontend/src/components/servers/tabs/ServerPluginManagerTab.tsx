@@ -490,9 +490,8 @@ export default function ServerPluginManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
- notifyError(
- error?.response?.data?.error || t('tabs.plugins.removeFailed'),
- );
+ // Pass the error object so the backend code and field details survive.
+ notifyError(error);
  },
  });
 
@@ -514,9 +513,7 @@ export default function ServerPluginManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
- notifyError(
- error?.response?.data?.error || t('tabs.plugins.installFailed'),
- );
+ notifyError(error);
  },
  });
 
