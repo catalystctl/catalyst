@@ -8,7 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { ServerMetricsPoint } from '../../types/server';
 import { formatBytes } from '../../utils/formatters';
-import { cpuPercentOfAllocation, formatCpuCores, resolveCpuCores } from '../../utils/cpu';
+import { cpuPercentOfAllocation, formatCpuCores, formatCpuPercent, resolveCpuCores } from '../../utils/cpu';
 import { useCpuFormat } from '../../hooks/useCpuFormat';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +18,14 @@ type TrendCard = {
  color: string;
  stroke: string;
  data: Array<{ index: number; value: number | null }>;
+ /**
+ * Top of the card's axis; the bottom is always zero. Every series here is a
+ * magnitude measured from zero, so an auto-fitted domain lies about scale: a
+ * server jittering between 0.02% and 0.4% of its CPU drew a full-height spike,
+ * and hovering the peak reported "0 / 4 cores". A zero-based axis makes the
+ * line's height mean the number it printed.
+ */
+ domainMax: number | 'auto';
  formatTooltip?: (value: number) => string;
 };
 
@@ -49,9 +57,9 @@ function ServerMetricsTrends({
  const { format: cpuFormat, read } = useCpuFormat();
  const resolvedTimeRangeLabel = timeRangeLabel ?? t('metrics.last60Min');
  const cpuCores = resolveCpuCores(allocatedCpuCores);
- // The chart plots the share of the allocation, matching the gauge above it:
- // the raw per-core figure would peg the line to the top of an auto-domain
- // chart. The format preference changes only the printed value and tooltip.
+ // The chart plots the share of the allocation, matching the gauge above it and
+ // the 0-100 axis below; the raw per-core figure would run to cores * 100. The
+ // format preference changes only the printed value and the tooltip.
  const cpuShareHistory = history.map((point) => point.cpuPercent == null
   ? null
   : cpuPercentOfAllocation(point.cpuPercent, allocatedCpuCores));
@@ -77,21 +85,28 @@ function ServerMetricsTrends({
  allocatedMemoryMb && allocatedMemoryMb > 0
  ? ((latest?.memoryUsageMb ?? 0) / allocatedMemoryMb) * 100
  : 0;
+ // Memory has a real ceiling (the allocation); a sample above it is the
+ // agent's problem, but the axis must still show it rather than clip it.
+ const memoryCeiling = allocatedMemoryMb > 0
+ ? Math.max(allocatedMemoryMb, ...memoryHistory.map((value) => value ?? 0))
+ : 'auto';
 
  const cards: TrendCard[] = [
  {
  label: t('metrics.labels.cpu'),
  // Same scale as the gauge above it; only the printed value follows the
  // user's format preference.
- value: cpuFormat === 'share' ? `${cpuLatest.share.toFixed(1)}%` : cpuLatest.text,
+ value: cpuFormat === 'share' ? `${formatCpuPercent(cpuLatest.share)}%` : cpuLatest.text,
  color: percentTone(cpuLatest.share),
  stroke: 'hsl(var(--primary))',
  data: toChartData(cpuShareHistory),
+ // The plotted value is the share of the allocation, which is capped at 100.
+ domainMax: 100,
  formatTooltip: (value) => {
  return t('metrics.cpuAllocationDetail', {
  used: formatCpuCores((value / 100) * cpuCores),
  total: formatCpuCores(cpuCores),
- percent: Math.round(value),
+ percent: formatCpuPercent(value),
  });
  },
  },
@@ -103,6 +118,7 @@ function ServerMetricsTrends({
  color: percentTone(memoryPercent),
  stroke: 'hsl(var(--success))',
  data: toChartData(memoryHistory),
+ domainMax: memoryCeiling,
  formatTooltip: (value) => `${value.toFixed(0)} MB`,
  },
  {
@@ -111,6 +127,7 @@ function ServerMetricsTrends({
  color: 'text-foreground',
  stroke: 'hsl(var(--warning))',
  data: toChartData(diskHistory),
+ domainMax: 'auto',
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },
  {
@@ -119,6 +136,7 @@ function ServerMetricsTrends({
  color: 'text-foreground',
  stroke: 'hsl(var(--info))',
  data: toChartData(diskIoHistory),
+ domainMax: 'auto',
  formatTooltip: (value) => formatBytes(value * 1024 * 1024),
  },
  {
@@ -127,6 +145,7 @@ function ServerMetricsTrends({
  color: 'text-foreground',
  stroke: 'hsl(var(--info))',
  data: toChartData(throughput),
+ domainMax: 'auto',
  formatTooltip: (value) => `${value.toFixed(2)} MB/s`,
  },
  ];
@@ -144,7 +163,7 @@ function ServerMetricsTrends({
  <div className="mt-2 h-24 w-full">
  <ResponsiveContainer width="100%" height="100%">
  <LineChart data={card.data}>
- <YAxis hide domain={['auto', 'auto']} />
+ <YAxis hide domain={[0, card.domainMax]} />
  <Tooltip
  contentStyle={{
  background: 'hsl(var(--surface-1))',

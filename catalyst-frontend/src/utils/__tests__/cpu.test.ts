@@ -6,6 +6,7 @@ import {
   cpuCoresUsed,
   cpuPercentOfAllocation,
   formatCpuCores,
+  formatCpuPercent,
   formatCpuReading,
   isCpuDisplayFormat,
   isCpuFormatPreference,
@@ -90,6 +91,33 @@ describe('formatCpuCores', () => {
     expect(formatCpuCores(0.5)).toBe('0.5');
     expect(formatCpuCores(2.646)).toBe('2.6');
   });
+
+  it('never prints a near-idle server as zero cores', () => {
+    // 0.4% of a 4-core allocation is 0.016 cores: one decimal said "0".
+    expect(formatCpuCores(0.04)).toBe('0.04');
+    expect(formatCpuCores(0.016)).toBe('0.02');
+    expect(formatCpuCores(0.004)).toBe('<0.01');
+    // A genuine zero still reads as zero.
+    expect(formatCpuCores(0)).toBe('0');
+    expect(formatCpuCores(-1)).toBe('0');
+    expect(formatCpuCores(Number.NaN)).toBe('0');
+  });
+});
+
+describe('formatCpuPercent', () => {
+  it('keeps the precision the reading has', () => {
+    expect(formatCpuPercent(65)).toBe('65');
+    expect(formatCpuPercent(65.4)).toBe('65');
+    expect(formatCpuPercent(3.44)).toBe('3.4');
+    expect(formatCpuPercent(0.35)).toBe('0.35');
+  });
+
+  it('never prints a non-zero reading as zero percent', () => {
+    // The report: a chart peak tooltip read "0% of allocated cores".
+    expect(formatCpuPercent(0.004)).toBe('<0.01');
+    expect(formatCpuPercent(0)).toBe('0');
+    expect(formatCpuPercent(-2)).toBe('0');
+  });
 });
 
 /**
@@ -125,6 +153,18 @@ describe('formatCpuReading', () => {
     expect(formatCpuReading(0, 4, 'cores').text).toBe('0 / 4 cores');
     expect(formatCpuReading(0, 4, 'perCore').text).toBe('0%');
     expect(formatCpuReading(0, 4, 'share').text).toBe('0%');
+  });
+
+  it('reports a near-idle server instead of rounding it to zero', () => {
+    // 1.4% per core on 4 cores: an idle-looking server that is not idle.
+    // Integer rounding printed "0 / 4 cores" and "0%" for exactly this.
+    expect(formatCpuReading(1.4, 4, 'cores').text).toBe('0.01 / 4 cores');
+    expect(formatCpuReading(1.4, 4, 'perCore').text).toBe('1.4%');
+    expect(formatCpuReading(1.4, 4, 'share').text).toBe('0.35%');
+    // Below a hundredth of a core the reading says so rather than "0".
+    expect(formatCpuReading(0.08, 4, 'cores').text).toBe('<0.01 / 4 cores');
+    expect(formatCpuReading(0.08, 4, 'share').text).toBe('0.02%');
+    expect(formatCpuReading(0.04, 4, 'perCore').text).toBe('0.04%');
   });
 
   it('treats a full allocation as 100% share and cores*100 per-core', () => {

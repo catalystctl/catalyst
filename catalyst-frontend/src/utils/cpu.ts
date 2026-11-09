@@ -86,9 +86,46 @@ export const cpuPercentOfAllocation = (
   return Math.min(100, percent / resolveCpuCores(allocatedCpuCores));
 };
 
-/** One-decimal, locale-aware cores reading: 2.6 cores out of 3. */
-export const formatCpuCores = (cores: number): string =>
-  formatNumber(cores, { maximumFractionDigits: 1, useGrouping: false });
+/** Two decimals, locale-aware: the floor used by the "<" readings. */
+const formatCpuFixed = (value: number): string =>
+  formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
+
+/**
+ * Locale-aware cores reading: 2.6 cores out of 3.
+ *
+ * One decimal is enough everywhere except below a tenth of a core, where it
+ * rounds a real sample down to "0" — a server idling at 0.4% of a 4-core
+ * allocation read "0 / 4 cores" whatever it was actually doing, on the very
+ * point the chart was drawing full height. Small readings keep a second
+ * decimal, and one too small even for that says so instead of printing zero.
+ */
+export const formatCpuCores = (cores: number): string => {
+  if (!Number.isFinite(cores) || cores <= 0) return '0';
+  if (cores < 0.01) return `<${formatCpuFixed(0.01)}`;
+  return formatNumber(cores, {
+    maximumFractionDigits: cores < 0.1 ? 2 : 1,
+    useGrouping: false,
+  });
+};
+
+/**
+ * A CPU percentage as the panel prints it, in whichever scale the caller is
+ * showing: share of the allocation or per core. Rounded to whole percent once
+ * there is one to round (>= 10%), a decimal in the single digits, two below 1%.
+ *
+ * Rounding every reading to an integer is what made a near-idle server print
+ * "0 / 4 cores · 0% of allocated cores" on every point of a chart that drew its
+ * noise floor full height: the number said idle, the shape said peaking.
+ */
+export const formatCpuPercent = (percent: number): string => {
+  if (!Number.isFinite(percent) || percent <= 0) return '0';
+  const text = formatNumber(percent, {
+    maximumFractionDigits: percent < 1 ? 2 : percent < 10 ? 1 : 0,
+    useGrouping: false,
+  });
+  // A non-zero reading can still round to nothing at the last place.
+  return text === '0' ? `<${formatCpuFixed(0.01)}` : text;
+};
 
 export type CpuReading = {
   /** The printed value, in the requested format. */
@@ -119,17 +156,16 @@ export const formatCpuReading = (
   const cores = cpuCoresUsed(cpuPercent, allocated);
   const share = cpuPercentOfAllocation(cpuPercent, allocated);
 
-  // Cores keep one decimal in both flavours so the value never jumps between
+  // Cores keep one decimal from a whole core up so the value never jumps between
   // "2.6 / 4 cores" and "3 / 4 cores" as load drifts.
   const used = formatCpuCores(cores);
   const total = formatCpuCores(allocated);
-  const percent = String(Math.round(share));
 
   const text =
     format === 'perCore'
-      ? `${Math.round(cores * 100)}%`
+      ? `${formatCpuPercent(cores * 100)}%`
       : format === 'share'
-        ? `${percent}%`
+        ? `${formatCpuPercent(share)}%`
         : compact
           ? `${used}/${total}`
           : `${used} / ${total} cores`;
