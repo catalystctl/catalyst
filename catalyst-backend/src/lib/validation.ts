@@ -63,6 +63,31 @@ export const serverNameSchema = z.string()
   .regex(/^[a-zA-Z0-9\-_ .()&']+$/, 'Server name can only contain letters, numbers, spaces, hyphens, underscores, dots, parentheses, ampersands, and apostrophes');
 
 /**
+ * Server environment map.
+ *
+ * Empty is a legitimate value: an imported egg declares optional variables as
+ * `"default_value": ""` (160 of the 167 upstream eggs have at least one), and a
+ * user clearing an optional variable in the variables tab stores `""` too. The
+ * panel round-trips the whole map — changing the image variant or saving the
+ * env editor sends it back — so requiring `min(1)` per value made every such
+ * server un-editable, surfacing only "Invalid request body".
+ *
+ * Non-string scalars are coerced rather than rejected: legacy Pterodactyl
+ * migration rows stored numbers/booleans, and an environment map only ever
+ * holds strings downstream. Objects and arrays stay rejected.
+ */
+export const serverEnvironmentSchema = z.record(
+  z.string(),
+  z
+    .union([z.string(), z.number(), z.boolean(), z.null()])
+    .transform((value) => (value === null ? '' : String(value)))
+    // Bounds run after the coercion so a long value still reports the
+    // translatable VALIDATION_TOO_LONG code (a refine() would become
+    // VALIDATION_CUSTOM, which the client cannot translate).
+    .pipe(z.string().max(4096)),
+);
+
+/**
  * Server creation validation
  */
 export const serverCreateSchema = z.object({
@@ -72,7 +97,7 @@ export const serverCreateSchema = z.object({
   nodeId: z.string().min(1, 'Node ID is required'),
   locationId: z.string().min(1, 'Location ID is required'),
   ownerId: z.string().min(1).optional(),
-  environment: z.record(z.string(), z.string().min(1).max(4096)).optional().default({}),
+  environment: serverEnvironmentSchema.optional().default({}),
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional().default({}),
   primaryPort: z.number().int().min(1).max(65535),
   primaryIp: z.string().max(45).nullable().optional(),
@@ -119,7 +144,7 @@ const cloneOverrideFields = {
   ioWeight: z.number().int().min(10).max(1000).optional(),
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: z.number().int().min(0).max(1048576).optional(),
-  environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
+  environment: serverEnvironmentSchema.optional(),
   ownerId: z.string().min(1).optional(),
   allocationId: z.string().min(1).optional(),
   networkMode: z.enum(CLONE_NETWORK_MODES).optional(),
@@ -172,7 +197,7 @@ export const serverCloneSchema = z.object({
 export const serverUpdateSchema = z.object({
   name: serverNameSchema.optional(),
   description: z.string().max(500).optional(),
-  environment: z.record(z.string(), z.string().min(1).max(4096)).optional(),
+  environment: serverEnvironmentSchema.optional(),
   // Startup-command edits arrive from ServerDetailsPage as a string or null.
   startupCommand: z.string().max(4096).nullable().optional(),
   portBindings: z.record(z.string(), z.number().int().min(1).max(65535)).optional(),
