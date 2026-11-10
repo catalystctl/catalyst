@@ -491,7 +491,7 @@ export default function ServerPluginManagerTab({
  },
  onError: (error: any) => {
  // Pass the error object so the backend code and field details survive.
- notifyError(error);
+ notifyError(error, t('tabs.plugins.removeFailed'));
  },
  });
 
@@ -513,7 +513,7 @@ export default function ServerPluginManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.pluginManagerInstalled(serverId ?? '') });
  },
  onError: (error: any) => {
- notifyError(error);
+ notifyError(error, t('tabs.plugins.installFailed'));
  },
  });
 

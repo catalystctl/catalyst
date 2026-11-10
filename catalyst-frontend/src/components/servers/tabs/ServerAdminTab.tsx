@@ -4,6 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import {
+ buildEnvironmentPayload,
+ isPanelManagedEnvKey,
+ panelManagedEnvironment,
+ type EnvRow,
+} from '../../../lib/panelEnvironment';
+import {
   AlertTriangle,
   Archive as ArchiveIcon,
   BarChart3,
@@ -325,19 +331,23 @@ export default function ServerAdminTab({
  return null;
  }, [server.owner, server.ownerId]);
 
- // ── Environment variables state ──
+ // Rows the raw editor may change: the panel derives
+// IMAGE_VARIANT/TEMPLATE_IMAGE/CATALYST_NETWORK_IP, so they are shown
+// read-only above the list instead of as editable peers.
+const editableRows = (environment: Record<string, string> | null | undefined): EnvRow[] =>
+ environment && typeof environment === 'object'
+ ? Object.entries(environment)
+ .filter(([key]) => !isPanelManagedEnvKey(key))
+ .map(([key, value]) => ({ key, value: String(value ?? '') }))
+ : [];
+
+// ── Environment variables state ──
  // Seed from server.environment on first render — the prev-ref sync below only
  // runs on *changes*, so without this the editor stays empty while the count badge
  // still shows Object.keys(server.environment).length.
- const [envVars, setEnvVars] = useState<{ key: string; value: string }[]>(() => {
- const env = server?.environment;
- if (!env || typeof env !== 'object') return [];
- const entries = Object.entries(env).map(([key, value]) => ({
- key,
- value: String(value ?? ''),
- }));
- return entries;
- });
+ const [envVars, setEnvVars] = useState<EnvRow[]>(() =>
+ editableRows(server?.environment),
+ );
  const [envDirty, setEnvDirty] = useState(false);
 
  const prevEnvRef = useRef(server?.environment);
@@ -350,22 +360,17 @@ export default function ServerAdminTab({
  setEnvVars([]);
  setEnvDirty(false);
  } else {
- const entries = Object.entries(server.environment).map(([key, value]) => ({
- key,
- value: String(value ?? ''),
- }));
- setEnvVars(entries);
+ setEnvVars(editableRows(server.environment));
  setEnvDirty(false);
  }
  }
 
  const envMutation = useMutation({
  mutationFn: () => {
- const env: Record<string, string> = {};
- for (const row of envVars) {
- const k = row.key.trim();
- if (k) env[k] = row.value;
- }
+ // Managed keys (IMAGE_VARIANT/TEMPLATE_IMAGE/CATALYST_NETWORK_IP) come from
+ // the stored server state — the panel derives them, so a row cannot shadow
+ // them. Everything else follows the editor rows, so a removed row is dropped.
+ const env = buildEnvironmentPayload(server?.environment, envVars);
  return serversApi.update(serverId, { environment: env });
  },
  onSuccess: () => {
@@ -378,7 +383,7 @@ export default function ServerAdminTab({
  },
  onError: (error: any) =>
  // Pass the error object so the backend code and field details survive.
- notifyError(error),
+ notifyError(error, t('tabs.admin.envUpdateFailed')),
  });
 
  // ── Derived ──
@@ -614,6 +619,31 @@ export default function ServerAdminTab({
           <div className="mt-2 space-y-2">
             {/* canAdminWrite is guaranteed here by the guard above. */}
             <>
+              {panelManagedEnvironment(server.environment).length > 0 && (
+                <>
+                  {panelManagedEnvironment(server.environment).map((row) => (
+                    <div key={row.key} className="flex flex-wrap items-center gap-2">
+                      <span
+                        className="flex h-7 w-[150px] min-w-[130px] shrink-0 items-center rounded-sm border border-border/40 bg-surface-1 px-2 font-mono text-mini uppercase text-muted-foreground sm:w-[180px] sm:max-w-[240px]"
+                        title={t('tabs.admin.managedKeyHint')}
+                      >
+                        {row.key}
+                      </span>
+                      <span className="text-micro text-muted-foreground">=</span>
+                      <span className="flex h-7 min-w-[8rem] flex-1 items-center truncate rounded-sm border border-border/40 bg-surface-1 px-2 font-mono text-mini text-muted-foreground">
+                        {row.value || '—'}
+                      </span>
+                      <span
+                        className="shrink-0 rounded-sm border border-border/60 bg-surface-2 px-2 py-0.5 text-micro font-medium uppercase text-muted-foreground"
+                        title={t('tabs.admin.managedKeyHint')}
+                      >
+                        {t('tabs.admin.managed')}
+                      </span>
+                    </div>
+                  ))}
+                  <p className="type-meta">{t('tabs.admin.managedKeysHint')}</p>
+                </>
+              )}
               {envVars.length === 0 && (
                 <p className="type-meta py-2">{t('tabs.admin.noEnvironment')}</p>
               )}
@@ -690,7 +720,8 @@ export default function ServerAdminTab({
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <ServerTabCard>
           <SectionHeader icon={Container} title={t('tabs.admin.image')} />
-          <DataField label={t('tabs.admin.fields.image')} value={currentResolvedImage} copyable />
+          <DataField label={t('tabs.admin.fields.resolvedImage')} value={currentResolvedImage} copyable />
+          <p className="type-meta mb-2">{t('tabs.admin.imageManagedHint')}</p>
           {(currentImageVariant || activeVariantName) && (
             <DataField
               label={t('tabs.admin.fields.variant')}

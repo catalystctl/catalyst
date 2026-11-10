@@ -535,7 +535,7 @@ export default function ServerModManagerTab({
  onError: (error: any) => {
  // Pass the error object: extracting .error dropped the backend code and
  // the field details, so a validation failure showed only a summary line.
- notifyError(error);
+ notifyError(error, t('tabs.mods.removeFailed'));
  },
  });
 
@@ -559,7 +559,7 @@ export default function ServerModManagerTab({
  queryClient.invalidateQueries({ queryKey: qk.modManagerInstalled(serverId ?? '', modTarget) });
  },
  onError: (error: any) => {
- notifyError(error);
+ notifyError(error, t('tabs.mods.installFailed'));
  },
  });
 

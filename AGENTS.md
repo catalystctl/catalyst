@@ -78,6 +78,16 @@ non-trivial, all of them:
   every validated request body, its bounds, and whether a rejection carries a
   stable code plus field details. Run it when adding a validated route or a new
   form field; it exits non-zero on an opaque rejection.
+- The server's image is one choice with two stored keys, and only one of them
+  is an input: `IMAGE_VARIANT` names an entry in `template.images[]`, and
+  `TEMPLATE_IMAGE` is the `repo:tag` the panel resolves from it (create, update,
+  install and every start recompute it, so a hand-edited value is discarded —
+  `server-image-variant-update.test.ts` pins that). They live in the environment
+  map with `CATALYST_NETWORK_IP`, so the raw env editor renders them read-only
+  (`catalyst-frontend/src/lib/panelEnvironment.ts`, mirroring
+  `catalyst-backend/src/lib/server-environment.ts`); add new panel-owned keys to
+  both lists. Changing the image is the Image card's variant picker, never an env
+  row.
 
 - Conventional commits: the release workflow derives minor/patch bumps from them (`feat:` minor, `fix:` and `chore(deps):` patch — dependency overhauls must ship; other `chore`/`ci`/`build`/`style` never bump).
 - Tests live next to the code (`src/__tests__/`, `src/**/__tests__/`). Backend tests hit the real dev database and must clean up the rows they create.

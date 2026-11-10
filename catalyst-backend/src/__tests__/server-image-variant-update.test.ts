@@ -239,6 +239,30 @@ describe('admin image variant change round-trips the stored environment', () => 
     expect(response.json().data.environment.MEMORY).toBe('2048');
   });
 
+  it('re-resolves TEMPLATE_IMAGE from the variant, ignoring a client-supplied value', async () => {
+    // TEMPLATE_IMAGE is derived, not an input: the panel computes it from
+    // IMAGE_VARIANT on every write. Pinning that here keeps the admin editor
+    // honest — editing TEMPLATE_IMAGE by hand cannot change the image.
+    const stored = await prisma.server.findUniqueOrThrow({ where: { id: serverId } });
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/api/servers/${serverId}`,
+      payload: {
+        environment: {
+          ...(stored.environment as Record<string, string>),
+          IMAGE_VARIANT: 'java21',
+          TEMPLATE_IMAGE: 'evil.example/pinned:latest',
+        },
+      },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const updated = await prisma.server.findUniqueOrThrow({ where: { id: serverId } });
+    expect(updated.environment).toMatchObject({
+      IMAGE_VARIANT: 'java21',
+      TEMPLATE_IMAGE: 'eclipse-temurin:21-jre',
+    });
+  });
+
   it('still rejects a payload that is not a string map', async () => {
     const stored = await prisma.server.findUniqueOrThrow({ where: { id: serverId } });
     const response = await app.inject({

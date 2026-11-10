@@ -70,7 +70,7 @@ export default function ServerStartupVariablesSection({
  onError: (error: any) => {
  // Resolve through the shared helper so a coded backend error is translated
  // and any field details are named, instead of showing a bare sentence.
- const message = getLocalizedErrorMessage(error, 'tabs.startup.saveFailed');
+ const message = getLocalizedErrorMessage(error, t('tabs.startup.saveFailed'));
  const fields = error?.response?.data?.fields as Record<string, string> | undefined;
  if (fields) {
  setLocalErrors(fields);

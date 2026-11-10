@@ -66,8 +66,11 @@ function isNetworkFailure(error: unknown): boolean {
  * English readers keep it; other locales get the translation of the code.
  * Untranslated codes keep working exactly as before localization, so the
  * backend can add codes incrementally.
+ *
+ * `fallback` is the last resort: a namespaced catalog key or ready-made text
+ * (a missing key resolves to itself, so pre-translated text passes through).
  */
-export function getLocalizedErrorMessage(error: unknown, fallbackKey = 'generic'): string {
+export function getLocalizedErrorMessage(error: unknown, fallback = 'generic'): string {
   const code = getApiErrorCode(error);
   const translated = code ? translateCode(code, getApiErrorParams(error)) : undefined;
   if (translated !== undefined && activeLocale() !== 'en') return withFieldDetails(error, translated);
@@ -78,7 +81,7 @@ export function getLocalizedErrorMessage(error: unknown, fallbackKey = 'generic'
   if (translated !== undefined && !looksUserFacing(serverMessage)) return withFieldDetails(error, translated);
   return withFieldDetails(
     error,
-    serverMessage || translated || i18n.t(fallbackKey, { ns: 'errors' }),
+    serverMessage || translated || i18n.t(fallback, { ns: 'errors' }),
   );
 }
 
