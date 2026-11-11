@@ -562,6 +562,12 @@ step_lint() {
       overall_exit=1
     fi
 
+    # Published API contract (maps to: pnpm --filter catalyst-backend run openapi:check in ci.yml lint: job)
+    echo -e "  ${C_BOLD}[pnpm] Verifying OpenAPI contract is current...${C_RESET}"
+    if ! run_step "${step_name}_openapi_check" bash -c "pnpm --filter catalyst-backend run openapi:check"; then
+      overall_exit=1
+    fi
+
     # Security audit (non-blocking — maps to: continue-on-error: true in ci.yml)
     if [[ "$overall_exit" -eq 0 ]]; then
       echo -e "  ${C_BOLD}[pnpm] Security audit...${C_RESET}"

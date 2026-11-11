@@ -196,6 +196,12 @@ jobs:
       - name: Check for new hardcoded strings
         run: pnpm i18n:hardcoded
 
+      # The published contract in api/openapi.json is generated from the route
+      # source. Fail when a route changed without regenerating it.
+      # Maps to: step "Verify OpenAPI contract is current" in run-workflow.sh
+      - name: Verify OpenAPI contract is current
+        run: pnpm --filter catalyst-backend run openapi:check
+
       - name: Security audit
         run: pnpm audit --audit-level=high
         continue-on-error: false

@@ -12,6 +12,9 @@
  * - Auth requirement from `preHandler` middleware (`authenticate`,
  *   `require*` permission guards, agent key verification).
  * - Referenced `ErrorCodes.*` values found in the route handler block.
+ * - Examples for the published request/response contracts (`EXAMPLES`,
+ *   `RESPONSE_EXAMPLES`) and a placeholder uuid for `{...Id}` path parameters.
+ * - `x-catalyst.bodyUndocumented` on write operations that declare no body.
  * - Tags derived deterministically from the URL's API section
  *   (see `tagFor()` — grouping rule, keep it stable).
  *
@@ -19,8 +22,10 @@
  * object. Handler-local Zod parsing is deliberately not guessed: inventing
  * field lists from filenames or destructuring would fabricate the contract.
  *
- * Run:  pnpm --filter catalyst-backend run openapi:export
- * Out:  ../api/openapi.json  (repo-relative override: --out <path>)
+ * Run:   pnpm --filter catalyst-backend run openapi:export
+ * Check: pnpm --filter catalyst-backend run openapi:check  (fails when the
+ *        committed document no longer matches the route source)
+ * Out:   ../api/openapi.json  (repo-relative override: --out <path>)
  */
 
 import { readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
@@ -37,6 +42,10 @@ const outFlag = args.indexOf('--out');
 const outPath = outFlag >= 0 && args[outFlag + 1]
   ? resolve(args[outFlag + 1])
   : resolve(__dirname, '../../api/openapi.json');
+/** `--check` compares the committed document against a fresh export instead of
+ *  writing. Source line numbers are ignored: they move whenever a route file is
+ *  edited above a registration and would make the gate noise, not signal. */
+const checkOnly = args.includes('--check');
 
 const METHODS = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options'] as const;
 
@@ -154,6 +163,51 @@ const RESPONSE_CONTRACTS: Record<string, OpenApiSchema> = {
   HealthUnhealthy: { type: 'object', required: ['status'], properties: { status: { type: 'string', const: 'unhealthy' } }, additionalProperties: false },
 };
 
+/** Placeholder id shown for `{...Id}` path parameters. Catalyst ids are uuids. */
+const ID_EXAMPLE = '7f3c1a90-2b64-4d8e-9c15-8a0b6e4f2d31';
+
+/**
+ * Request examples for the published request contracts, keyed by schema name.
+ * They use only declared fields, and `openapi-contract.test.ts` validates every
+ * example against its schema: an example may illustrate the contract, never
+ * widen it.
+ */
+const EXAMPLES: Record<string, Record<string, unknown>> = {
+  ServerCreate: {
+    name: 'survival', description: 'Public survival world',
+    templateId: ID_EXAMPLE, nodeId: ID_EXAMPLE, locationId: ID_EXAMPLE,
+    primaryPort: 25565, allocatedMemoryMb: 4096, allocatedCpuCores: 2, allocatedDiskMb: 20480,
+    environment: { SERVER_JARFILE: 'server.jar' }, networkMode: 'mc-lan-static',
+  },
+  ServerUpdate: {
+    name: 'survival', allocatedMemoryMb: 8192, allocatedCpuCores: 4, primaryPort: 25565,
+    environment: { MAX_PLAYERS: '20' }, networkMode: 'bridge',
+  },
+  ServerClone: {
+    mode: 'full', targetNodeId: ID_EXAMPLE, name: 'survival-copy',
+    copyFiles: true, includeAccess: true, includeRoleGrants: true,
+  },
+  Allocation: { containerPort: 25566, hostPort: 25566 },
+  ApiKeyCreate: { name: 'ci-deploy', permissions: ['server.read'], rateLimitMax: 100, rateLimitTimeWindow: 60000 },
+  ApiKeyUpdate: { name: 'ci-deploy', enabled: true, rateLimitMax: 200 },
+  PluginEnable: { enabled: true, safety: { disclaimerVersion: '1' } },
+  PluginConfig: { config: { theme: 'dark' } },
+  PluginPermissions: { granted: ['server.read'] },
+  MarketplaceSourceAdd: { url: 'https://plugins.example.com/index.json', label: 'Internal' },
+  MarketplaceSourceUpdate: { enabled: false },
+  PluginInstall: { url: 'https://plugins.example.com/acme-1.0.0.zip', sha256: '5f2b9c4d7e1a3860b5c2d9e4f7a1b3c6d8e0f2a4b6c8d0e2f4a6b8c0d2e4f6a8' },
+  PluginUninstall: { purgeData: false },
+  Setup: { email: 'admin@example.com', username: 'admin', password: 'change-me-now', panelName: 'Catalyst', defaultTheme: 'dark' },
+};
+
+/** Response examples, keyed by response-contract schema name. */
+const RESPONSE_EXAMPLES: Record<string, unknown> = {
+  MessageSuccess: { success: true, message: 'Done.' },
+  Health: { status: 'ok', redis: 'ok' },
+  HealthUnhealthy: { status: 'unhealthy' },
+  PaginatedEnvelope: { success: true, data: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 } },
+};
+
 const RESPONSE_RULES: { method: string; path: RegExp; status?: string; schema: string }[] = [
   { method: 'POST', path: /\/api\/(?:auth\/register|auth\/login)$/, schema: 'AuthSuccess' },
   { method: 'GET', path: /\/api\/admin\/api-keys\/permissions$/, schema: 'ApiKeyArrayEnvelope' },
@@ -220,7 +274,7 @@ const CONTRACT_RULES: { method: string; path: RegExp; schema: string }[] = [
   { method: 'PATCH', path: /\/api\/plugins\/marketplace\/sources\/\{id\}$/, schema: 'MarketplaceSourceUpdate' },
   { method: 'POST', path: /\/api\/plugins\/install$/, schema: 'PluginInstall' },
   { method: 'POST', path: /\/api\/plugins\/\{name\}\/uninstall$/, schema: 'PluginUninstall' },
-  { method: 'POST', path: /\/api\/setup$/, schema: 'Setup' },
+  { method: 'POST', path: /\/api\/setup\/complete$/, schema: 'Setup' },
 ];
 
 function contractFor(method: string, path: string): string | undefined {
@@ -351,6 +405,20 @@ function responseObjects(response: Record<string, unknown> | undefined, mediaTyp
   }));
 }
 
+/** Attach a response example where the response resolves to an example-carrying contract. */
+function withResponseExamples(responses: Record<string, unknown>): Record<string, unknown> {
+  const attach = (entry: unknown): unknown => {
+    if (!entry || typeof entry !== 'object') return entry;
+    const response = entry as { content?: Record<string, { schema?: { $ref?: string } }> };
+    const media = response.content?.['application/json'];
+    const name = media?.schema?.$ref?.replace('#/components/schemas/', '');
+    const example = name ? RESPONSE_EXAMPLES[name] : undefined;
+    if (!example || !media) return entry;
+    return { ...response, content: { ...response.content, 'application/json': { ...media, example } } };
+  };
+  return Object.fromEntries(Object.entries(responses).map(([status, entry]) => [status, attach(entry)]));
+}
+
 /** Deterministic grouping: first meaningful URL section decides the tag. */
 function tagFor(path: string): string {
   const seg = path.replace(/^\/api\//, '').split('/')[0] ?? 'misc';
@@ -444,19 +512,19 @@ function parseFile(file: string): { method: string; path: string; op: Operation 
 
     // Handler block: observed status codes + referenced error codes.
     const block = lines.slice(s.idx, end).join('\n');
-    const helperContent = file.startsWith('servers/')
-      ? readFileSync(resolve(routesDir, 'servers/_helpers.ts'), 'utf-8')
-      : '';
     const statusCodes = [...new Set([
       ...block.matchAll(/reply\.status\(\s*['"]?(\d{3})/g),
       ...block.matchAll(/reply\.code\(\s*['"]?(\d{3})/g),
       ...block.matchAll(/apiError\(\s*reply\s*,\s*(\d{3})/g),
     ].map((m) => m[1]))].sort();
-    // Include codes referenced by helpers in the same route module as well as
-    // the registration block (helpers are often called by several handlers).
+    // Codes are attributed to the operation whose handler block references them.
+    // A file-wide union would have every operation in a module claim every code
+    // the module can emit, which is not the contract of any single endpoint.
+    // `validateRequestBody` answers 400 VALIDATION_ERROR before the handler runs,
+    // so it counts even when the handler never names the code.
     const errorCodes = [...new Set([
       ...[...block.matchAll(/ErrorCodes\.([A-Z0-9_]+)/g)].map((m) => m[1]),
-      ...[...`${content}\n${helperContent}`.matchAll(/ErrorCodes\.([A-Z0-9_]+)/g)].map((m) => m[1]),
+      ...(/\bvalidateRequestBody\s*\(/.test(head) ? ['VALIDATION_ERROR'] : []),
     ])];
 
     found.push({
@@ -475,6 +543,43 @@ function openapiPath(raw: string): string {
 function operationId(method: string, path: string): string {
   const suffix = path.replace(/^\//, '').replace(/\{([^}]+)\}/g, 'by_$1').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return `${method.toLowerCase()}_${suffix || 'root'}`;
+}
+
+/**
+ * Source line numbers move whenever a route file is edited above a
+ * registration, so `--check` ignores them. Everything else — paths, methods,
+ * schemas, examples, error codes — must match the committed document.
+ */
+function withoutLineNumbers(value: unknown): string {
+  return JSON.stringify(value, (key, val) => (key === 'source' && typeof val === 'string' ? val.replace(/:\d+$/, '') : val));
+}
+
+function checkCommitted(serialized: string, count: number, fileCount: number): void {
+  let committed: { paths?: Record<string, Record<string, unknown>> };
+  try {
+    committed = JSON.parse(readFileSync(outPath, 'utf-8')) as { paths?: Record<string, Record<string, unknown>> };
+  } catch {
+    console.error(`export-openapi --check: ${outPath} is missing or unreadable. Run "pnpm --filter catalyst-backend run openapi:export".`);
+    process.exitCode = 1;
+    return;
+  }
+  const rebuilt = JSON.parse(serialized) as { paths: Record<string, Record<string, unknown>> };
+  if (withoutLineNumbers(committed) === withoutLineNumbers(rebuilt)) {
+    console.log(`export-openapi: ${outPath} matches route source (${count} operations from ${fileCount} files).`);
+    return;
+  }
+  const drifted: string[] = [];
+  for (const [path, item] of Object.entries(rebuilt.paths)) {
+    for (const [method, operation] of Object.entries(item)) {
+      if (withoutLineNumbers(committed.paths?.[path]?.[method]) !== withoutLineNumbers(operation)) drifted.push(`${method.toUpperCase()} ${path}`);
+    }
+  }
+  for (const path of Object.keys(committed.paths ?? {})) if (!(path in rebuilt.paths)) drifted.push(`REMOVED ${path}`);
+  console.error(`export-openapi --check: ${outPath} is out of date (${drifted.length} operation(s) differ).`);
+  console.error('  Run "pnpm --filter catalyst-backend run openapi:export" and commit the result.');
+  for (const line of drifted.slice(0, 25)) console.error(`  - ${line}`);
+  if (drifted.length > 25) console.error(`  … ${drifted.length - 25} more`);
+  process.exitCode = 1;
 }
 
 function main(): void {
@@ -511,6 +616,7 @@ function main(): void {
         in: 'path',
         required: true,
         schema: { type: 'string' },
+        ...(/(?:^id$|Id$)/.test(m[1]) ? { example: ID_EXAMPLE } : {}),
       }));
       const declared = op.schema ?? {};
       const declaredParams = declared.params && typeof declared.params === 'object' ? declared.params as Record<string, unknown> : undefined;
@@ -531,26 +637,31 @@ function main(): void {
        const responses = responseObjects(enrichResponse(declaredResponses, method, key), op.mediaTypes);
       const errorStatuses = new Set(op.errorCodes.map((code) => catalog.statusByCode[code] ?? errorStatus(code)));
       const documentedErrors = Object.fromEntries([...errorStatuses].map((status) => [status, { $ref: `#/components/responses/Error${status}` }]));
-      const generatedResponses = {
+      const generatedResponses = withResponseExamples({
         ...(responses ?? {}),
         ...Object.fromEntries(op.statusCodes.filter((code) => !responses?.[code]).map((code) => [code, { description: `HTTP ${code} response observed in source.` }])),
         ...(Object.keys(responses ?? {}).length === 0 && op.statusCodes.length === 0 ? { 'default': { description: 'Response shape is not declared in route metadata.' } } : {}),
         ...(op.requiresAuth ? { '401': { description: 'Unauthenticated.' } } : {}),
-      };
-      const requestSchema = contract ? ref(contract) : declared.body && Object.keys(declared.body as object).length > 0 ? declared.body : { type: 'object', additionalProperties: true };
+      });
+      const declaredBody = declared.body && Object.keys(declared.body as object).length > 0 ? declared.body : undefined;
+      const requestSchema = contract ? ref(contract) : declaredBody ?? { type: 'object', additionalProperties: true };
       const operation: Record<string, unknown> = {
         operationId: operationId(method, key),
         summary: op.summary,
         ...(op.description && op.description !== op.summary ? { description: op.description } : {}),
         tags: Array.isArray(declared.tags) ? declared.tags : [tagFor(path)],
         ...(parameters.length > 0 ? { parameters } : {}),
-         ...((contract || declared.body) ? { requestBody: { required: true, content: { 'application/json': { schema: requestSchema } } } } : {}),
+         ...((contract || declaredBody) ? { requestBody: { required: true, content: { 'application/json': { schema: requestSchema, ...(contract && EXAMPLES[contract] ? { example: EXAMPLES[contract] } : {}) } } } } : {}),
          responses: { ...generatedResponses, ...documentedErrors },
          ...(op.requiresAuth ? { security: [{ bearerAuth: [], cookieAuth: [] }] } : headerParams.some((p) => p.name.toLowerCase() === 'authorization') ? { security: [{ bearerAuth: [] }] } : headerParams.some((p) => p.name.toLowerCase().startsWith('x-catalyst-') || p.name.toLowerCase() === 'x-node-api-key') ? { security: [{ nodeApiKey: [] }] } : {}),
         'x-catalyst': {
           source: `${op.file}:${op.line}`,
           ...(op.permissions.length > 0 ? { permissionGuards: op.permissions } : {}),
           ...(op.errorCodes.length > 0 ? { errorCodes: op.errorCodes } : {}),
+          // A write endpoint that declares no body contract is a gap, not an
+          // endpoint that takes nothing. Flag it so readers and the ratchet in
+          // openapi-contract.test.ts can see it.
+          ...(['POST', 'PUT', 'PATCH'].includes(method) && !contract && !declaredBody ? { bodyUndocumented: true } : {}),
         },
       };
       paths[key] ??= {};
@@ -569,11 +680,37 @@ function main(): void {
     tags: ['Auth'],
     parameters: [{ name: 'path', in: 'path', required: true, schema: { type: 'string' } }],
     responses: { default: { description: 'Response generated by Better Auth.' } },
-    'x-catalyst': { source: 'src/server.ts:799', wildcard: true },
+    // Better Auth owns this body; the panel does not declare its shape.
+    'x-catalyst': { source: 'src/server.ts:799', wildcard: true, ...(['post', 'put', 'patch'].includes(method) ? { bodyUndocumented: true } : {}) },
   });
   paths['/api/auth/{path}'] ??= {};
   for (const method of ['get', 'post', 'put', 'patch', 'delete', 'options']) {
     paths['/api/auth/{path}'][method] = authWildcard(method);
+    count++;
+  }
+
+  // Plugins contribute routes at runtime, so the contract can only describe the
+  // dispatcher src/plugins/loader.ts mounts for every `/api/plugins/{name}/*`
+  // path. The matched handler, its auth mode and its response belong to the
+  // plugin; an unmatched path answers 404.
+  const pluginWildcard = (method: string): Record<string, unknown> => ({
+    operationId: operationId(method, '/api/plugins/{pluginName}/{path}'),
+    summary: 'Dispatch a route registered by a plugin',
+    description: 'Catch-all dispatcher for plugin-contributed routes (see registerPluginRouteDispatcher). The plugin owns the handler, auth mode and response shape.',
+    tags: ['Plugins'],
+    parameters: [
+      { name: 'pluginName', in: 'path', required: true, schema: { type: 'string' } },
+      { name: 'path', in: 'path', required: true, schema: { type: 'string' } },
+    ],
+    responses: {
+      '404': { $ref: '#/components/responses/Error404' },
+      default: { description: 'Response produced by the plugin handler.' },
+    },
+    'x-catalyst': { source: 'src/plugins/route-table.ts:149', wildcard: true, pluginDispatched: true, ...(['post', 'put', 'patch'].includes(method) ? { bodyUndocumented: true } : {}) },
+  });
+  paths['/api/plugins/{pluginName}/{path}'] ??= {};
+  for (const method of ['get', 'post', 'put', 'patch', 'delete', 'options']) {
+    paths['/api/plugins/{pluginName}/{path}'][method] = pluginWildcard(method);
     count++;
   }
 
@@ -583,8 +720,10 @@ function main(): void {
       title: 'Catalyst API',
       description:
         'Authoritative endpoint contract generated statically from catalyst-backend/src/routes/. ' +
-        'Request/response shapes are validated by zod schemas in the handlers; this document captures ' +
-        'routes, auth, parameters, and referenced error codes. Generated by scripts/export-openapi.ts — do not edit by hand.',
+        'Path, method, auth, path parameters, declared request/response schemas, examples and the ' +
+        'stable error codes each handler references are read from the route source. Write operations ' +
+        'that declare no request-body schema are marked x-catalyst.bodyUndocumented rather than ' +
+        'presented as taking no body. Generated by scripts/export-openapi.ts — do not edit by hand.',
       version: '1.0.0',
     },
     // No server URL. A relative "/api" makes the docs site the target of
@@ -635,8 +774,13 @@ function main(): void {
     },
   };
 
+  const serialized = `${JSON.stringify(doc, null, 2)}\n`;
+  if (checkOnly) {
+    checkCommitted(serialized, count, files.length);
+    return;
+  }
   mkdirSync(dirname(outPath), { recursive: true });
-  writeFileSync(outPath, `${JSON.stringify(doc, null, 2)}\n`);
+  writeFileSync(outPath, serialized);
   console.log(`export-openapi: ${count} operations from ${files.length} files → ${outPath}`);
 }
 

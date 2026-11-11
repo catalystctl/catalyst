@@ -393,7 +393,7 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
   // Transfer server to another node
   app.post(
     "/:id/transfer",
-    { schema: { summary: "Retrieve transfer", description: "Retrieve transfer.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
+    { schema: { summary: "Transfer a server to another node", description: "Transfer a server to another node.", tags: ["Admin Ops"], params: { type: "object", required: ['id'], properties: { id: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
       const { targetNodeId } = request.body as {

@@ -455,7 +455,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite (authenticated)
   app.post(
     "/invites/accept",
-    { schema: { summary: "Retrieve accept for invites", description: "Retrieve accept for invites.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { keyScopeExemptReason: 'invite acceptance is gated by the bearer invite token itself, not a permission' }},
+    { schema: { summary: "Accept a server invite", description: "Accept a server invite.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { keyScopeExemptReason: 'invite acceptance is gated by the bearer invite token itself, not a permission' }},
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user.userId;
       const { token } = request.body as { token?: string };
@@ -476,7 +476,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
   // Accept invite + register
   app.post(
     "/invites/register",
-    { schema: { summary: "Retrieve register for invites", description: "Retrieve register for invites.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    { schema: { summary: "Accept an invite and register an account", description: "Accept an invite and register an account.", tags: ["Invites"], response: { 200: { type: "object", additionalProperties: true } } },  config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { token, username, password } = request.body as {
         token?: string;

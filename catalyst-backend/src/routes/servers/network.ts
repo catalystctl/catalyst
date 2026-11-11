@@ -484,7 +484,7 @@ export async function serverNetworkRoutes(app: FastifyInstance) {
   // Set primary allocation (allowed when running — no firewall change needed, just metadata swap)
   app.post(
     "/:serverId/allocations/primary",
-    { schema: { summary: "Retrieve primary for allocations", description: "Retrieve primary for allocations.", tags: ["Network"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
+    { schema: { summary: "Set the primary allocation", description: "Set the primary allocation.", tags: ["Network"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate] },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
       const { containerPort } = request.body as { containerPort: number };
