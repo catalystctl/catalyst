@@ -450,6 +450,72 @@ impl StorageManager {
         Ok(())
     }
 
+    /// Remount every disk image whose mount point lost its mount.
+    ///
+    /// Loop mounts do not survive a host reboot, and nothing else remounts an
+    /// image for a server that is not being started: `ensure_mounted` runs only
+    /// from start/install/restore. An unmounted image therefore leaves
+    /// `<data_dir>/<uuid>` as a plain empty directory, so the file explorer and
+    /// SFTP report an empty server while its data is still inside
+    /// `<data_dir>/images/<uuid>.img` — the "all my files are gone" symptom a
+    /// customer hits after rebooting a node.
+    pub async fn remount_unmounted_images(&self) -> AgentResult<()> {
+        for (uuid, mount_dir, size_mb) in self.unmounted_image_targets().await? {
+            match self.ensure_mounted(&uuid, &mount_dir, size_mb).await {
+                Ok(_) => info!("Remounted disk image for {} at startup", uuid),
+                Err(e) => warn!("Could not remount disk image for {}: {}", uuid, e),
+            }
+        }
+        Ok(())
+    }
+
+    /// Disk images that have a server directory but no live mount.
+    ///
+    /// Only existing directories are returned: an orphan image must not
+    /// resurrect a server whose data directory was deleted. `size_mb` is the
+    /// image's own size, so remounting never grows a quota.
+    pub(crate) async fn unmounted_image_targets(&self) -> AgentResult<Vec<(String, PathBuf, u64)>> {
+        let images_dir = self.images_dir();
+        let mut targets = Vec::new();
+        if !images_dir.exists() {
+            return Ok(targets);
+        }
+        let mut entries = match fs::read_dir(&images_dir).await {
+            Ok(e) => e,
+            Err(e) => {
+                warn!("Could not scan storage images for remount: {}", e);
+                return Ok(targets);
+            }
+        };
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Some(uuid) = name.strip_suffix(".img") else {
+                continue;
+            };
+            if uuid.is_empty() || uuid.contains('/') || uuid.contains('\0') {
+                continue;
+            }
+            let mount_dir = self.data_dir.join(uuid);
+            // symlink_metadata: never mount over a symlinked server directory.
+            match fs::symlink_metadata(&mount_dir).await {
+                Ok(meta) if meta.is_dir() => {}
+                _ => continue,
+            }
+            if self.is_mounted(&mount_dir).await.unwrap_or(false) {
+                continue;
+            }
+            let size_mb = match self.image_size_mb(&path).await {
+                Ok(mb) if mb > 0 => mb,
+                _ => continue,
+            };
+            targets.push((uuid.to_string(), mount_dir, size_mb));
+        }
+        Ok(targets)
+    }
+
     pub async fn resize(
         &self,
         server_uuid: &str,
@@ -1440,6 +1506,60 @@ mod tests {
         assert!(dest.join("new.txt").exists());
         assert!(!dest.join("live.txt").exists());
         assert!(!src.exists());
+    }
+
+    #[tokio::test]
+    async fn remount_targets_skip_orphans_files_and_symlinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let images = tmp.path().join("images");
+        std::fs::create_dir_all(&images).unwrap();
+        // A server whose directory survives the reboot but whose image is no
+        // longer mounted: this is the one that must be remounted.
+        std::fs::create_dir_all(tmp.path().join("live")).unwrap();
+        std::fs::write(images.join("live.img"), vec![0u8; 1024 * 1024]).unwrap();
+        // Orphan image: deleting a server removes the dir before the image.
+        std::fs::write(images.join("orphan.img"), vec![0u8; 1024 * 1024]).unwrap();
+        // A symlinked server dir must never be mounted over.
+        std::fs::create_dir_all(tmp.path().join("linked-target")).unwrap();
+        std::os::unix::fs::symlink(tmp.path().join("linked-target"), tmp.path().join("linked"))
+            .unwrap();
+        std::fs::write(images.join("linked.img"), vec![0u8; 1024 * 1024]).unwrap();
+        // Non-image files in the images dir are ignored.
+        std::fs::write(images.join("notes.txt"), b"x").unwrap();
+
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        let mut targets = sm.unmounted_image_targets().await.unwrap();
+        targets.sort();
+        let uuids: Vec<&str> = targets.iter().map(|(uuid, _, _)| uuid.as_str()).collect();
+        assert_eq!(uuids, vec!["live"], "only a real server dir is remounted");
+        assert_eq!(targets[0].1, tmp.path().join("live"));
+        assert_eq!(targets[0].2, 1, "remount uses the image's own size");
+    }
+
+    #[tokio::test]
+    async fn remount_never_fails_startup_when_a_mount_fails() {
+        // Mounting needs root, so on an unprivileged node (or a bogus image)
+        // this exercises the per-image failure path. Startup must survive it:
+        // the caller falls back to the plain directory, exactly as server start
+        // does, instead of refusing to boot.
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("images")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("srv1")).unwrap();
+        std::fs::write(tmp.path().join("images/srv1.img"), vec![0u8; 1024 * 1024]).unwrap();
+
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        sm.remount_unmounted_images()
+            .await
+            .expect("remount is best-effort");
+    }
+
+    #[tokio::test]
+    async fn remount_without_images_dir_is_a_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sm = StorageManager::new(tmp.path().to_path_buf());
+        sm.remount_unmounted_images()
+            .await
+            .expect("remount with no images dir");
     }
 
     #[tokio::test]

@@ -165,13 +165,31 @@ impl CatalystAgent {
     pub async fn run(&self, mut shutdown_rx: broadcast::Receiver<()>) -> AgentResult<()> {
         info!("Starting Catalyst Agent");
 
-        // Heal loop images whose file grew but ext4/loop capacity did not.
-        // Safe to run while game servers are up (online resize2fs).
-        if let Err(e) = self.storage_manager.heal_mounted_images().await {
-            warn!("Storage heal on startup failed: {}", e);
-            self.ws_handler
-                .queue_startup_error(format!("Storage heal on startup failed: {}", e))
-                .await;
+        // Loop mounts do not survive a host reboot, and nothing remounts an
+        // image for a server that is not being started — without this the
+        // server directory stays an empty mount point, so the file explorer and
+        // SFTP report an empty server while the data sits in images/<uuid>.img.
+        //
+        // Background, and before the heal pass: a first-mount data migration can
+        // take minutes, and the two passes must not mount the same image at
+        // once. Heal then covers the images this pass just remounted.
+        {
+            let storage = self.storage_manager.clone();
+            let ws = self.ws_handler.clone();
+            tokio::spawn(async move {
+                if let Err(e) = storage.remount_unmounted_images().await {
+                    warn!("Storage remount on startup failed: {}", e);
+                    ws.queue_startup_error(format!("Storage remount on startup failed: {}", e))
+                        .await;
+                }
+                // Heal loop images whose file grew but ext4/loop capacity did
+                // not. Safe to run while game servers are up (online resize2fs).
+                if let Err(e) = storage.heal_mounted_images().await {
+                    warn!("Storage heal on startup failed: {}", e);
+                    ws.queue_startup_error(format!("Storage heal on startup failed: {}", e))
+                        .await;
+                }
+            });
         }
 
         // One-time repair for server files created by earlier versions that
