@@ -162,6 +162,10 @@ catalyst-frontend/playwright/.cache/
 # Logs
 *.log
 
+# Python bytecode from the LXC lab helper scripts
+__pycache__/
+*.pyc
+
 # Real environment files — only the *.example templates are tracked.
 # (Per-package .gitignore files cover the plain `.env` case.)
 .env.*
