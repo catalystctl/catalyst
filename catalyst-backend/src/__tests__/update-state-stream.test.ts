@@ -13,8 +13,8 @@
  * These tests pin the wire contract the frontend relies on.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync, rmSync, existsSync } from 'node:fs';
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const SOURCE = readFileSync(
@@ -23,16 +23,7 @@ const SOURCE = readFileSync(
 );
 const SERVER_SOURCE = readFileSync(resolve(__dirname, '../server.ts'), 'utf8');
 
-const UPDATE_MARKER = '/tmp/catalyst-update-in-flight';
-
 describe('panel update state stream contract', () => {
-  beforeEach(() => {
-    rmSync(UPDATE_MARKER, { force: true });
-  });
-
-  afterEach(() => {
-    rmSync(UPDATE_MARKER, { force: true });
-  });
 
   it('SSE event states are exactly the frontend modal phases', () => {
     // UpdateProgressModal maps `phase` against these names; anything else
@@ -101,16 +92,24 @@ describe('panel update state stream contract', () => {
     expect(SERVER_SOURCE).toContain('emitUpdateCompletedFromBoot');
   });
 
-  it('marker path lives in /tmp (ephemeral per container, not a volume)', () => {
-    // It must NOT survive container recreation — the marker describes the
-    // previous process's update, and each container has its own /tmp.
-    expect(SOURCE).toContain('"/tmp/catalyst-update-in-flight"');
+  it('marker lives in the panel state dir, not a shared temp directory', () => {
+    // A predictable name under /tmp is a symlink target for any other local
+    // user (CWE-377, CodeQL js/insecure-temporary-file): the writer would
+    // follow a planted link. The panel's own state root is writable by the
+    // backend user only, and in the compose stack only its subdirectories are
+    // volumes — so the marker still does not survive container recreation,
+    // which is what it wants: it describes the previous process's update.
+    expect(SOURCE).toContain('process.env.CATALYST_STATE_DIR || "/var/lib/catalyst"');
+    expect(SOURCE).toContain('"update-in-flight"');
+    expect(SOURCE).not.toContain('/tmp/catalyst-update-in-flight');
+    // O_CREAT|O_EXCL: an existing path (or a symlink) is never truncated through.
+    expect(SOURCE).toMatch(/writeFileSync\(\s*UPDATE_IN_FLIGHT_MARKER,[\s\S]{0,160}flag: "wx"/);
   });
 
-  it('marker is cleaned up when no update ran (existsSync guard)', () => {
-    // Smoke: without a marker, the boot function is a no-op and writes
-    // nothing. (Direct unit call — module import requires no DB at this
-    // path; it only touches fs + the gateway ref, which is unset here.)
-    expect(existsSync(UPDATE_MARKER)).toBe(false);
+  it('marker is only written on the restarting transition, never at import', () => {
+    // A top-level write would announce a completed update on every boot: the
+    // marker must appear exactly once, inside setUpdateState's restarting
+    // branch (asserted above).
+    expect([...SOURCE.matchAll(/markUpdateInFlight\(\);/g)]).toHaveLength(1);
   });
 });

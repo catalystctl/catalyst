@@ -86,16 +86,33 @@ const TAR_EXTENSIONS = new Set([
 ]);
 
 /**
+ * Drop every trailing `/` with an explicit scan.
+ *
+ * `value.replace(/\/+$/, "")` looks harmless but is not: the pattern is
+ * unanchored, so the engine retries it at every offset and a value made of many
+ * slashes costs O(n²) (CodeQL `js/polynomial-redos`). Archive member names come
+ * from a user-supplied archive, so the work is done in one linear pass instead.
+ */
+export function stripTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value.charCodeAt(end - 1) === 47 /* "/" */) end -= 1;
+  return end === value.length ? value : value.slice(0, end);
+}
+
+/** Drop every leading `/`, in one linear pass. See {@link stripTrailingSlashes}. */
+export function stripLeadingSlashes(value: string): string {
+  let start = 0;
+  while (start < value.length && value.charCodeAt(start) === 47 /* "/" */) start += 1;
+  return start === 0 ? value : value.slice(start);
+}
+
+/**
  * Strip a leading `./` and trailing slashes so archive listings from different
  * tools compare equal. Member names are case-folded because packs exported on
  * Windows routinely disagree on the case of `Modrinth.index.json`.
  */
 export function normalizeEntryName(name: string): string {
-  return name
-    .replace(/\\/g, "/")
-    .replace(/^\.\/+/, "")
-    .replace(/\/+$/, "")
-    .trim();
+  return stripTrailingSlashes(name.replace(/\\/g, "/").replace(/^\.\/+/, "")).trim();
 }
 
 function extensionOf(filename: string): string {
@@ -273,8 +290,14 @@ export function parseMrpackIndex(raw: unknown): MrpackIndex {
   };
 }
 
-/** Map Modrinth's `dependencies` block onto a human loader label. */
-function mrpackLoader(index: MrpackIndex): string | undefined {
+/**
+ * Map Modrinth's `dependencies` block onto a human loader label.
+ *
+ * The single source of truth for the loader name: the installer reads it into
+ * `ModpackInstallResult.modLoader`, so a duplicated copy elsewhere is how the
+ * two drift apart.
+ */
+export function mrpackLoader(index: MrpackIndex): string | undefined {
   const deps = index.dependencies ?? {};
   if (deps["fabric-loader"]) return "fabric";
   if (deps["quilt-loader"]) return "quilt";

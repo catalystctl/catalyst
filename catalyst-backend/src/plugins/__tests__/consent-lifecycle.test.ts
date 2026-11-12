@@ -22,20 +22,55 @@ function manifest(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** ESM backend module that writes marker files on lifecycle hooks. */
-function backendModule(opts: { onLoad?: string; onEnable?: string }): string {
-  const parts: string[] = [];
-  if (opts.onLoad) {
-    parts.push(
-      `onLoad: async () => { await import('node:fs/promises').then(({ writeFile }) => writeFile(${JSON.stringify(opts.onLoad)}, 'x')); }`,
-    );
+/**
+ * Backend module written for every test plugin.
+ *
+ * The marker paths are deliberately NOT interpolated into this source. Building
+ * code out of test values is what CodeQL's `js/bad-code-sanitization` flags
+ * (CWE-94), and it buys nothing: the module is a constant that reads
+ * `markers.json` from its own directory — the loader stages the whole plugin
+ * directory, so the relative URL resolves in the staged copy too. Only data
+ * crosses the boundary, never code.
+ */
+const MARKERS_FILE = 'markers.json';
+
+const BACKEND_MODULE_SOURCE = `import { readFile, writeFile } from 'node:fs/promises';
+
+const markerFor = async (hook) => {
+  try {
+    const raw = JSON.parse(await readFile(new URL('./markers.json', import.meta.url), 'utf8'));
+    return raw[hook];
+  } catch {
+    return undefined;
   }
-  if (opts.onEnable) {
-    parts.push(
-      `onEnable: async () => { await import('node:fs/promises').then(({ writeFile }) => writeFile(${JSON.stringify(opts.onEnable)}, 'x')); }`,
-    );
-  }
-  return `export default { ${parts.join(', ')} };`;
+};
+
+const mark = async (hook) => {
+  const target = await markerFor(hook);
+  if (target) await writeFile(target, 'x');
+};
+
+export default {
+  onLoad: async () => mark('onLoad'),
+  onEnable: async () => mark('onEnable'),
+};
+`;
+
+/** The marker paths for a test plugin, as written to `markers.json`. */
+function markersFor(opts: { onLoad?: string; onEnable?: string }): Record<string, string> {
+  return {
+    ...(opts.onLoad ? { onLoad: opts.onLoad } : {}),
+    ...(opts.onEnable ? { onEnable: opts.onEnable } : {}),
+  };
+}
+
+/** Write the backend module and the marker paths it reads, into `pluginDir`. */
+async function writeBackendModule(
+  pluginDir: string,
+  opts: { onLoad?: string; onEnable?: string },
+): Promise<void> {
+  await writeFile(path.join(pluginDir, 'backend.mjs'), BACKEND_MODULE_SOURCE);
+  await writeFile(path.join(pluginDir, MARKERS_FILE), JSON.stringify(markersFor(opts)));
 }
 
 function disabledRow(): Record<string, any> {
@@ -138,7 +173,7 @@ async function setupPlugin(
     path.join(pluginDir, 'plugin.json'),
     JSON.stringify(manifest({ runtime: 'legacy', backend: { entry: 'backend.mjs' } })),
   );
-  await writeFile(path.join(pluginDir, 'backend.mjs'), backendModule(backendOpts));
+  await writeBackendModule(pluginDir, backendOpts);
   const { prisma, row, updateCalls } = makePrisma(initialRow);
   const instance = loader(root, prisma);
   await instance.loadPlugin(pluginDir);
@@ -240,7 +275,7 @@ describe('PluginLoader consent lifecycle', () => {
       path.join(pluginDir, 'plugin.json'),
       JSON.stringify(manifest({ runtime: 'legacy', version: '2.0.0', backend: { entry: 'backend.mjs' } })),
     );
-    await writeFile(path.join(pluginDir, 'backend.mjs'), backendModule({ onLoad: reloaded }));
+    await writeBackendModule(pluginDir, { onLoad: reloaded });
 
     await instance.reloadPlugin('test-plugin');
 
@@ -272,7 +307,7 @@ describe('PluginLoader consent lifecycle', () => {
       path.join(pluginDir, 'plugin.json'),
       JSON.stringify(manifest({ runtime: 'legacy', backend: { entry: 'backend.mjs' } })),
     );
-    await writeFile(path.join(pluginDir, 'backend.mjs'), backendModule({ onLoad: loaded }));
+    await writeBackendModule(pluginDir, { onLoad: loaded });
     const { prisma } = makePrisma(null);
     const instance = loader(root, prisma);
 
@@ -314,7 +349,7 @@ describe('PluginLoader consent lifecycle', () => {
     await instance.enablePlugin('test-plugin');
 
     // Same version, new code: consent is unchanged, so the reload applies it.
-    await writeFile(path.join(pluginDir, 'backend.mjs'), backendModule({ onLoad: reloaded }));
+    await writeBackendModule(pluginDir, { onLoad: reloaded });
     await instance.reloadPlugin('test-plugin');
 
     const plugin = pluginOf(instance);

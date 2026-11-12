@@ -317,6 +317,11 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 	}),
 
 	// ── Storage ───────────────────────────────────────────────────────────
+	base("CATALYST_STATE_DIR", "storage", "path", {
+		default: "/var/lib/catalyst",
+		description:
+			"Private directory for panel state that must survive a process restart (the panel self-update in-flight marker). Must not be a shared temp directory.",
+	}),
 	base("SERVER_DATA_DIR", "storage", "path", {
 		default: "/var/lib/catalyst/servers",
 		description: "Root directory for server data on the panel.",

@@ -16,12 +16,15 @@ import {
   curseforgeLoader,
   detectArchiveContainer,
   ModpackArchiveError,
+  mrpackLoader,
   normalizeEntryName,
   parseCurseforgeManifest,
   parseMrpackIndex,
   planArchiveOverrides,
   planCurseforgeFiles,
   planMrpackFiles,
+  stripLeadingSlashes,
+  stripTrailingSlashes,
   type ArchiveContainer,
   type ArchiveEntryLike,
   type ModpackFormat,
@@ -81,15 +84,23 @@ export interface ModpackInstallResult {
 
 const MANIFEST_NAMES = ["modrinth.index.json", "manifest.json"] as const;
 
+/**
+ * Join an extraction root with an archive-relative member path.
+ *
+ * Both sides are normalized with the linear slash scans from modpack-archive
+ * rather than `replace(/\/+$/, "")`: that regex is unanchored and quadratic on
+ * a name made of many slashes (CodeQL `js/polynomial-redos`), and the name here
+ * comes straight out of an archive the user uploaded.
+ */
 function joinPath(base: string, relative: string): string {
-  const left = base.replace(/\/+$/, "");
-  const right = relative.replace(/^\/+/, "");
+  const left = stripTrailingSlashes(base);
+  const right = stripLeadingSlashes(relative);
   if (!left) return `/${right}`;
   return `${left}/${right}`;
 }
 
 function normalizeDir(value: string): string {
-  const cleaned = value.replace(/\\/g, "/").replace(/\/+$/, "");
+  const cleaned = stripTrailingSlashes(value.replace(/\\/g, "/"));
   return cleaned.length === 0 ? "/" : cleaned;
 }
 
@@ -320,7 +331,7 @@ export class ModpackInstaller {
         result.name = index.name;
         result.version = index.versionId;
         result.gameVersion = index.dependencies?.minecraft;
-        result.modLoader = loaderFromDependencies(index.dependencies ?? {});
+        result.modLoader = mrpackLoader(index);
         const planned = planMrpackFiles(index);
         files = planned.files;
         result.skipped.push(...planned.skipped);
@@ -383,12 +394,4 @@ export class ModpackInstaller {
     }
     throw new ModpackArchiveError("Manifest download returned no content", "invalid-manifest");
   }
-}
-
-function loaderFromDependencies(dependencies: Record<string, string>): string | undefined {
-  if (dependencies["fabric-loader"]) return "fabric";
-  if (dependencies["quilt-loader"]) return "quilt";
-  if (dependencies.forge) return "forge";
-  if (dependencies.neoforge) return "neoforge";
-  return undefined;
 }

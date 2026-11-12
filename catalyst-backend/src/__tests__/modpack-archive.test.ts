@@ -11,6 +11,8 @@ import {
   planArchiveOverrides,
   planCurseforgeFiles,
   planMrpackFiles,
+  stripLeadingSlashes,
+  stripTrailingSlashes,
   ModpackArchiveError,
 } from "../lib/modpack-archive";
 
@@ -99,6 +101,37 @@ describe("normalizeEntryName", () => {
     expect(normalizeEntryName("./mods/foo.jar")).toBe("mods/foo.jar");
     expect(normalizeEntryName("overrides/")).toBe("overrides");
     expect(normalizeEntryName("mods\\foo.jar")).toBe("mods/foo.jar");
+  });
+});
+
+describe("slash scanning", () => {
+  // The scans exist because `replace(/\/+$/, "")` is unanchored: it retries at
+  // every offset, so a member name made of many slashes costs O(n²) on a value
+  // an uploaded archive controls (CodeQL js/polynomial-redos). These pin both
+  // the equivalence and the linear behaviour.
+
+  it("matches what the equivalent regex would strip", () => {
+    expect(stripTrailingSlashes("a/b///")).toBe("a/b");
+    expect(stripLeadingSlashes("////a/b")).toBe("a/b");
+    expect(stripTrailingSlashes("///")).toBe("");
+    expect(stripLeadingSlashes("///")).toBe("");
+    expect(stripTrailingSlashes("")).toBe("");
+    // Interior slashes are not the scan's business.
+    expect(stripTrailingSlashes("a//b")).toBe("a//b");
+    expect(stripLeadingSlashes("a//b")).toBe("a//b");
+    // A trailing space is not a slash, so it stops the scan.
+    expect(stripTrailingSlashes("a/  ")).toBe("a/  ");
+  });
+
+  it("handles a slash-only member name without quadratic backtracking", () => {
+    // 200k slashes: the regex took tens of seconds on this, the scan is
+    // microseconds. The bound is generous so a slow CI box cannot flake it.
+    const slashes = "/".repeat(200_000);
+    const started = performance.now();
+    expect(stripTrailingSlashes(`${slashes}mods/x.jar`)).toBe(`${slashes}mods/x.jar`);
+    expect(stripTrailingSlashes(`mods/x.jar${slashes}`)).toBe("mods/x.jar");
+    expect(stripLeadingSlashes(`${slashes}mods/x.jar`)).toBe("mods/x.jar");
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
 

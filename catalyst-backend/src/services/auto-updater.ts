@@ -141,12 +141,29 @@ function emitPanelUpdateAvailable(currentVersion: string, latestVersion: string 
  * subscribers. Without it the progress modal never learned the update had
  * finished and the "update available" flyout stayed stale until a manual
  * page refresh.
+ *
+ * It lives in the panel's own state directory, NOT in the shared temp
+ * directory. `/tmp/<predictable-name>` is a symlink target for any local user
+ * (CWE-377): a native install running the backend with elevated rights would
+ * follow an attacker-planted link and write wherever it pointed. `/var/lib/
+ * catalyst` is the panel's own root — writable by the backend user, not
+ * writable by others, and (in the compose stack only its subdirectories are
+ * volumes) still ephemeral per container, which is exactly what the marker
+ * wants to be: it describes the previous process's update, not history.
  */
-const UPDATE_IN_FLIGHT_MARKER = "/tmp/catalyst-update-in-flight";
+const UPDATE_STATE_DIR = process.env.CATALYST_STATE_DIR || "/var/lib/catalyst";
+const UPDATE_IN_FLIGHT_MARKER = path.join(UPDATE_STATE_DIR, "update-in-flight");
 
 function markUpdateInFlight(): void {
 	try {
-		fs.writeFileSync(UPDATE_IN_FLIGHT_MARKER, new Date().toISOString());
+		fs.mkdirSync(UPDATE_STATE_DIR, { recursive: true, mode: 0o700 });
+		// `wx` is O_CREAT|O_EXCL: an existing path (or a symlink placed there) is
+		// never followed or truncated. Only the marker's existence matters, so a
+		// leftover file failing the write is harmless — boot clears it.
+		fs.writeFileSync(UPDATE_IN_FLIGHT_MARKER, new Date().toISOString(), {
+			flag: "wx",
+			mode: 0o600,
+		});
 	} catch {
 		/* best-effort */
 	}
