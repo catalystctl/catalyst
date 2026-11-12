@@ -12,7 +12,7 @@ import ErrorBoundary from './components/shared/ErrorBoundary';
 import { debugLog } from './lib/debug-log';
 import { useThemeStore } from './stores/themeStore';
 import { themeApi } from './services/api/theme';
-import { adminApi } from './services/api/admin';
+import { loadAdminCustomCss } from './lib/admin-custom-css';
 import { reportSystemError } from './services/api/systemErrors';
 import { describeError } from './utils/errors';
 import { useAuthStore } from './stores/authStore';
@@ -174,30 +174,32 @@ function App() {
 
  adminLoadedRef.current = true;
 
- const loadAdminCustomCss = async () => {
- try {
- const fullSettings = await adminApi.getThemeSettings();
- debugLog('[App] admin theme loaded, customCss length:', fullSettings.customCss?.length ?? 0);
- if (fullSettings.customCss !== undefined) {
- injectCustomCss(fullSettings.customCss);
- }
- } catch (error) {
- // A 403 just means the account lacks admin.read (expected for
- // non-admin roles) — not a system error worth reporting.
- if ((error as { status?: number })?.status === 403) {
+ // The loader reports which outcome happened (applied / forbidden / failed)
+ // instead of returning the same value for a success and a failure, so the
+ // failure is handled here, where the reporting context lives.
+ const loadAdminCss = async () => {
+ const outcome = await loadAdminCustomCss(injectCustomCss);
+ if (outcome.status === 'forbidden') {
+ // Expected for accounts without admin.read — not a system error.
+ debugLog('[App] admin theme skipped: account lacks admin.read');
  return;
  }
+ if (outcome.status === 'failed') {
  reportSystemError({
  level: 'error',
  component: 'App',
- message: describeError(error),
- stack: error instanceof Error ? error.stack : undefined,
+ message: describeError(outcome.error),
+ stack: outcome.error instanceof Error ? outcome.error.stack : undefined,
  metadata: { context: 'loadAdminCustomCss' },
  });
- console.error('[App] Failed to load admin custom CSS:', error);
+ console.error('[App] Failed to load admin custom CSS:', outcome.error);
+ return;
  }
+ debugLog('[App] admin theme loaded, customCss length:', outcome.customCss?.length ?? 0);
  };
- loadAdminCustomCss();
+ // loadAdminCustomCss turns a failure into the 'failed' outcome, so this
+ // loader never rejects and needs no trailing catch.
+ void loadAdminCss();
  }, [isAuthenticated, user, injectCustomCss]);
 
  // Apply theme whenever it changes
