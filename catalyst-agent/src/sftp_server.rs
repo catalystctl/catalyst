@@ -1195,7 +1195,7 @@ impl russh::server::Handler for SshSession {
     async fn auth_publickey_offered(
         &mut self,
         _user: &str,
-        _public_key: &russh::keys::PublicKey,
+        _public_key: russh::server::PublicKeyOffer<'_>,
     ) -> Result<Auth, Self::Error> {
         // SFTP only supports password auth (sftp_ tokens).
         // Reject publickey at the offer stage so the client doesn't
@@ -1206,7 +1206,7 @@ impl russh::server::Handler for SshSession {
     async fn auth_publickey(
         &mut self,
         _user: &str,
-        _public_key: &russh::keys::PublicKey,
+        _public_key: russh::server::VerifiedPublicKey<'_>,
     ) -> Result<Auth, Self::Error> {
         // Reject publickey signature too (belt and suspenders).
         Ok(reject_password())

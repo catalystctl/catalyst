@@ -34,7 +34,16 @@ impl AgentMetrics {
 
     /// Update resident set size metric from current process memory usage.
     pub fn update_memory_usage(&self) {
-        let mut system = System::new();
+        // sysinfo 0.40 made `System::new` fallible; the release profile is
+        // `panic = "abort"`, so a failure skips this sample and keeps the last
+        // known RSS instead of taking the agent down.
+        let mut system = match System::new() {
+            Ok(system) => system,
+            Err(e) => {
+                tracing::warn!("metrics: sysinfo init failed, RSS not sampled: {}", e);
+                return;
+            }
+        };
         if let Ok(pid) = sysinfo::get_current_pid() {
             // RSS needs neither host memory, process CPU/disk counters, nor
             // every Tokio/blocking-pool thread under /proc/<pid>/task.

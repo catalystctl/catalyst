@@ -14,32 +14,46 @@ struct HostStats {
 
 /// Reuse CPU baselines and interface storage. All proc/sysfs reads and statvfs
 /// run on the blocking pool, not a Tokio worker serving game-control traffic.
+///
+/// sysinfo 0.40 made `System::new`/`Networks::new` fallible, and the release
+/// profile is `panic = "abort"`, so the sampler is built lazily into an `Option`
+/// and a construction failure is returned as an error instead of unwrapped.
 async fn collect_host_stats(data_dir: PathBuf) -> AgentResult<HostStats> {
-    static SAMPLER: std::sync::LazyLock<std::sync::Mutex<(System, Networks)>> =
-        std::sync::LazyLock::new(|| {
-            let mut system = System::new();
-            system.refresh_cpu_usage();
-            // Only the initial sample needs a second baseline. Later reports
-            // measure CPU over the reporting interval rather than 200 ms.
-            std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
-            std::sync::Mutex::new((system, Networks::new()))
-        });
-    tokio::task::spawn_blocking(move || {
+    static SAMPLER: std::sync::LazyLock<std::sync::Mutex<Option<(System, Networks)>>> =
+        std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
+    let run = tokio::task::spawn_blocking(move || -> AgentResult<HostStats> {
         let mut sampler = SAMPLER.lock().unwrap_or_else(|p| p.into_inner());
-        let (system, networks) = &mut *sampler;
+        let (system, networks) = match sampler.as_mut() {
+            Some(sampler) => sampler,
+            None => {
+                let mut system = System::new().map_err(|e| {
+                    AgentError::InternalError(format!("sysinfo init failed: {}", e))
+                })?;
+                system.refresh_cpu_usage();
+                // Only the initial sample needs a second baseline. Later reports
+                // measure CPU over the reporting interval rather than 200 ms.
+                std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+                let networks = Networks::new().map_err(|e| {
+                    AgentError::InternalError(format!("sysinfo network init failed: {}", e))
+                })?;
+                sampler.insert((system, networks))
+            }
+        };
         system.refresh_cpu_usage();
         system.refresh_memory();
         networks.refresh(true);
         let mut network_rx_bytes = 0u64;
         let mut network_tx_bytes = 0u64;
-        for (name, data) in networks.list() {
-            if is_physical_interface(name) {
+        for (name, data) in networks.iter() {
+            // sysinfo 0.40 hands interfaces over as OsString; on Linux the
+            // kernel name is always valid UTF-8, so the lossy form is exact.
+            if is_physical_interface(&name.to_string_lossy()) {
                 network_rx_bytes = network_rx_bytes.saturating_add(data.total_received());
                 network_tx_bytes = network_tx_bytes.saturating_add(data.total_transmitted());
             }
         }
         let (disk_usage_mb, disk_total_mb) = data_dir_disk_usage_mb(&data_dir);
-        HostStats {
+        Ok(HostStats {
             cpu_percent: sanitize_cpu_percent(system.global_cpu_usage()),
             memory_usage_mb: system.used_memory() / (1024 * 1024),
             memory_total_mb: system.total_memory() / (1024 * 1024),
@@ -47,10 +61,16 @@ async fn collect_host_stats(data_dir: PathBuf) -> AgentResult<HostStats> {
             disk_total_mb,
             network_rx_bytes,
             network_tx_bytes,
-        }
+        })
     })
-    .await
-    .map_err(|e| AgentError::InternalError(format!("Host metrics task failed: {}", e)))
+    .await;
+    match run {
+        Ok(result) => result,
+        Err(e) => Err(AgentError::InternalError(format!(
+            "Host metrics task failed: {}",
+            e
+        ))),
+    }
 }
 /// Convert ContainerStats cpu_throttling into wire fields: cumulative
 /// throttled time and the throttled-periods ratio.
