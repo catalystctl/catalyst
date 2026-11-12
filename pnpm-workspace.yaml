@@ -53,6 +53,12 @@ overrides:
   'lodash@4': 4.18.1
   'js-yaml@4': 4.3.2
   js-yaml@>=4.0.0 <4.3.2: '>=4.3.2 <5'
+  # minimatch: GHSA-g3hv-75wg-m249 (moderate), patched in 11.0.1. No 10.x fix
+  # exists, so the 10.x tree used by eslint's config-array and archiver's
+  # readdir-glob is forced onto 11 — both are ESM and call the same
+  # `minimatch(path, pattern, options)` API, and the whole suite (lint,
+  # backend archiver tests, frontend tests) runs against the forced version.
+  minimatch@<11.0.1: '>=11.0.1 <12'
   mysql2@<3.22.0: '>=3.22.0 <4'
   mysql2@<=3.23.0: '>=3.23.1 <4'
   nodemailer@<9.1.1: '>=9.1.1 <10'

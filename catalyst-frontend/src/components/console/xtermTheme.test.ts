@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { hslChannelsToHex, paintXtermBackground, readCssVar, tokenValueToColor } from './xtermTheme';
 
 describe('hslChannelsToHex', () => {
@@ -75,21 +75,24 @@ describe('readCssVar', () => {
   });
 
   it('stops after three hops so a long chain cannot hang the theme read', () => {
-    const root = document.documentElement;
-    root.style.setProperty('--xterm-cap-e', '10 20% 30%');
-    root.style.setProperty('--xterm-cap-d', 'var(--xterm-cap-e)');
-    root.style.setProperty('--xterm-cap-c', 'var(--xterm-cap-d)');
-    root.style.setProperty('--xterm-cap-b', 'var(--xterm-cap-c)');
-    root.style.setProperty('--xterm-cap-a', 'var(--xterm-cap-b)');
+    // jsdom 31 resolves var() chains inside getComputedStyle, which no browser
+    // does for custom properties, so the hop budget has to be exercised
+    // against a stub that returns the token stream the way a browser does.
+    const lookup: Record<string, string> = {
+      '--xterm-cap-a': 'var(--xterm-cap-b)',
+      '--xterm-cap-b': 'var(--xterm-cap-c)',
+      '--xterm-cap-c': 'var(--xterm-cap-d)',
+      '--xterm-cap-d': 'var(--xterm-cap-e)',
+      '--xterm-cap-e': '10 20% 30%',
+    };
+    const spy = vi
+      .spyOn(window, 'getComputedStyle')
+      .mockReturnValue({ getPropertyValue: (name: string) => lookup[name] ?? '' } as CSSStyleDeclaration);
     try {
       // a→b→c→d resolves; the fourth hop to --xterm-cap-e is not followed.
       expect(readCssVar('--xterm-cap-a')).toBe('var(--xterm-cap-e)');
     } finally {
-      root.style.removeProperty('--xterm-cap-a');
-      root.style.removeProperty('--xterm-cap-b');
-      root.style.removeProperty('--xterm-cap-c');
-      root.style.removeProperty('--xterm-cap-d');
-      root.style.removeProperty('--xterm-cap-e');
+      spy.mockRestore();
     }
   });
 });

@@ -76,10 +76,17 @@ const metrics = {
   networkTxBytes: 0,
 } as unknown as ServerMetricsType;
 
-/** Widths of every meter fill, in declaration order. */
-function meterWidths(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll<HTMLElement>('span[style*="width"]')).map(
-    (el) => el.style.width,
+/**
+ * Widths of every meter fill, in declaration order, as percentages.
+ *
+ * Compared numerically rather than as strings: a DOM implementation may
+ * serialize `86.66666666666667%` as `86.6667%` (CSS values are serialized to
+ * six significant digits), and the assertion is about the share of the
+ * allocation, not about the serializer's rounding.
+ */
+function meterWidths(container: HTMLElement): number[] {
+  return Array.from(container.querySelectorAll<HTMLElement>('span[style*="width"]')).map((el) =>
+    Number.parseFloat(el.style.width),
   );
 }
 
@@ -112,7 +119,7 @@ describe('CPU gauge on a 3-core server at 260%', () => {
       <ServerHeaderStats metrics={metrics} serverStatus="running" allocatedCpuCores={3} />,
     );
     // 260 / 3 = 86.67% of the allowance: visible headroom remains.
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
     // Default format is cores.
     expect(screen.getAllByText('2.6 / 3 cores').length).toBeGreaterThan(0);
     // The detail (including the percentage) is available on hover.
@@ -125,7 +132,7 @@ describe('CPU gauge on a 3-core server at 260%', () => {
     const { container } = render(
       <ServerMetrics cpu={THREE_CORE_CPU} memory={40} allocatedCpuCores={3} />,
     );
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
     expect(screen.getByText('2.6 / 3 cores')).toBeInTheDocument();
   });
 
@@ -135,7 +142,7 @@ describe('CPU gauge on a 3-core server at 260%', () => {
         <ServerListItem server={server} />
       </MemoryRouter>,
     );
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
     expect(screen.getByText('2.6/3')).toBeInTheDocument();
     // Regression: the old code clamped this reading to exactly "100%".
     expect(screen.queryByText('100%')).not.toBeInTheDocument();
@@ -147,7 +154,7 @@ describe('CPU gauge on a 3-core server at 260%', () => {
         <ServerCard server={server} />
       </MemoryRouter>,
     );
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
     expect(screen.getByText('2.6/3')).toBeInTheDocument();
     expect(screen.queryByText('100%')).not.toBeInTheDocument();
   });
@@ -162,7 +169,7 @@ describe('the three formats print the same sample differently', () => {
     expect(screen.getAllByText('260%').length).toBeGreaterThan(0);
     // The bar must NOT follow the per-core number, or a 1-of-4-cores server
     // would peg it and turn it danger-red.
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
   });
 
   it('share prints the share of the allocation', () => {
@@ -171,7 +178,7 @@ describe('the three formats print the same sample differently', () => {
       <ServerHeaderStats metrics={metrics} serverStatus="running" allocatedCpuCores={3} />,
     );
     expect(screen.getAllByText('87%').length).toBeGreaterThan(0);
-    expect(meterWidths(container)[0]).toBe('86.66666666666667%');
+    expect(meterWidths(container)[0]).toBeCloseTo(THREE_CORE_CPU / 3, 3);
   });
 
   it('cores stays the default and is unaffected by the others', () => {
@@ -237,7 +244,7 @@ describe('CPU gauge on a single-core server at 100%', () => {
     const header = render(
       <ServerHeaderStats metrics={singleCoreMetrics} serverStatus="running" allocatedCpuCores={1} />,
     );
-    expect(meterWidths(header.container)[0]).toBe('100%');
+    expect(meterWidths(header.container)[0]).toBe(100);
     expect(screen.getAllByText('1 / 1 cores').length).toBeGreaterThan(0);
     header.unmount();
 
@@ -247,7 +254,7 @@ describe('CPU gauge on a single-core server at 100%', () => {
       </MemoryRouter>,
     );
     // A single-core server at 100% is genuinely saturated: bar full.
-    expect(meterWidths(list.container)[0]).toBe('100%');
+    expect(meterWidths(list.container)[0]).toBe(100);
   });
 });
 
@@ -261,7 +268,7 @@ describe('CPU gauge without an allocation', () => {
       </MemoryRouter>,
     );
     // 100% against an unknown allocation is one full core: bar full, no NaN.
-    expect(meterWidths(container)[0]).toBe('100%');
+    expect(meterWidths(container)[0]).toBe(100);
     expect(screen.getByText('1/1')).toBeInTheDocument();
   });
 
@@ -274,7 +281,7 @@ describe('CPU gauge without an allocation', () => {
     );
     // Stopped servers keep the meters (they hold the row's shape) but every
     // fill is empty and no stale reading survives.
-    expect(meterWidths(container)).toEqual(['0%', '0%', '0%']);
+    expect(meterWidths(container)).toEqual([0, 0, 0]);
     expect(screen.queryByText(/cores/)).not.toBeInTheDocument();
   });
 });
