@@ -1,0 +1,338 @@
+{
+  "breadcrumbs": {
+    "activity": "Активность",
+    "backups": "Резервные копии",
+    "console": "Консоль",
+    "files": "Файлы",
+    "invites": "Приглашения",
+    "metrics": "Метрики",
+    "nav": "Навигация",
+    "network": "Сеть",
+    "plugin": "Плагин",
+    "settings": "Настройки",
+    "sftp": "SFTP",
+    "tasks": "Задачи"
+  },
+  "nav": {
+    "admin": "Администрирование",
+    "alerts": "Предупреждения",
+    "apiKeys": "API-ключи",
+    "auditLogs": "Журналы аудита",
+    "dashboard": "Обзор",
+    "databases": "Базы данных",
+    "environment": "Среда",
+    "marketplace": "Каталог",
+    "migration": "Миграция",
+    "nodes": "Узлы",
+    "overview": "Обзор",
+    "plugins": "Плагины",
+    "profile": "Профиль",
+    "roles": "Роли",
+    "security": "Безопасность",
+    "servers": "Серверы",
+    "system": "Система",
+    "systemErrors": "Системные ошибки",
+    "templates": "Шаблоны",
+    "theme": "Тема",
+    "tickets": "Обращения",
+    "users": "Пользователи"
+  },
+  "search": {
+    "all": "Все",
+    "categories": {
+      "account": "Учётная запись",
+      "actions": "Быстрые действия",
+      "admin": "Администрирование",
+      "nodes": "Узлы",
+      "pages": "Страницы",
+      "servers": "Серверы",
+      "serverTabs": "Вкладки сервера",
+      "settings": "Настройки и конфигурация",
+      "templates": "Шаблоны"
+    },
+    "close": "Закрыть поиск",
+    "hints": {
+      "close": "закрывать",
+      "navigate": "перемещаться",
+      "open": "открыть",
+      "select": "выбирать"
+    },
+    "hostWithServers": "{{host}} · {{servers}} серверы",
+    "items": {
+      "adminAlerts": {
+        "description": "Настройка правил оповещений и просмотр триггерных оповещений"
+      },
+      "adminApiKeys": {
+        "description": "Управление ключами и токенами API платформы"
+      },
+      "adminAuditLogs": {
+        "description": "Подробный контроль всех действий"
+      },
+      "adminDatabases": {
+        "description": "Управление хостами MySQL и PostgreSQL",
+        "label": "Хосты базы данных"
+      },
+      "adminEnvironment": {
+        "description": "Управляйте переменными среды и перезапускайте панель"
+      },
+      "adminMarketplace": {
+        "description": "Просматривайте и устанавливайте плагины из настроенных торговых площадок."
+      },
+      "adminMigration": {
+        "description": "Импорт серверов из Pterodactyl"
+      },
+      "adminNodes": {
+        "description": "Управление вычислительными узлами и ресурсами"
+      },
+      "adminOverview": {
+        "description": "Панель управления и статистика всей платформы",
+        "label": "Обзор администратора"
+      },
+      "adminPlugins": {
+        "description": "Установка расширений панели и управление ими"
+      },
+      "adminRoles": {
+        "description": "Настройка ролей и групп разрешений",
+        "label": "Роли и разрешения"
+      },
+      "adminSecurity": {
+        "description": "Ограничения скорости, политика блокировки и настройки файлового туннеля"
+      },
+      "adminSystem": {
+        "description": "Конфигурация Health, SMTP и менеджера модов"
+      },
+      "adminSystemErrors": {
+        "description": "Записанные ошибки панели, агента и интерфейса."
+      },
+      "adminTemplates": {
+        "description": "Шаблоны серверов и конфигурации гнезд"
+      },
+      "adminUsers": {
+        "description": "Управление учетными записями пользователей и доступом"
+      },
+      "navDashboard": {
+        "description": "Обзор ваших серверов и активности"
+      },
+      "navProfile": {
+        "description": "Настройки и безопасность учетной записи"
+      },
+      "navServers": {
+        "description": "Просмотр и управление вашими игровыми серверами"
+      },
+      "profile2fa": {
+        "description": "Включите приложение TOTP-аутентификатора для своей учетной записи",
+        "label": "Двухфакторная аутентификация"
+      },
+      "profileApiKeys": {
+        "description": "Управляйте своими личными токенами API",
+        "label": "Персональные ключи API"
+      },
+      "profileAuditLog": {
+        "description": "Ваша недавняя активность и действия",
+        "label": "Журнал личного аудита"
+      },
+      "profilePasskeys": {
+        "description": "Беспарольный вход с использованием биометрических данных или ключей безопасности",
+        "label": "Пароли / WebAuthn"
+      },
+      "profileSessions": {
+        "description": "Просмотр и отзыв активных сеансов входа в систему",
+        "label": "Активные сессии"
+      },
+      "profileSso": {
+        "description": "Просмотр и управление поставщиками входа, связанными с OAuth.",
+        "label": "Связанные аккаунты с системой единого входа"
+      },
+      "settingsAuditRetention": {
+        "description": "Как долго хранятся журналы аудита",
+        "label": "Хранение аудита"
+      },
+      "settingsAuthLockouts": {
+        "description": "Просмотр заблокированных учетных записей и управление ими",
+        "label": "Блокировка аутентификации"
+      },
+      "settingsBrandColors": {
+        "description": "Конфигурация основного, дополнительного и акцентного цвета.",
+        "label": "Фирменные цвета"
+      },
+      "settingsBranding": {
+        "description": "Название панели, логотип и значок",
+        "label": "Брендинг и Айдентика"
+      },
+      "settingsCustomCss": {
+        "description": "Внедряйте собственный CSS на каждую страницу",
+        "label": "Пользовательский CSS"
+      },
+      "settingsDarkSurfaces": {
+        "description": "Фон, карточка, граница и высота для темной темы",
+        "label": "Поверхности темного режима"
+      },
+      "settingsFileTunnel": {
+        "description": "Ограничения скорости передачи файлов и размеры загружаемых файлов",
+        "label": "Настройки файлового туннеля"
+      },
+      "settingsHealth": {
+        "description": "Состояние системы, работоспособность узла и состояние базы данных",
+        "label": "Состояние платформы"
+      },
+      "settingsLayout": {
+        "description": "Глобальная настройка радиуса границы и интервала",
+        "label": "Макет и радиус границы"
+      },
+      "settingsLightSurfaces": {
+        "description": "Фон, карточка, граница и высота для светлой темы",
+        "label": "Поверхности в светлом режиме"
+      },
+      "settingsLockoutPolicy": {
+        "description": "Правила блокировки неудачной попытки входа в систему",
+        "label": "Политика блокировки"
+      },
+      "settingsModManager": {
+        "description": "Ключи API CurseForge и Modrinth для загрузки модов",
+        "label": "Ключи API менеджера модов"
+      },
+      "settingsNodeAllocations": {
+        "description": "Управляйте IP-адресами, портами и пулами CIDR на каждом узле.",
+        "label": "Распределение узлов и пулы IP-адресов"
+      },
+      "settingsPaletteGenerator": {
+        "description": "Автоматическое создание полной темы из одного исходного цвета",
+        "label": "Генератор цветовой палитры"
+      },
+      "settingsRateLimits": {
+        "description": "Ограничения на запросы аутентификации, файлов, консоли и агента",
+        "label": "Ограничения ставок"
+      },
+      "settingsSemanticColors": {
+        "description": "Цвета успеха, предупреждения, опасности и информационной обратной связи",
+        "label": "Семантические цвета"
+      },
+      "settingsSmtp": {
+        "description": "Настройка исходящей электронной почты для оповещений и приглашений",
+        "label": "SMTP / электронная почта"
+      },
+      "settingsSso": {
+        "description": "Настройка входа в WHMCS и OIDC плательщика",
+        "label": "Поставщики единого входа/OAuth"
+      },
+      "settingsThemeMode": {
+        "description": "Тема по умолчанию и доступные режимы (светлый/темный)",
+        "label": "Тематический режим"
+      },
+      "settingsThemeOverview": {
+        "description": "Брендинг, цвета, палитра и внешний вид",
+        "label": "Настройки темы"
+      }
+    },
+    "nodeAllocations": "{{name}} — Распределения",
+    "nodeAllocationsDescription": "IP-пулы, порты и управление CIDR",
+    "noResults": "Результаты не найдены",
+    "noResultsHint": "Попробуйте другие ключевые слова или очистите фильтр.",
+    "placeholder": "Поиск страниц, настроек, серверов, узлов…",
+    "quickActions": {
+      "createServer": {
+        "description": "Разверните новый игровой сервер из шаблона",
+        "label": "Создать новый сервер"
+      }
+    },
+    "resultCount_one": "{{count}} результат",
+    "resultCount_other": "{{count}} результатов",
+    "serverTabs": {
+      "admin": {
+        "description": "Передача владельца, приостановка и действия администратора",
+        "label": "Администратор сервера"
+      },
+      "alerts": {
+        "description": "Правила оповещений и история для конкретного сервера",
+        "label": "Предупреждения"
+      },
+      "backups": {
+        "description": "Управление резервным копированием и восстановлением сервера",
+        "label": "Резервные копии"
+      },
+      "configuration": {
+        "description": "Флаги запуска сервера и настройки JVM",
+        "label": "Конфигурация"
+      },
+      "console": {
+        "description": "Вывод терминала живого сервера",
+        "label": "Консоль"
+      },
+      "databases": {
+        "description": "Управление базой данных сервера",
+        "label": "Базы данных"
+      },
+      "files": {
+        "description": "Просмотр и редактирование файлов сервера",
+        "label": "Файловый менеджер"
+      },
+      "metrics": {
+        "description": "Графики процессора, памяти, диска и сети",
+        "label": "Метрики"
+      },
+      "modManager": {
+        "description": "Найдите и установите моды из CurseForge/Modrinth.",
+        "label": "Менеджер модов"
+      },
+      "pluginManager": {
+        "description": "Установка и управление плагинами сервера",
+        "label": "Менеджер плагинов"
+      },
+      "settings": {
+        "description": "Переименование, переустановка и настройки сервера",
+        "label": "Настройки сервера"
+      },
+      "sftp": {
+        "description": "Сведения о SFTP-подключении и учетные данные",
+        "label": "SFTP-доступ"
+      },
+      "tasks": {
+        "description": "Cron-подобная автоматизация операций сервера",
+        "label": "Запланированные задачи"
+      },
+      "users": {
+        "description": "Управление доступом и разрешениями к серверу",
+        "label": "Субпользователи"
+      }
+    },
+    "serverTabTitle": "{{server}} — {{tab}}",
+    "serverTemplate": "Шаблон сервера",
+    "unknownNode": "Неизвестный узел"
+  },
+  "sections": {
+    "accessControl": "Контроль доступа",
+    "administration": "Администрация",
+    "configuration": "Конфигурация",
+    "extensions": "Расширения",
+    "infrastructure": "Инфраструктура",
+    "main": "Основной",
+    "monitoring": "Мониторинг",
+    "plugins": "Плагины"
+  },
+  "shell": {
+    "closeMenu": "Закрыть меню",
+    "collapseNav": "Свернуть навигацию",
+    "expandNav": "Развернуть навигацию",
+    "fleetHeartbeat": "{{online}}/{{total}} онлайн",
+    "lastRefreshed": "Обновлённый {{when}}",
+    "lastRefreshedNever": "Еще не обновлено",
+    "live": "В реальном времени",
+    "offline": "Живые обновления в автономном режиме",
+    "openMenu": "Открыть меню",
+    "openSearch": "Открыть поиск ({{shortcut}})",
+    "reconnecting": "Повторное подключение…",
+    "refreshing": "Обновление…",
+    "searchButton": "Поиск…",
+    "sections": "Все разделы",
+    "skipToContent": "Перейти к содержимому"
+  },
+  "sidebar": {
+    "darkMode": "Темный режим",
+    "fallbackRole": "Член",
+    "fallbackUser": "Пользователь",
+    "lightMode": "Светлый режим",
+    "logout": "Выход из системы",
+    "updateTooltip": "v{{current}} – устаревший (последний: v{{latest}})",
+    "versionTooltip": "Панель Catalyst v{{version}}"
+  }
+}
