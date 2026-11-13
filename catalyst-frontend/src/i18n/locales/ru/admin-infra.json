@@ -5,8 +5,10 @@
     "assignedIps": "Назначенные IP-адреса ({{value}})",
     "available": "Доступный",
     "bulkDelete": {
-      "message_one": "Вы собираетесь удалить <1>{{count}} выделений</1>.",
-      "message_other": "Вы собираетесь удалить <1>{{count}} выделений</1>.",
+      "message_one": "Вы собираетесь удалить <1>{{count}} выделение</1>.",
+      "message_few": "Вы собираетесь удалить <1>{{count}} выделения</1>.",
+      "message_many": "Вы собираетесь удалить <1>{{count}} выделений</1>.",
+      "message_other": "Вы собираетесь удалить <1>{{count}} выделения</1>.",
       "title": "Удалить распределения",
       "warning": "Назначенные распределения не могут быть удалены и недоступны для выбора. Это невозможно отменить."
     },
@@ -90,12 +92,18 @@
       "poolCreated": "Пул IP создан",
       "poolDeleted": "Пул IP удален.",
       "portDeleted": "Распределение портов удалено.",
-      "portsCreated_one": "Создано {{count}} распределение портов.",
-      "portsCreated_other": "Создано {{count}} выделенных портов.",
-      "portsDeleted_one": "Удалено распределение портов {{count}}.",
-      "portsDeleted_other": "Удалены назначения портов: {{count}}.",
-      "portsDeleteSkipped_one": "Пропущено назначенное распределение: {{count}}",
-      "portsDeleteSkipped_other": "Пропущено назначенных выделений: {{count}}"
+      "portsCreated_one": "Создано {{count}} выделение порта",
+      "portsCreated_few": "Создано {{count}} выделения портов",
+      "portsCreated_many": "Создано {{count}} выделений портов",
+      "portsCreated_other": "Создано {{count}} выделения портов",
+      "portsDeleted_one": "Удалено {{count}} выделение порта",
+      "portsDeleted_few": "Удалено {{count}} выделения портов",
+      "portsDeleted_many": "Удалено {{count}} выделений портов",
+      "portsDeleted_other": "Удалено {{count}} выделения портов",
+      "portsDeleteSkipped_one": "Пропущено {{count}} назначенное выделение",
+      "portsDeleteSkipped_few": "Пропущено {{count}} назначенных выделения",
+      "portsDeleteSkipped_many": "Пропущено {{count}} назначенных выделений",
+      "portsDeleteSkipped_other": "Пропущено {{count}} назначенных выделения"
     }
   },
   "database": {
@@ -136,6 +144,8 @@
       "checking": "Проверка",
       "connected": "Подключено",
       "databaseCount_one": "{{count}} БД",
+      "databaseCount_few": "{{count}} БД",
+      "databaseCount_many": "{{count}} БД",
       "databaseCount_other": "{{count}} БД",
       "disconnected": "Отключено",
       "pingCounts": "{{databases}} БД, {{tables}} таблицы",
@@ -173,11 +183,15 @@
     },
     "assigned": "назначенный",
     "backupWarnings": {
-      "noSlots_one": "На сервере {{count}} 0 резервных слотов",
-      "noSlots_other": "На {{count}} серверах 0 резервных слотов",
+      "noSlots_one": "{{count}} сервер не имеет резервных слотов",
+      "noSlots_few": "{{count}} сервера не имеют резервных слотов",
+      "noSlots_many": "{{count}} серверов не имеют резервных слотов",
+      "noSlots_other": "{{count}} сервера не имеют резервных слотов",
       "noSlotsDescription": "При миграции автоматически будет установлено ограничение резервного копирования, равное 1, на этих серверах для создания резервной копии миграции.",
-      "slotsFull_one": "На сервере {{count}} все резервные слоты заняты.",
-      "slotsFull_other": "На {{count}} серверах все резервные слоты заняты.",
+      "slotsFull_one": "{{count}} сервер использует все резервные слоты",
+      "slotsFull_few": "{{count}} сервера используют все резервные слоты",
+      "slotsFull_many": "{{count}} серверов используют все резервные слоты",
+      "slotsFull_other": "{{count}} сервера используют все резервные слоты",
       "slotsFullDescription": "При миграции лимит резервного копирования автоматически увеличится на 1, чтобы освободить место для резервной копии миграции."
     },
     "connect": {
@@ -400,7 +414,9 @@
     "lastSeen": "Последний раз был в сети {{time}}",
     "loadFailed": "Невозможно загрузить узлы.",
     "locationNodeCount_one": "{{count}} узел",
-    "locationNodeCount_other": "{{count}} узлов",
+    "locationNodeCount_few": "{{count}} узла",
+    "locationNodeCount_many": "{{count}} узлов",
+    "locationNodeCount_other": "{{count}} узла",
     "locations": "Локации",
     "manage": "Управлять",
     "resultCount": "{{shown}} из {{total}}",
@@ -432,10 +448,14 @@
     },
     "title": "Узлы",
     "toast": {
-      "deleted_one": "{{count}} узел удален",
-      "deleted_other": "{{count}} узлов удалено",
-      "deleteFailed_one": "Не удалось удалить узел {{count}}.",
-      "deleteFailed_other": "Не удалось удалить {{count}} узлов."
+      "deleted_one": "Удален {{count}} узел",
+      "deleted_few": "Удалено {{count}} узла",
+      "deleted_many": "Удалено {{count}} узлов",
+      "deleted_other": "Удалено {{count}} узла",
+      "deleteFailed_one": "Не удалось удалить {{count}} узел",
+      "deleteFailed_few": "Не удалось удалить {{count}} узла",
+      "deleteFailed_many": "Не удалось удалить {{count}} узлов",
+      "deleteFailed_other": "Не удалось удалить {{count}} узла"
     },
     "unassigned": "Неназначенный"
   }

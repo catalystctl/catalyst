@@ -10,10 +10,14 @@
   },
   "attention": {
     "alertsOpen_one": "{{count}} активное предупреждение",
-    "alertsOpen_other": "{{count}} активного предупреждения",
+    "alertsOpen_few": "{{count}} активных предупреждения",
+    "alertsOpen_many": "{{count}} активных предупреждений",
+    "alertsOpen_other": "{{count}} активных предупреждения",
     "allClear": "Всё работает",
     "allClearDetail": "Нет отключённых серверов и непросмотренных предупреждений.",
     "nodesOffline_one": "{{count}} узел не в сети",
+    "nodesOffline_few": "{{count}} узла не в сети",
+    "nodesOffline_many": "{{count}} узлов не в сети",
     "nodesOffline_other": "{{count}} узла не в сети",
     "title": "Требует внимания"
   },
@@ -36,7 +40,9 @@
     "serversRunning": "Запущено: {{servers}}"
   },
   "pendingAlerts_one": "{{count}} непросмотренное предупреждение",
-  "pendingAlerts_other": "{{count}} непросмотренного предупреждения",
+  "pendingAlerts_few": "{{count}} непросмотренных предупреждения",
+  "pendingAlerts_many": "{{count}} непросмотренных предупреждений",
+  "pendingAlerts_other": "{{count}} непросмотренных предупреждения",
   "resources": {
     "cpu": "Процессор",
     "memory": "Память"
