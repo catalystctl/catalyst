@@ -14,7 +14,7 @@
     "unavailable": "Эта вкладка плагина недоступна."
   },
   "webSocket": {
-    "connectionError": "Ошибка подключения к веб-сокету",
-    "unavailable": "Вебсокет недоступен"
+    "connectionError": "Ошибка подключения WebSocket",
+    "unavailable": "WebSocket недоступен"
   }
 }

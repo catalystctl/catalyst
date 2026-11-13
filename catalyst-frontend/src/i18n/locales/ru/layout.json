@@ -76,7 +76,7 @@
         "description": "Управляйте переменными среды и перезапускайте панель"
       },
       "adminMarketplace": {
-        "description": "Просматривайте и устанавливайте плагины из настроенных торговых площадок."
+        "description": "Просматривайте и устанавливайте плагины из настроенных торговых площадок"
       },
       "adminMigration": {
         "description": "Импорт серверов из Pterodactyl"
@@ -102,7 +102,7 @@
         "description": "Конфигурация Health, SMTP и менеджера модов"
       },
       "adminSystemErrors": {
-        "description": "Записанные ошибки панели, агента и интерфейса."
+        "description": "Записанные ошибки панели, агента и интерфейса"
       },
       "adminTemplates": {
         "description": "Шаблоны серверов и конфигурации гнезд"
@@ -140,7 +140,7 @@
         "label": "Активные сессии"
       },
       "profileSso": {
-        "description": "Просмотр и управление поставщиками входа, связанными с OAuth.",
+        "description": "Просмотр и управление поставщиками входа, связанными с OAuth",
         "label": "Связанные аккаунты с системой единого входа"
       },
       "settingsAuditRetention": {
@@ -152,7 +152,7 @@
         "label": "Блокировка аутентификации"
       },
       "settingsBrandColors": {
-        "description": "Конфигурация основного, дополнительного и акцентного цвета.",
+        "description": "Конфигурация основного, дополнительного и акцентного цвета",
         "label": "Фирменные цвета"
       },
       "settingsBranding": {
@@ -192,7 +192,7 @@
         "label": "Ключи API менеджера модов"
       },
       "settingsNodeAllocations": {
-        "description": "Управляйте IP-адресами, портами и пулами CIDR на каждом узле.",
+        "description": "Управляйте IP-адресами, портами и пулами CIDR на каждом узле",
         "label": "Распределение узлов и пулы IP-адресов"
       },
       "settingsPaletteGenerator": {
@@ -212,7 +212,7 @@
         "label": "SMTP / электронная почта"
       },
       "settingsSso": {
-        "description": "Настройка входа в WHMCS и OIDC плательщика",
+        "description": "Настройка входа OIDC для WHMCS и Paymenter",
         "label": "Поставщики единого входа/OAuth"
       },
       "settingsThemeMode": {
@@ -227,7 +227,7 @@
     "nodeAllocations": "{{name}} — Распределения",
     "nodeAllocationsDescription": "IP-пулы, порты и управление CIDR",
     "noResults": "Результаты не найдены",
-    "noResultsHint": "Попробуйте другие ключевые слова или очистите фильтр.",
+    "noResultsHint": "Попробуйте другие ключевые слова или очистите фильтр",
     "placeholder": "Поиск страниц, настроек, серверов, узлов…",
     "quickActions": {
       "createServer": {
@@ -273,7 +273,7 @@
         "label": "Метрики"
       },
       "modManager": {
-        "description": "Найдите и установите моды из CurseForge/Modrinth.",
+        "description": "Найдите и установите моды из CurseForge/Modrinth",
         "label": "Менеджер модов"
       },
       "pluginManager": {

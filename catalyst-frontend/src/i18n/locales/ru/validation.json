@@ -9,7 +9,7 @@
   "VALIDATION_INVALID_FORMAT": "Неверный {{format}}",
   "VALIDATION_INVALID_TYPE": "Недопустимое значение",
   "VALIDATION_TOO_BIG": "Должно быть не более {{max}}",
-  "VALIDATION_TOO_LONG": "Должно быть не более {{max}} символов.",
-  "VALIDATION_TOO_SHORT": "Должно быть не менее {{min}} символов.",
+  "VALIDATION_TOO_LONG": "Должно быть не более {{max}} символов",
+  "VALIDATION_TOO_SHORT": "Должно быть не менее {{min}} символов",
   "VALIDATION_TOO_SMALL": "Должно быть не менее {{min}}"
 }

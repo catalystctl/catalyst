@@ -142,7 +142,7 @@
     "update": "Обновить настройки сервера"
   },
   "setupStatus": {
-    "checkFailed": "Не удалось проверить статус настройки.",
+    "checkFailed": "Не удалось проверить статус настройки",
     "timedOut": "Время проверки установки истекло через {{ms}} мс"
   },
   "status": {
@@ -167,7 +167,7 @@
     "title": "Статус сервера: {{label}}"
   },
   "storageResize": {
-    "failed": "Не удалось изменить размер хранилища.",
+    "failed": "Не удалось изменить размер хранилища",
     "succeeded": "Размер хранилища изменен"
   },
   "templateImport": {
@@ -176,10 +176,10 @@
     "builtinPort": "Порт основного сервера",
     "builtinTimezone": "Часовой пояс сервера",
     "importedEgg": "Импортированный шаблон",
-    "importedFromPelican": "Привезено из Пеликана.",
-    "importedFromPterodactyl": "Импортировано из Птеродактиля.",
+    "importedFromPelican": "Импортировано из Pelican",
+    "importedFromPterodactyl": "Импортировано из Pterodactyl",
     "missingField": "Отсутствует обязательное поле: {{field}}",
-    "missingStopCommand": "Отсутствует обязательное поле: stopCommand (или sendSignalTo для остановки по сигналу).",
+    "missingStopCommand": "Отсутствует обязательное поле: stopCommand (или sendSignalTo для остановки по сигналу)",
     "variableMissingDefault": "Для переменной {{name}} отсутствует значение по умолчанию",
     "variableMissingName": "Переменная с индексом {{index}} отсутствует имя"
   },
