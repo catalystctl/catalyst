@@ -1,5 +1,6 @@
 import enEmail from './locales/en/email.json' with { type: 'json' };
 import frEmail from './locales/fr/email.json' with { type: 'json' };
+import ruEmail from './locales/ru/email.json' with { type: 'json' };
 import zhCnEmail from './locales/zh-CN/email.json' with { type: 'json' };
 import { DEFAULT_LOCALE, type SupportedLocale } from './locales.js';
 
@@ -9,6 +10,7 @@ type TranslateParams = Record<string, string | number>;
 const CATALOGS: Record<SupportedLocale, Catalog> = {
   en: enEmail as Catalog,
   fr: frEmail as Catalog,
+  ru: ruEmail as Catalog,
   'zh-CN': zhCnEmail as Catalog,
 };
 

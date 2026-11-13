@@ -1,0 +1,462 @@
+{
+  "allocations": {
+    "assigned": "Назначенный",
+    "assignedCannotSelect": "Назначенные выделения не могут быть удалены",
+    "assignedIps": "Назначенные IP-адреса ({{value}})",
+    "available": "Доступный",
+    "bulkDelete": {
+      "message_one": "Вы собираетесь удалить <1>{{count}} выделение</1>.",
+      "message_few": "Вы собираетесь удалить <1>{{count}} выделения</1>.",
+      "message_many": "Вы собираетесь удалить <1>{{count}} выделений</1>.",
+      "message_other": "Вы собираетесь удалить <1>{{count}} выделения</1>.",
+      "title": "Удалить распределения",
+      "warning": "Назначенные распределения не могут быть удалены и недоступны для выбора. Это невозможно отменить."
+    },
+    "clearSelection": "Очистить",
+    "createAllocations": "Создать распределения",
+    "createPool": {
+      "autofill": "Автозаполнение /24",
+      "cidr": "ЦИДР",
+      "cidrPlaceholder": "192.168.50.0/24 или 2001:db8::/64",
+      "creating": "Создание…",
+      "description": "Настройте сеть MACVLAN с автоматическим IPAM.",
+      "endIp": "Конечный IP-адрес (необязательно)",
+      "gateway": "шлюз",
+      "intro": "Пулы IP позволяют серверам получать выделенные IP-адреса в сети через MACVLAN. Каждый сервер автоматически получает один IP из пула.",
+      "networkName": "Имя сети",
+      "quickSetupIp": "Быстрая настройка IP",
+      "reservedIps": "Зарезервированные IP-адреса (необязательно, через запятую)",
+      "startIp": "Стартовый IP (необязательно)",
+      "submit": "Создать пул",
+      "title": "Создать пул IP"
+    },
+    "createPoolButton": "Создать пул IP-адресов",
+    "createPort": {
+      "aliasLabel": "Псевдоним (необязательно)",
+      "aliasPlaceholder": "например, Основная сеть",
+      "creating": "Создание…",
+      "description": "Массовое создание распределений IP:Port для этого узла.",
+      "ipFormat": "<strong>Формат IP:</strong> один IP-адрес (192.168.1.100), несколько IP-адресов (192.168.1.100, 192.168.1.101) или CIDR (192.168.1.0/24)",
+      "ipLabel": "IP-адрес(а)",
+      "ipPlaceholder": "192.168.1.100, 2001:db8::1 или 192.168.1.0/24",
+      "portFormat": "<strong>Формат порта:</strong> один порт (25565), диапазон (25565–25664) или несколько портов (25565, 25566, 25567)",
+      "portsLabel": "Порт(ы)",
+      "portsPlaceholder": "25565-25664 или 25565, 25566",
+      "quickFill": "Быстрое заполнение: используйте IP-адрес узла + порты 25565-25664",
+      "submit": "Создание распределений",
+      "title": "Создание распределения портов"
+    },
+    "description": "Управление привязками портов и пулами IP-адресов для {{node}}",
+    "empty": {
+      "createFirst": "Создайте свои первые распределения",
+      "createFirstPool": "Создайте свой первый пул IP-адресов",
+      "noMatches": "Нет назначений портов, соответствующих вашему запросу",
+      "noPools": "Для этого узла нет пулов IP-адресов",
+      "noPoolsDescription": "Создайте пул IP-адресов, чтобы включить сеть MACVLAN с автоматическим IPAM.",
+      "noPorts": "Распределения портов пока нет",
+      "noPortsDescription": "Создайте выделения для назначения серверам комбинаций IP:порт."
+    },
+    "field": {
+      "ip": "ИП",
+      "port": "Порт"
+    },
+    "info": {
+      "ipPools": "<strong>Пулы IP</strong> — автоматическое создание сети MACVLAN с выделенными IP-адресами для каждого сервера (дополнительно)",
+      "portAllocations": "<strong>Распределение портов</strong> – отслеживание комбинаций IP:порт для настроек прокси/NAT (например, Pterodactyl)",
+      "title": "Два типа распределения:"
+    },
+    "poolCount": "{{value}} пулов",
+    "poolTotals": "Всего: {{total}} · Шлюз: {{gateway}}",
+    "portCount": "{{value}} портов",
+    "resultCount": "{{shown}} из {{total}}",
+    "searchPlaceholder": "Поиск по IP, порту, псевдониму...",
+    "selectAll": "Выбрать все",
+    "selectAllocation": "Выберите {{ip}}:{{port}}",
+    "selectedCount": "{{value}} выбрано",
+    "stats": {
+      "assigned": "Назначенный",
+      "available": "Доступный",
+      "reserved": "Сдержанный",
+      "totalIps": "Всего IP-адресов",
+      "totalPorts": "Всего портов",
+      "uniqueIps": "Уникальные IP-адреса",
+      "used": "Использовал"
+    },
+    "tabs": {
+      "ips": "IP-пулы",
+      "ports": "Распределение портов"
+    },
+    "thisNode": "этот узел",
+    "title": "Сетевые распределения",
+    "toast": {
+      "poolCreated": "Пул IP создан",
+      "poolDeleted": "Пул IP удален",
+      "portDeleted": "Распределение портов удалено",
+      "portsCreated_one": "Создано {{count}} выделение порта",
+      "portsCreated_few": "Создано {{count}} выделения портов",
+      "portsCreated_many": "Создано {{count}} выделений портов",
+      "portsCreated_other": "Создано {{count}} выделения портов",
+      "portsDeleted_one": "Удалено {{count}} выделение порта",
+      "portsDeleted_few": "Удалено {{count}} выделения портов",
+      "portsDeleted_many": "Удалено {{count}} выделений портов",
+      "portsDeleted_other": "Удалено {{count}} выделения портов",
+      "portsDeleteSkipped_one": "Пропущено {{count}} назначенное выделение",
+      "portsDeleteSkipped_few": "Пропущено {{count}} назначенных выделения",
+      "portsDeleteSkipped_many": "Пропущено {{count}} назначенных выделений",
+      "portsDeleteSkipped_other": "Пропущено {{count}} назначенных выделения"
+    }
+  },
+  "database": {
+    "addHost": "Добавить хост",
+    "catalystDatabase": "База данных Catalyst",
+    "createDialog": {
+      "submit": "Создать хост",
+      "subtitle": "Зарегистрируйте хост MySQL, используемый для подготовки баз данных для каждого сервера.",
+      "title": "Добавить хост базы данных"
+    },
+    "creating": "Создание…",
+    "deleteDialog": {
+      "message": "Вы уверены, что хотите удалить \"{{name}}\"? Это может повлиять на серверы, использующие этот хост для подготовки базы данных.",
+      "title": "Удалить хост базы данных?"
+    },
+    "description": "Отслеживайте состояние базы данных и управляйте хостами для подготовки серверов.",
+    "editDialog": {
+      "submit": "Сохранить изменения",
+      "subtitle": "Обновите сведения о соединении для этого хоста базы данных.",
+      "title": "Изменить хост базы данных"
+    },
+    "empty": {
+      "description": "Создайте хост для подготовки баз данных для серверов.",
+      "title": "Хостов баз данных пока нет"
+    },
+    "form": {
+      "database": "База данных",
+      "databaseHint": "База данных для подключения для проверки работоспособности и подготовки.",
+      "engine": "Двигатель",
+      "host": "Хост",
+      "name": "Название",
+      "password": "Пароль",
+      "passwordEditHint": "(оставьте пустым, чтобы сохранить)",
+      "port": "Порт",
+      "username": "Имя пользователя"
+    },
+    "host": {
+      "checking": "Проверка",
+      "connected": "Подключено",
+      "databaseCount_one": "{{count}} БД",
+      "databaseCount_few": "{{count}} БД",
+      "databaseCount_many": "{{count}} БД",
+      "databaseCount_other": "{{count}} БД",
+      "disconnected": "Отключено",
+      "pingCounts": "{{databases}} БД, {{tables}} таблицы",
+      "port": "Порт {{port}}",
+      "testConnection": "Тестовое соединение"
+    },
+    "hostCount": "{{value}} хостов",
+    "recordsValue": "{{users}} пользователей, {{servers}} серверов",
+    "saving": "Сохранение…",
+    "stats": {
+      "connections": "Соединения",
+      "records": "Рекорды",
+      "size": "Размер",
+      "tables": "Таблицы"
+    },
+    "title": "База данных",
+    "toast": {
+      "created": "Хост базы данных создан",
+      "removed": "Узел базы данных удален",
+      "updated": "Хост базы данных обновлен"
+    }
+  },
+  "migration": {
+    "actions": {
+      "pause": "Пауза",
+      "resume": "Резюме"
+    },
+    "alwaysImported": {
+      "configFileEditor": "Редактор файлов конфигурации",
+      "dockerImageOverride": "Переопределение образа Docker",
+      "portAllocations": "Распределение портов",
+      "serverConfig": "Конфигурация сервера и переменные окружения",
+      "startupCommand": "Команда запуска",
+      "swapIoWeight": "Вес свопа и ввода-вывода"
+    },
+    "assigned": "назначенный",
+    "backupWarnings": {
+      "noSlots_one": "{{count}} сервер не имеет резервных слотов",
+      "noSlots_few": "{{count}} сервера не имеют резервных слотов",
+      "noSlots_many": "{{count}} серверов не имеют резервных слотов",
+      "noSlots_other": "{{count}} сервера не имеют резервных слотов",
+      "noSlotsDescription": "При миграции автоматически будет установлено ограничение резервного копирования, равное 1, на этих серверах для создания резервной копии миграции.",
+      "slotsFull_one": "{{count}} сервер использует все резервные слоты",
+      "slotsFull_few": "{{count}} сервера используют все резервные слоты",
+      "slotsFull_many": "{{count}} серверов используют все резервные слоты",
+      "slotsFull_other": "{{count}} сервера используют все резервные слоты",
+      "slotsFullDescription": "При миграции лимит резервного копирования автоматически увеличится на 1, чтобы освободить место для резервной копии миграции."
+    },
+    "connect": {
+      "apiKey": "Ключ API приложения",
+      "clientApiKey": "Ключ клиентского API",
+      "clientApiKeyHint": "(для миграции файлов)",
+      "clientApiKeyNote": "Требуется для создания резервной копии и миграции файлов. Создайте в Pterodactyl → API Credentials → Client API.",
+      "description": "URL-адрес панели и ключ API приложения. Сопоставьте существующие онлайн-узлы Catalyst.",
+      "panelUrl": "URL-адрес панели",
+      "title": "Соединять"
+    },
+    "description": "Миграция серверов с Pterodactyl на Catalyst",
+    "empty": {
+      "noActive": "Нет активной миграции",
+      "noActiveDescription": "Начните новую миграцию, чтобы увидеть прогресс здесь.",
+      "noJobs": "Вакансий по миграции пока нет",
+      "noJobsDescription": "Начните новую миграцию, чтобы увидеть ее здесь."
+    },
+    "free": "бесплатно",
+    "history": {
+      "jobSteps": "Шагов: {{completed}}/{{total}}",
+      "title": "История миграции"
+    },
+    "imports": {
+      "databases": "Базы данных",
+      "noBackupSlots": "Нет резервных слотов",
+      "schedules": "Расписания",
+      "serverFiles": "Серверные файлы",
+      "subusers": "Субпользователи"
+    },
+    "moreCount": "+{{value}} ещё",
+    "noAllocations": "Pterodactyl не вернул подробностей о распределении",
+    "noBackups": "нет резервных копий",
+    "nodeConfig": {
+      "allocations": "Распределение узлов ({{value}})",
+      "behindProxy": "За прокси",
+      "dataDirectory": "Каталог данных:",
+      "direct": "Прямой",
+      "disk": "Диск:",
+      "diskValue": "{{disk}} МБ ({{overallocation}} % перераспределения)",
+      "endpoint": "Конечная точка:",
+      "location": "Расположение:",
+      "maintenance": "Обслуживание:",
+      "memory": "Память:",
+      "memoryValue": "{{memory}} МБ ({{overallocation}} % перераспределения)",
+      "proxy": "Прокси:",
+      "sftpPort": "SFTP-порт:",
+      "uploadLimit": "Лимит загрузки:",
+      "uploadLimitValue": "{{value}} МБ"
+    },
+    "nodeMapping": {
+      "configuration": "Конфигурация узла",
+      "helpFull": "Все узлы Pterodactyl должны быть сопоставлены. Нажмите на узел, чтобы увидеть, что будет импортировано.",
+      "helpSelect": "Выберите, какие узлы Pterodactyl нужно сопоставить. Нажмите, чтобы посмотреть подробности импорта серверов.",
+      "noServers": "На этом узле нет серверов.",
+      "serversOnNode": "Серверы на этом узле ({{value}})",
+      "title": "Сопоставление узлов Pterodactyl с узлами Catalyst"
+    },
+    "nodeServerCount": "{{value}} серверов",
+    "noOnlineNodes": "Онлайн-узлы Catalyst не обнаружены. Для миграции требуется, чтобы хотя бы один узел Catalyst был в сети. Сначала запустите агент на своих узлах.",
+    "phases": {
+      "backups": "Резервные копии",
+      "current": "ТЕКУЩИЙ",
+      "databases": "Базы данных",
+      "files": "Серверные файлы",
+      "locations": "Локации",
+      "moreErrors": "+{{value}} больше ошибок",
+      "schedules": "Расписания",
+      "servers": "Серверы",
+      "steps": "{{value}} шагов",
+      "templates": "Шаблоны (гнезда и яйца)",
+      "title": "Этапы миграции",
+      "users": "Пользователи",
+      "validate": "Валидация",
+      "waiting": "Ожидающий..."
+    },
+    "primary": "начальный",
+    "progress": {
+      "completed": "{{value}} завершено",
+      "duration": "Продолжительность: {{duration}}",
+      "elapsed": "Прошло: {{duration}}",
+      "failed": "{{value}} не удалось",
+      "phase": "Фаза:",
+      "skipped": "{{value}} пропущено",
+      "started": "Начало: {{date}}",
+      "title": "Прогресс миграции"
+    },
+    "scope": {
+      "full": "Полная миграция",
+      "fullDescription": "Сопоставьте все узлы Ptero с узлами Catalyst",
+      "node": "Узел за узлом",
+      "nodeDescription": "Выберите, какие узлы Ptero нужно перенести",
+      "server": "Сервер за сервером",
+      "serverDescription": "Сопоставьте отдельные серверы с узлами Catalyst",
+      "title": "Область миграции"
+    },
+    "sections": {
+      "allocations": "Выделенные порты",
+      "imports": "Импорт"
+    },
+    "selectTargetNode": "Выберите целевой узел",
+    "serverMapping": {
+      "help": "Щелкните сервер, чтобы увидеть, что импортируется автоматически.",
+      "title": "Сопоставление серверов Pterodactyl с узлами Catalyst"
+    },
+    "serverResources": {
+      "cpu": "Процессор",
+      "disk": "Диск",
+      "memory": "Память"
+    },
+    "skipReasons": {
+      "alreadyExists": "Уже существует",
+      "noBackupSlots": "Нет резервных слотов",
+      "noClientApiKey": "Нет ключа клиентского API",
+      "noSchedules": "Нет расписаний",
+      "notApplicable": "Непригодный",
+      "notAvailable": "Недоступно",
+      "skipped": "Пропущено"
+    },
+    "slotsFull": "слоты заполнены",
+    "startMigration": "Начать миграцию",
+    "status": {
+      "cancelled": "Отменено",
+      "completed": "Завершенный",
+      "failed": "Ошибка",
+      "paused": "Приостановлено",
+      "pending": "В ожидании",
+      "running": "Работает",
+      "validating": "Проверка"
+    },
+    "steps": {
+      "downloadFiles": "Скачать файлы",
+      "importBackup": "Импортировать резервную копию",
+      "importDatabase": "Импортировать базу данных",
+      "importDatabaseHost": "Импортировать хост базы данных",
+      "importLocation": "Импортировать местоположение",
+      "importNest": "Импортировать гнездо",
+      "importSchedule": "График импорта",
+      "importServer": "Импортировать сервер",
+      "importTemplate": "Импортировать шаблон",
+      "importUser": "Импортировать пользователя",
+      "more": "{{value}} ещё...",
+      "showLess": "Показать меньше",
+      "toggleErrorDetails": "Переключить сведения об ошибке",
+      "validateConnection": "Тестовое соединение"
+    },
+    "stepStatus": {
+      "completed": "Готово",
+      "failed": "Ошибка",
+      "pending": "В ожидании",
+      "running": "Работает",
+      "skipped": "Пропущено"
+    },
+    "summary": {
+      "nodesMapped": "Сопоставлено {{mapped}} из {{total}} узлов",
+      "selected": "выбрано",
+      "serversMapped": "Сопоставлено {{mapped}} из {{total}} серверов"
+    },
+    "suspendedParen": "(приостановленный)",
+    "tabs": {
+      "active": "Активная миграция",
+      "history": "История",
+      "new": "Новая миграция"
+    },
+    "test": {
+      "connected": "Подключено (v{{version}})",
+      "failed": "Соединение не удалось",
+      "locations": "Локации",
+      "nests": "Гнезда",
+      "nodes": "Узлы",
+      "servers": "Серверы",
+      "users": "Пользователи"
+    },
+    "testConnection": "Тестовое соединение",
+    "title": "Миграция",
+    "toast": {
+      "cancelled": "Миграция отменена",
+      "completed": "Миграция завершена успешно!",
+      "connected": "Подключено к панели Pterodactyl",
+      "connectionFailed": "Соединение не удалось",
+      "connectionTestFailed": "Проверка соединения не удалась",
+      "failed": "Не удалось выполнить миграцию: {{error}}",
+      "paused": "Миграция приостановлена",
+      "resumed": "Миграция возобновлена",
+      "started": "Миграция началась",
+      "stepQueued": "Шаг поставлен в очередь на повтор"
+    },
+    "unknownError": "Неизвестная ошибка"
+  },
+  "nodes": {
+    "agentVersionShort": "Агент v{{version}}",
+    "allLocations": "Все",
+    "clearAll": "Очистить все",
+    "clearFilters": "Очистить фильтры",
+    "clearSelection": "Очистить",
+    "deleteAccessLoadFailed": "Невозможно проверить, какие узлы можно удалить.",
+    "deleteDialog": {
+      "message": "Вы собираетесь удалить <1>{{label}}</1>.",
+      "title": "Удалить узлы",
+      "warning": "Ноды с работающими серверами удалить невозможно. Остановите все серверы на узле перед его удалением. Это невозможно отменить."
+    },
+    "description": "Управляйте узлами инфраструктуры и отслеживайте доступность",
+    "empty": {
+      "adjustFilters": "Попробуйте настроить поиск или фильтры.",
+      "installAgent": "Для начала установите агент Catalyst и зарегистрируйте узлы.",
+      "none": "Узлы не обнаружены",
+      "notFound": "Узлы не найдены"
+    },
+    "filter": {
+      "allLocations": "Все локации",
+      "allStatuses": "Все статусы",
+      "location": "Расположение",
+      "offlineCount": "Офлайн ({{value}})",
+      "onlineCount": "В сети ({{value}})",
+      "status": "Статус",
+      "unassignedCount": "Не назначено ({{value}})"
+    },
+    "filters": "Фильтры",
+    "hostnameUnavailable": "имя хоста н/д",
+    "lastSeen": "Последний раз был в сети {{time}}",
+    "loadFailed": "Невозможно загрузить узлы.",
+    "locationNodeCount_one": "{{count}} узел",
+    "locationNodeCount_few": "{{count}} узла",
+    "locationNodeCount_many": "{{count}} узлов",
+    "locationNodeCount_other": "{{count}} узла",
+    "locations": "Локации",
+    "manage": "Управлять",
+    "resultCount": "{{shown}} из {{total}}",
+    "searchPlaceholder": "Поиск узлов по имени или имени хоста…",
+    "selectAll": "Выбрать все",
+    "selectAllInSection": "Выбрать все в разделе",
+    "selectedCount": "{{value}} выбрано",
+    "selectedLabel": "{{value}} узлов",
+    "sort": {
+      "cpuCores": "Ядра процессора",
+      "memory": "Память",
+      "mostServers": "Большинство серверов",
+      "nameAsc": "Имя А→Я",
+      "nameDesc": "Имя Я→А",
+      "status": "Статус"
+    },
+    "stat": {
+      "cores": "ядра",
+      "memory": "память",
+      "servers": "серверы"
+    },
+    "stats": {
+      "cpuCores": "Ядра процессора",
+      "memory": "Память",
+      "nodes": "Узлы",
+      "offline": "Не в сети",
+      "online": "В сети",
+      "totalServers": "Всего серверов"
+    },
+    "title": "Узлы",
+    "toast": {
+      "deleted_one": "Удален {{count}} узел",
+      "deleted_few": "Удалено {{count}} узла",
+      "deleted_many": "Удалено {{count}} узлов",
+      "deleted_other": "Удалено {{count}} узла",
+      "deleteFailed_one": "Не удалось удалить {{count}} узел.",
+      "deleteFailed_few": "Не удалось удалить {{count}} узла",
+      "deleteFailed_many": "Не удалось удалить {{count}} узлов",
+      "deleteFailed_other": "Не удалось удалить {{count}} узла."
+    },
+    "unassigned": "Неназначенный"
+  }
+}

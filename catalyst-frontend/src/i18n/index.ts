@@ -7,6 +7,9 @@ import validationEn from './locales/en/validation.json';
 import commonFr from './locales/fr/common.json';
 import errorsFr from './locales/fr/errors.json';
 import validationFr from './locales/fr/validation.json';
+import commonRu from './locales/ru/common.json';
+import errorsRu from './locales/ru/errors.json';
+import validationRu from './locales/ru/validation.json';
 import commonZhCn from './locales/zh-CN/common.json';
 import errorsZhCn from './locales/zh-CN/errors.json';
 import validationZhCn from './locales/zh-CN/validation.json';
@@ -79,6 +82,7 @@ void i18n
     resources: {
       en: { common: commonEn, errors: errorsEn, validation: validationEn },
       fr: { common: commonFr, errors: errorsFr, validation: validationFr },
+      ru: { common: commonRu, errors: errorsRu, validation: validationRu },
       'zh-CN': { common: commonZhCn, errors: errorsZhCn, validation: validationZhCn },
     },
     // Bundled namespaces initialize synchronously; the rest load lazily.

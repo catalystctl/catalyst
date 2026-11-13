@@ -1,0 +1,212 @@
+{
+  "actions": {
+    "apply": "Применить",
+    "back": "Назад",
+    "cancel": "Отмена",
+    "close": "Закрыть",
+    "confirm": "Подтвердить",
+    "copied": "Скопировано",
+    "copy": "Копировать",
+    "create": "Создать",
+    "delete": "Удалить",
+    "disable": "Отключить",
+    "disabled": "Отключено",
+    "download": "Скачать",
+    "edit": "Изменить",
+    "enable": "Включить",
+    "enabled": "Включено",
+    "loading": "Загрузка...",
+    "more": "Ещё",
+    "next": "Далее",
+    "no": "Нет",
+    "none": "Нет",
+    "previous": "Назад",
+    "refresh": "Обновить",
+    "remove": "Удалить",
+    "reset": "Сбросить",
+    "retry": "Повторить",
+    "save": "Сохранить",
+    "search": "Поиск",
+    "unknown": "Неизвестно",
+    "update": "Обновить",
+    "upload": "Загрузить",
+    "working": "Выполняется…",
+    "yes": "Да"
+  },
+  "apiKeys": {
+    "created": "Ключ API успешно создан",
+    "revoked": "Ключ API успешно отозван",
+    "updated": "Ключ API успешно обновлен"
+  },
+  "combobox": {
+    "noMatches": "Совпадений не найдено.",
+    "placeholder": "Выберите..."
+  },
+  "configFormats": {
+    "jsonMustBeObject": "Конфигурация JSON должна быть объектом"
+  },
+  "demo": {
+    "banner": "Демо — вы изучаете вымышленные данные. Изменения не сохраняются."
+  },
+  "errorBoundary": {
+    "message": "Произошла непредвиденная ошибка.",
+    "retry": "Попробуйте еще раз",
+    "title": "Что-то пошло не так"
+  },
+  "freshness": {
+    "never": "Данных пока нет",
+    "updatedAt": "Обновлен {{when}}"
+  },
+  "language": {
+    "description": "Выберите язык интерфейса панели.",
+    "label": "Язык"
+  },
+  "metricsHistory": {
+    "oneHour": "1 час"
+  },
+  "nodeAgent": {
+    "updateFailed": "Обновление не выполнено"
+  },
+  "operationStage": {
+    "cloning": "Клонирование файлов",
+    "installing": "Установка сервера",
+    "transferring": "Перенос сервера"
+  },
+  "pagination": {
+    "pageOf": "Страница {{page}} из {{totalPages}}"
+  },
+  "passwordStrength": {
+    "fair": "Средний",
+    "good": "Хороший",
+    "strong": "Сильный",
+    "title": "Надежность пароля",
+    "veryStrong": "Очень сильный",
+    "weak": "Слабый"
+  },
+  "relativeTime": {
+    "daysAgo": "{{value}} дней назад",
+    "hoursAgo": "{{value}} ч. назад",
+    "justNow": "прямо сейчас",
+    "minutesAgo": "{{value}} м назад",
+    "monthsAgo": "{{value}} мес. назад",
+    "yearsAgo": "{{value}} год назад"
+  },
+  "roles": {
+    "administrator": "Администратор",
+    "description": {
+      "administrator": "Полный доступ к системе",
+      "moderator": "Ограниченные права управления",
+      "user": "Стандартный доступ пользователя"
+    },
+    "moderator": "Модератор",
+    "user": "Пользователь"
+  },
+  "serverPermissions": {
+    "alertCreate": "Создание оповещений",
+    "alertDelete": "Удалить оповещения",
+    "alertRead": "Просмотр оповещений",
+    "alertUpdate": "Обновить оповещения",
+    "archive": "Архивация и восстановление сервера",
+    "backupCreate": "Создание резервных копий",
+    "backupDelete": "Удалить резервные копии",
+    "backupDownload": "Скачать резервные копии",
+    "backupPin": "Закрепить резервные копии (игнорировать ограничение хранения)",
+    "backupRead": "Просмотр резервных копий",
+    "backupRestore": "Восстановление резервных копий",
+    "clone": "Клонировать сервер",
+    "consoleRead": "Посмотреть консоль",
+    "consoleWrite": "Отправлять консольные команды",
+    "databaseCreate": "Создание баз данных",
+    "databaseDelete": "Удаление баз данных",
+    "databaseRead": "Просмотр баз данных",
+    "databaseRotate": "Ротация паролей базы данных",
+    "delete": "Удалить сервер",
+    "fileRead": "Просмотр файлов",
+    "fileWrite": "Редактировать и загружать файлы",
+    "install": "Установить сервер",
+    "kill": "Принудительная остановка сервера",
+    "migrate": "Перемещайте сервер между узлами",
+    "modsManage": "Управление модами и пакетами данных",
+    "network": "Управление портами и адресами",
+    "pluginsManage": "Управление плагинами",
+    "read": "Посмотреть детали сервера",
+    "rebuild": "Повторно запустите команду установки",
+    "reinstall": "Переустановить сервер",
+    "resources": "Изменение ресурсов и распределений",
+    "schedule": "Управляйте расписаниями и задачами",
+    "start": "Запустить сервер",
+    "startup": "Редактировать команду запуска и переменные",
+    "stop": "Остановить/убить сервер",
+    "storage": "Изменить размер хранилища сервера",
+    "transfer": "Перенос сервера",
+    "update": "Обновить настройки сервера"
+  },
+  "setupStatus": {
+    "checkFailed": "Не удалось проверить статус настройки",
+    "timedOut": "Время проверки установки истекло через {{ms}} мс"
+  },
+  "status": {
+    "archived": "В архиве",
+    "cloning": "Клонирование файлов",
+    "crashed": "Аварийно остановлен",
+    "creatingBackup": "Создание резервной копии",
+    "error": "Ошибка",
+    "installing": "Установка",
+    "offline": "Не в сети",
+    "online": "В сети",
+    "restoring": "Восстановление",
+    "running": "Работает",
+    "starting": "Запуск",
+    "stopped": "Остановлен",
+    "stopping": "Остановка",
+    "suspended": "Приостановлен",
+    "transferring": "Перенос",
+    "unhealthy": "Ошибка состояния"
+  },
+  "statusBadge": {
+    "title": "Статус сервера: {{label}}"
+  },
+  "storageResize": {
+    "failed": "Не удалось изменить размер хранилища",
+    "succeeded": "Размер хранилища изменен"
+  },
+  "templateImport": {
+    "builtinIp": "IP-адрес сервера (0.0.0.0 для всех интерфейсов)",
+    "builtinMemory": "Выделенная память в МБ",
+    "builtinPort": "Порт основного сервера",
+    "builtinTimezone": "Часовой пояс сервера",
+    "importedEgg": "Импортированный шаблон",
+    "importedFromPelican": "Импортировано из Pelican",
+    "importedFromPterodactyl": "Импортировано из Pterodactyl",
+    "missingField": "Отсутствует обязательное поле: {{field}}",
+    "missingStopCommand": "Отсутствует обязательное поле: stopCommand (или sendSignalTo для остановки по сигналу)",
+    "variableMissingDefault": "Для переменной {{name}} отсутствует значение по умолчанию",
+    "variableMissingName": "Переменная с индексом {{index}} отсутствует имя"
+  },
+  "themeImport": {
+    "customCssTooLarge": "Размер пользовательского CSS превышает 100 КБ.",
+    "invalidBorderRadius": "Неверный borderRadius — ожидается «0,625rem».",
+    "invalidColor": "Неверный {{field}} — ожидается шестнадцатеричный цвет #rrggbb.",
+    "invalidCustomCss": "Неверный customCss — ожидается строка.",
+    "jsonMustBeObject": "JSON темы должен быть объектом.",
+    "missingThemeColors": "Отсутствует объект themeColors."
+  },
+  "updateNotification": {
+    "available": "Доступно обновление: v{{version}}",
+    "completeToast": "Обновление панели завершено — теперь вы используете последнюю версию.",
+    "currentVersion": "Вы используете v{{version}}.",
+    "dismissDescription": "Выберите, как обрабатывать баннер обновления для версии {{version}}.",
+    "dismissForNow": "Отклонить на данный момент",
+    "dismissGlobalDescription": "Навсегда скрыть все уведомления об обновлениях. Повторно включите, очистив данные сайта/localStorage.",
+    "dismissGlobalTitle": "Не напоминай мне больше",
+    "dismissOptions": "Отклонить параметры",
+    "dismissSessionDescription": "Скрыть на время. Уведомление появится снова после обновления страницы или входа.",
+    "dismissSessionTitle": "Скрыть пока",
+    "dismissTitle": "Закрыть уведомление об обновлении",
+    "dismissVersionDescription": "Помните мой выбор в пользу {{version}}. Вы снова получите уведомление, когда будет выпущена следующая версия.",
+    "dismissVersionTitle": "Закрыть это обновление",
+    "openDismissOptions": "Открыть параметры отклонения",
+    "starting": "Начало…",
+    "triggerFailed": "Не удалось запустить обновление"
+  }
+}

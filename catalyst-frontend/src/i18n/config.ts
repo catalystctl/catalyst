@@ -19,6 +19,7 @@ export interface LocaleDefinition {
 export const SUPPORTED_LOCALES = [
   { code: 'en', englishName: 'English', nativeName: 'English' },
   { code: 'fr', englishName: 'French', nativeName: 'Français' },
+  { code: 'ru', englishName: 'Russian', nativeName: 'Русский' },
   { code: 'zh-CN', englishName: 'Chinese (Simplified)', nativeName: '简体中文' },
 ] as const satisfies readonly LocaleDefinition[];
 

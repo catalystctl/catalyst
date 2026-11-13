@@ -1,0 +1,58 @@
+{
+  "accountFallback": "вашей учётной записи",
+  "activity": {
+    "emptyDescription": "За выбранный период действий не было.",
+    "emptyTitle": "Недавних действий нет",
+    "errorDescription": "Не удалось загрузить последние действия.",
+    "errorTitle": "История действий недоступна",
+    "title": "Последние действия",
+    "viewAll": "Посмотреть все"
+  },
+  "attention": {
+    "alertsOpen_one": "{{count}} активное предупреждение",
+    "alertsOpen_few": "{{count}} активных предупреждения",
+    "alertsOpen_many": "{{count}} активных предупреждений",
+    "alertsOpen_other": "{{count}} активных предупреждения",
+    "allClear": "Всё работает",
+    "allClearDetail": "Нет отключённых серверов и непросмотренных предупреждений.",
+    "nodesOffline_one": "{{count}} узел не в сети",
+    "nodesOffline_few": "{{count}} узла не в сети",
+    "nodesOffline_many": "{{count}} узлов не в сети",
+    "nodesOffline_other": "{{count}} узла не в сети",
+    "title": "Требует внимания"
+  },
+  "description": "Состояние инфраструктуры: {{name}}.",
+  "onboarding": {
+    "addNode": "Добавить узел",
+    "browseServers": "Открыть серверы",
+    "createServer": "Создать сервер",
+    "description": "Настройте узел и шаблон, затем создайте сервер. Здесь показаны только действия, доступные вашей учётной записи.",
+    "overline": "ПЕРВЫЕ ШАГИ",
+    "templates": "Настроить шаблоны",
+    "title": "Запустите первый сервер"
+  },
+  "overview": {
+    "alertsUnacknowledged": "Не просмотрено: {{alerts}}",
+    "allResolved": "Всё устранено",
+    "errorDescription": "Не удалось загрузить данные для обзора.",
+    "errorTitle": "Обзор недоступен",
+    "nodesConnected": "Подключено: {{nodes}}",
+    "serversRunning": "Запущено: {{servers}}"
+  },
+  "pendingAlerts_one": "{{count}} непросмотренное предупреждение",
+  "pendingAlerts_few": "{{count}} непросмотренных предупреждения",
+  "pendingAlerts_many": "{{count}} непросмотренных предупреждений",
+  "pendingAlerts_other": "{{count}} непросмотренных предупреждения",
+  "resources": {
+    "cpu": "Процессор",
+    "memory": "Память"
+  },
+  "title": "Обзор",
+  "vitals": {
+    "alerts": "Предупреждения",
+    "network": "Сеть",
+    "nodes": "Узлы",
+    "servers": "Серверы",
+    "title": "Состояние системы"
+  }
+}
