@@ -544,6 +544,13 @@ export const ENV_VAR_REGISTRY: readonly EnvVarSpec[] = [
 		default: "false",
 		description: "Force the Docker update path even when it cannot be detected.",
 	}),
+	base("DOCKER_SOCKET_PATH", "updates", "path", {
+		// Not mounted by default (security audit S1-7). When absent, in-panel
+		// self-update and the panel log export report the deployment posture
+		// instead of failing with a daemon connection error.
+		default: "/var/run/docker.sock",
+		description: "Container engine socket used by the panel self-updater and log export.",
+	}),
 
 	// ── Developer / aggressive ────────────────────────────────────────────
 	base("DISABLE_RATE_LIMIT", "developer", "boolean", {

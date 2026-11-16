@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import { redactEnvVar, redactLogText, type RedactionMode } from "../../lib/secret-redaction.js";
 
 /**
@@ -139,6 +140,12 @@ export async function collectPanelLogs(options: {
 		? [env.DIAGNOSTICS_CONTAINER_RUNTIME === "podman" ? "podman" : "docker"]
 		: ["docker", "podman"];
 
+	// The socket is not mounted by default (security-audit S1-7), so `docker logs`
+	// fails with a connection error rather than a spawn error. That is a
+	// deployment posture, not a missing CLI — report it as such.
+	const socketPath = env.DOCKER_SOCKET_PATH || "/var/run/docker.sock";
+	const noEngineAccess = !fs.existsSync(socketPath);
+
 	let lastError = "";
 	for (const runtime of runtimes) {
 		for (const withUntil of [true, false]) {
@@ -187,7 +194,12 @@ export async function collectPanelLogs(options: {
 		lines: 0,
 		source: "unavailable",
 		truncated: false,
-		warning: `Panel logs are unavailable in this deployment (${lastError || "no container runtime found"}).`,
+		warning: noEngineAccess
+			? `Panel logs are unavailable in this deployment because the container engine socket ` +
+				`is not mounted in the backend container (${socketPath}). This is the default and ` +
+				`intentional: the panel does not get host-level control unless you opt in. ` +
+				`Use the log export from the host, or start the stack with the auto-update override.`
+			: `Panel logs are unavailable in this deployment (${lastError || "no container runtime found"}).`,
 	};
 }
 
