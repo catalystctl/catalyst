@@ -31,7 +31,7 @@
 		"@aws-sdk/client-s3": "~3.1167.0",
 		"@better-auth/passkey": "~1.7.22",
 		"@fastify/compress": "^9.3.0",
-		"@fastify/cors": "~11.4.1",
+		"@fastify/cors": "~11.4.2",
 		"@fastify/helmet": "~13.2.0",
 		"@fastify/multipart": "~10.1.8",
 		"@fastify/rate-limit": "~11.2.2",
