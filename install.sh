@@ -1413,7 +1413,7 @@ phase_configure() {
     if [[ -f "${COMPOSE_DIR}/docker-compose.yml" ]]; then
         chmod 644 "${COMPOSE_DIR}/docker-compose.yml" 2>/dev/null || true
     fi
-    for cfg in docker-compose.caddy.yml docker-compose.traefik.yml docker-compose.test.yml; do
+    for cfg in docker-compose.caddy.yml docker-compose.traefik.yml docker-compose.test.yml docker-compose.auto-update.yml; do
         if [[ -f "${COMPOSE_DIR}/${cfg}" ]]; then
             chmod 644 "${COMPOSE_DIR}/${cfg}" 2>/dev/null || true
         fi

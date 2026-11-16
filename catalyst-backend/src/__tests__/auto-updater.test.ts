@@ -99,11 +99,29 @@ describe("performUpdate", () => {
 		process.env.AUTO_UPDATE_FORCE_DOCKER = "true";
 		delete process.env.AUTO_UPDATE_DOCKER_COMPOSE_PATH;
 		process.env.DOCKER_BIN = "/tmp/catalyst-no-such-docker";
+		// Stand in a socket so this exercises the CLI-failure path rather than
+		// the no-socket gate covered below.
+		process.env.DOCKER_SOCKET_PATH = "/tmp/catalyst-fake.sock";
+		fs.writeFileSync(process.env.DOCKER_SOCKET_PATH, "");
 		const result = await performUpdate();
+		fs.rmSync(process.env.DOCKER_SOCKET_PATH, { force: true });
+		delete process.env.DOCKER_SOCKET_PATH;
 		expect(result.success).toBe(false);
 		expect(result.message).toMatch(
 			/Could not find docker-compose.yml|docker CLI is not available|not found/,
 		);
+	});
+
+	it("refuses to update when the engine socket is not mounted (audit S1-7)", async () => {
+		process.env.AUTO_UPDATE_FORCE_DOCKER = "true";
+		process.env.DOCKER_SOCKET_PATH = "/nonexistent/catalyst/docker.sock";
+		const result = await performUpdate();
+		delete process.env.DOCKER_SOCKET_PATH;
+		expect(result.success).toBe(false);
+		// The message explains the deployment posture, not a docker failure.
+		expect(result.message).toMatch(/socket is not mounted/i);
+		expect(result.message).toMatch(/default/i);
+		expect(getUpdateState().state).toBe("failed");
 	});
 });
 

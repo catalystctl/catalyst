@@ -379,6 +379,35 @@ export function formatDockerUpdateError(error: unknown): string {
 	return error instanceof Error ? error.message : "Docker update failed";
 }
 
+/**
+ * Default socket the container engine listens on inside the backend container.
+ * Kept as a constant so tests can point it at a temp path instead of a real daemon.
+ */
+export function containerSocketPath(): string {
+	return process.env.DOCKER_SOCKET_PATH || "/var/run/docker.sock";
+}
+
+/**
+ * Whether the backend can actually drive its own container engine.
+ *
+ * The socket is NOT mounted by default any more (security-audit S1-7): holding
+ * it hands the web-facing backend host-root-equivalent access, so the default
+ * deployment does not get it. When the socket is absent we say so explicitly
+ * instead of letting `docker` fail with a confusing connection error — the fix
+ * is an operator action (mount the socket), not a bug in the update itself.
+ */
+export function composeUpdateUnavailableReason(
+	socketPath: string = containerSocketPath(),
+): string | null {
+	if (fs.existsSync(socketPath)) return null;
+	return (
+		`The container engine socket is not mounted in the backend container (${socketPath}). ` +
+		"Panel self-update is disabled in this deployment, which is the default: it keeps the " +
+		"backend out of host-level control. Start the stack with the auto-update override to " +
+		"enable in-panel updates, or run the deploy scripts on the host to update."
+	);
+}
+
 function dockerBin(): string {
 	return process.env.DOCKER_BIN || "docker";
 }
@@ -527,6 +556,16 @@ export async function performUpdate(logger?: {
 	}
 
 	if (inDocker) {
+		// No socket means no way to drive the engine. Report the deployment
+		// posture rather than a docker connection error (security-audit S1-7).
+		const unavailable = composeUpdateUnavailableReason();
+		if (unavailable) {
+			logger?.warn?.(unavailable);
+			setUpdateState("failed", unavailable);
+			appendUpdateLog(`Update unavailable: ${unavailable}`);
+			return { success: false, message: unavailable };
+		}
+
 		const context = resolveComposeContext();
 		if (!context) {
 			const message =

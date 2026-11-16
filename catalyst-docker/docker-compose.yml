@@ -255,7 +255,18 @@ services:
       - catalyst-server-data:/var/lib/catalyst/servers
       - catalyst-backup-data:/var/lib/catalyst/backups
       - catalyst-plugin-data:/var/lib/catalyst/plugins
-      - /var/run/docker.sock:/var/run/docker.sock
+      # SECURITY (audit S1-7): /var/run/docker.sock is deliberately NOT mounted
+      # here. The socket is equivalent to host root, so any code-execution
+      # primitive in this web-facing backend (a plugin, an admin API bug, an
+      # RCE in a dependency) would become full control of the host daemon and
+      # every container on it. The default deployment does not need it: panel
+      # self-update is off unless enabled, and the log export degrades to a
+      # clear "unavailable" warning.
+      #
+      # To enable in-panel self-update, add the opt-in overlay, which mounts
+      # the socket and hardens the container to compensate:
+      #   {podman|docker} compose -f docker-compose.yml -f docker-compose.auto-update.yml up -d
+      # Everything else about the panel works unchanged without it.
       - ${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:${CATALYST_COMPOSE_DIR:-/opt/catalyst-docker}:ro
     healthcheck:
       # $$ defers expansion to the container shell, so the probe follows the

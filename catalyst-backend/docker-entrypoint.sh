@@ -7,9 +7,16 @@ set -e
 echo "==> Catalyst Backend starting..."
 
 # Join the docker.sock group so the panel Update button can talk to the host
-# daemon after we drop root. No-op when the socket is not mounted.
-if [ "$(id -u)" = "0" ] && [ -S /var/run/docker.sock ]; then
-    sock_gid="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || true)"
+# daemon after we drop root.
+#
+# SECURITY (audit S1-7): the socket is not mounted by default, so this whole
+# block is normally a no-op. It only runs when the operator opted in via
+# docker-compose.auto-update.yml (or an equivalent mount). The predecessor here
+# widened traversal with `chmod o+x` on every ancestor of the compose dir; the
+# walk now refuses to start from / or /root so a bad compose path cannot open
+# the filesystem root.
+if [ "$(id -u)" = "0" ] && [ -S "${DOCKER_SOCKET_PATH:-/var/run/docker.sock}" ]; then
+    sock_gid="$(stat -c '%g' "${DOCKER_SOCKET_PATH:-/var/run/docker.sock}" 2>/dev/null || true)"
     if [ -n "$sock_gid" ]; then
         if ! getent group "$sock_gid" >/dev/null 2>&1; then
             addgroup -g "$sock_gid" docker >/dev/null
@@ -18,15 +25,24 @@ if [ "$(id -u)" = "0" ] && [ -S /var/run/docker.sock ]; then
         addgroup catalyst "$sock_group" >/dev/null 2>&1 || true
     fi
     # Image /root is 0700. A same-path bind of /root/catalyst-docker is
-    # unreachable unless parents are traversable by user catalyst.
+    # unreachable unless parents are traversable by user catalyst. Walk from the
+    # container user's data roots only, so we do not open / or /root.
     compose_path="${AUTO_UPDATE_DOCKER_COMPOSE_PATH:-}"
     if [ -n "$compose_path" ]; then
         dir=$(dirname "$compose_path")
-        while [ "$dir" != "/" ]; do
-            chmod o+x "$dir" 2>/dev/null || true
-            dir=$(dirname "$dir")
-        done
+        case "$dir" in
+            /|/root|/root/*) ;;
+            *)
+                while [ "$dir" != "/" ] && [ "$dir" != "." ]; do
+                    # Only traverse; never grant read or list on the contents.
+                    chmod o+x "$dir" 2>/dev/null || true
+                    dir=$(dirname "$dir")
+                done
+                ;;
+        esac
     fi
+else
+    echo "==> Container engine socket not mounted; in-panel self-update is disabled (default)."
 fi
 
 # Ensure data directories exist (volumes may be mounted over the Dockerfile-created dirs)

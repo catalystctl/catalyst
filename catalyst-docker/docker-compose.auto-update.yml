@@ -1,0 +1,67 @@
+# =============================================================================
+# Catalyst — Panel self-update overlay (OPT-IN, NOT the default)
+#
+# Usage:
+#   podman compose -f docker-compose.yml -f docker-compose.auto-update.yml up -d
+#
+# You almost certainly do not need this. It exists for operators who want the
+# Update button in Admin > System to pull new images and recreate the stack
+# from inside the panel, and who accept the trade-off below.
+#
+# WHY THIS IS OPT-IN (security audit S1-7, MEDIUM / CONFIRMED)
+#   A mounted /var/run/docker.sock is equivalent to host root. The daemon does
+#   not distinguish "may run a container" from "may run a privileged container
+#   with / mounted". Whoever can talk to the socket can read the host filesystem,
+#   modify any container, and start a new one with the host's privileges.
+#
+#   The backend is the most exposed component in Catalyst: it serves the admin
+#   API, loads plugins, and renders operator-supplied data. Putting the socket
+#   in it means any code-execution primitive there escalates from "controls the
+#   panel" to "controls the host and every tenant container on it". Since the
+#   Update button is a convenience and the panel is otherwise fully functional
+#   without it, the default deployment does not get the socket at all.
+#
+#   This overlay is therefore a deliberate, documented opt-in, and it also
+#   applies the container hardening the audit asked for, so the opt-in path is
+#   not a step down from the default one.
+#
+# ALTERNATIVE (no socket, no privileges)
+#   Update from the host instead:
+#     cd catalyst-docker && podman compose pull && podman compose up -d
+#   or re-run the deploy scripts. The panel does not need to orchestrate itself.
+#
+# NOTE ON PODMAN: use the podman-docker compatibility socket so the backend's
+# docker-compatible client can reach it. Point DOCKER_SOCKET_PATH at the real
+# podman socket if you mount it somewhere else.
+# =============================================================================
+
+services:
+  backend:
+    volumes:
+      # Writable on purpose: `compose pull` + `compose up -d` are daemon WRITES.
+      # A read-only mount cannot update anything, so :ro here would only produce
+      # confusing failures. The hardening below is what bounds the risk instead.
+      #
+      # Only the HOST side is variable. podman-compose 1.3 cannot parse a
+      # short-syntax mount with a ${VAR:-default} on both sides ("could not
+      # parse mount"), so the container side stays the real path the backend
+      # already expects. Point DOCKER_SOCKET_PATH at the host socket if it is
+      # not the rootful default.
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      # The gate the backend checks before it tries to drive the engine.
+      DOCKER_SOCKET_PATH: /var/run/docker.sock
+      AUTO_UPDATE_ENABLED: "true"
+    # Hardening requested by audit S1-7. The entrypoint still needs to run as
+    # root briefly to join the socket's group and chown data dirs, then it
+    # su-execs to `catalyst`; these flags stop that root phase from being
+    # escalated back into by a compromised process.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
