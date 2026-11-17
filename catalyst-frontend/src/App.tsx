@@ -101,6 +101,9 @@ function App() {
  const user = useAuthStore((s) => s.user);
  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
  const isReady = useAuthStore((s) => s.isReady);
+ const sessionCheckFailed = useAuthStore((s) => s.sessionCheckFailed);
+ const isRefreshing = useAuthStore((s) => s.isRefreshing);
+ const retrySession = useAuthStore((s) => s.init);
  const {
  setupRequired,
  isLoading: isSetupLoading,
@@ -109,26 +112,45 @@ function App() {
  recheck: recheckSetup,
  } = useSetupStatus();
 
- // Backstop so a stalled backend can never leave the panel on Loading...
- // Auth and setup hooks have their own shorter timeouts; this covers any
- // other hang in the boot path.
+ // Backstop so a stalled boot step can never leave the panel on Loading...
+ // The auth hook bounds its own probe (and shows a retry screen) and the setup
+ // hook has its own timeout, so this only covers anything else that hangs —
+ // and it never overrides an in-flight session probe, because flipping the
+ // gate early is the login-page flash.
  const [bootTimedOut, setBootTimedOut] = useState(false);
  // Mirrors boot readiness so the backstop only reports when boot is
  // genuinely still stuck — previously the timer always fired 20s after
  // mount and reported on every session, even fast boots.
  const bootReadyRef = useRef(false);
+ const bootReportedRef = useRef(false);
  bootReadyRef.current = isReady && !isSetupLoading;
  useEffect(() => {
- const timer = setTimeout(() => {
+ let timer: ReturnType<typeof setTimeout> | undefined;
+ const check = (delay: number) => {
+ timer = setTimeout(() => {
  if (bootReadyRef.current) return;
+ // A session probe still in flight is the one boot step this must not
+ // override: flipping the gate early is exactly the login-page flash.
+ // useAuthInit bounds that probe on its own (retry, then its retry
+ // screen), so keep watching instead of cancelling the backstop.
+ if (useAuthStore.getState().isRefreshing) {
+ check(5000);
+ return;
+ }
  setBootTimedOut(true);
+ if (bootReportedRef.current) return;
+ bootReportedRef.current = true;
  reportSystemError({
  level: 'warn',
  component: 'App',
  message: 'Boot loading timed out, continuing without blocking on init',
  });
- }, 20000);
- return () => clearTimeout(timer);
+ }, delay);
+ };
+ check(20000);
+ return () => {
+ if (timer) clearTimeout(timer);
+ };
  }, []);
 
  // Load public theme settings (including custom CSS) once on mount
@@ -269,6 +291,30 @@ function App() {
  </AnimatePresence>
  </PluginProvider>
  </ErrorBoundary>
+ );
+ }
+
+ // The session probe never settled (slow or unreachable backend). Falling
+ // through to the router would paint /login for a user whose session may still
+ // be valid; offer a retry instead. `init()` clears the flag when the probe
+ // answers.
+ if (sessionCheckFailed && !isAuthenticated) {
+ return (
+ <div className="flex h-screen items-center justify-center bg-background px-6">
+ <div className="max-w-md space-y-3 text-center">
+ <p className="text-sm text-muted-foreground">
+ {t('sessionCheck.failed')}
+ </p>
+ <button
+ type="button"
+ onClick={() => { void retrySession().catch(() => {}); }}
+ disabled={isRefreshing}
+ className="mx-auto inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {isRefreshing ? t('actions.loading') : t('actions.retry')}
+ </button>
+ </div>
+ </div>
  );
  }
 

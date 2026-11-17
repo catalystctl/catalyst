@@ -39,6 +39,44 @@ async function login(page: Page) {
   await loginUser(page, testUser);
 }
 
+/**
+ * Record every in-app path this document navigates through. React Router
+ * redirects via history.pushState/replaceState, which fire no Playwright
+ * navigation event, so a `framenavigated` listener would miss a client-side
+ * bounce to /login. Install before the reload under test.
+ */
+async function recordSpaPaths(page: Page) {
+  await page.addInitScript(() => {
+    const store = window as unknown as { __spaPaths: string[] };
+    store.__spaPaths = [window.location.pathname];
+    const historyMethods = history as unknown as Record<
+      string,
+      (state: unknown, title: string, url?: string | URL | null) => void
+    >;
+    const record = (url?: string | URL | null) => {
+      if (url === undefined || url === null) return;
+      try {
+        store.__spaPaths.push(new URL(String(url), window.location.origin).pathname);
+      } catch {
+        // Not a resolvable path — nothing to record.
+      }
+    };
+    for (const method of ['pushState', 'replaceState']) {
+      const original = historyMethods[method].bind(history);
+      historyMethods[method] = (state, title, url) => {
+        record(url);
+        original(state, title, url);
+      };
+    }
+  });
+}
+
+async function spaPaths(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () => (window as unknown as { __spaPaths?: string[] }).__spaPaths ?? [],
+  );
+}
+
 // ─── Test suites ─────────────────────────────────────────────────────────────
 
 // 1. Authentication Flows
@@ -224,6 +262,39 @@ test.describe('Authentication Flows', () => {
     await expect
       .soft(page.locator('nav, [data-sidebar], aside').first())
       .toBeVisible({ timeout: 10_000 });
+  });
+
+  test('Reloading an authenticated page never paints the login page', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    await recordSpaPaths(page);
+
+    // EventSource streams keep the network busy, so networkidle can never settle;
+    // the sidebar locator below is the real "panel rendered" signal.
+    await page.goto('/servers', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.locator('aside nav').first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+
+    expect.soft(await spaPaths(page)).not.toContain('/login');
+    expect.soft(new URL(page.url()).pathname).toBe('/servers');
+  });
+
+  test('Reloading with a slow session probe never paints the login page', async ({ page }) => {
+    test.setTimeout(60_000);
+    await login(page);
+    await recordSpaPaths(page);
+
+    // Slow backend: this is the window in which the old bootstrap declared "no
+    // session" before /api/auth/me had answered, bouncing users to /login.
+    await page.route('**/api/auth/me*', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      await route.continue();
+    });
+
+    await page.goto('/servers', { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await page.locator('aside nav').first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+
+    expect.soft(await spaPaths(page)).not.toContain('/login');
+    expect.soft(new URL(page.url()).pathname).toBe('/servers');
   });
 
   test('User can logout and is redirected', async ({ page }) => {

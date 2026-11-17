@@ -141,6 +141,9 @@
     "transfer": "Transfer server",
     "update": "Update server settings"
   },
+  "sessionCheck": {
+    "failed": "We could not verify your session. The panel may still be starting up, or the backend may be unreachable. Try again in a moment."
+  },
   "setupStatus": {
     "checkFailed": "Failed to check setup status",
     "timedOut": "Setup check timed out after {{ms}}ms"

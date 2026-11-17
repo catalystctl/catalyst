@@ -5,6 +5,7 @@ import { authApi } from '../services/api/auth';
 import { reportSystemError } from '../services/api/systemErrors';
 import { describeError } from '../utils/errors';
 import { getLocalizedErrorMessage, getLocalizedFieldErrors } from '../i18n/api-errors';
+import i18n from '../i18n';
 import type { User } from '../types/user';
 import type { LoginSchema, RegisterSchema } from '../validators/auth';
 
@@ -14,8 +15,18 @@ interface AuthState {
   rememberMe: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /**
+   * "The session question is answered." Auth gating (`App`, `ProtectedRoute`,
+   * `LoginPage`) keys off this, so only an actual answer may set it: the boot
+   * probe (`init`), the flows that establish or end a session
+   * (`login`/`register`/2FA/logout), and the global 401 handler for a
+   * protected call. Background refreshes must never flip it before the probe
+   * settles.
+   */
   isReady: boolean;
   isRefreshing: boolean;
+  /** The boot probe never settled: render a retry screen instead of /login. */
+  sessionCheckFailed: boolean;
   error: string | null;
   /** @internal AbortController for an in-flight server sign-out request */
   _pendingLogoutController?: AbortController;
@@ -53,6 +64,10 @@ function sanitizeImageUrl(url?: string | null): string | undefined {
 }
 
 const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [], AuthState> = (set, get) => {
+  // Session probes in flight. `refresh()` also runs for background callers
+  // (SSE handlers, profile mutations, the profile poll), so only the last one
+  // may clear `isRefreshing`; `isReady` is left to `init()`.
+  let refreshesInFlight = 0;
   return {
     user: null,
     token: null, // No longer using localStorage tokens
@@ -61,6 +76,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
     isReady: false,
     isLoading: false,
     isRefreshing: false,
+    sessionCheckFailed: false,
     error: null,
     login: async (values) => {
       // Abort any in-flight server sign-out from a previous logout — otherwise
@@ -95,6 +111,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isAuthenticated: true,
           isLoading: false,
           isReady: true,
+          sessionCheckFailed: false,
           error: null,
         });
         // Keep the login-in-progress flag true briefly so transient 401s from
@@ -136,7 +153,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       try {
         const { user } = await authApi.register(values);
         // Cookie-based authentication - tokens stored in HttpOnly cookies
-        (set as AuthSet)({ user: { ...user, image: sanitizeImageUrl(user.image) }, token: null, isAuthenticated: true, isLoading: false, isReady: true, error: null });
+        (set as AuthSet)({ user: { ...user, image: sanitizeImageUrl(user.image) }, token: null, isAuthenticated: true, isLoading: false, isReady: true, sessionCheckFailed: false, error: null });
       } catch (err: unknown) {
         // Field-level failures carry a rule code each, so they can be shown in
         // the panel language; otherwise the error's own code drives the banner.
@@ -158,22 +175,27 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
       }
     },
     refresh: async () => {
-      // With cookie-based auth, always try to refresh - cookies are sent automatically
-      (set as AuthSet)({ isRefreshing: true, error: null, isReady: true });
+      // With cookie-based auth, always try to refresh - cookies are sent automatically.
+      // Deliberately never touches `isReady`: this runs on mount, on SSE events and
+      // after profile mutations, so announcing "auth decided" here is what made the
+      // router remount (and paint /login) while the session was still unknown.
+      const wasReady = (get as AuthGet)().isReady;
+      refreshesInFlight += 1;
+      (set as AuthSet)({ isRefreshing: true, error: null });
       try {
         const { user } = await authApi.refresh();
         (set as AuthSet)({
           token: null,
           user: { ...user, image: sanitizeImageUrl(user.image) },
           isAuthenticated: true,
-          isRefreshing: false,
-          isReady: true,
+          sessionCheckFailed: false,
           error: null,
         });
       } catch (error: unknown) {
         const { loginGuard } = await import('../services/api/client');
         if (loginGuard.active) {
-          (set as AuthSet)({ isRefreshing: false, isReady: true });
+          // A login / 2FA handshake owns the session right now. Leave it alone:
+          // login() sets isAuthenticated and isReady when it completes.
           return;
         }
         const e = error as { status?: number; response?: { status?: number }; retryAfterMs?: number; message?: string };
@@ -181,7 +203,16 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         const isTransient = status === 429 || status === 408 || (typeof status === 'number' && status >= 500) || status === undefined;
         const isCooldown = e.message === 'Refresh cooldown active';
         if (isTransient || isCooldown) {
-          (set as AuthSet)({ isRefreshing: false, isReady: true });
+          // Keep the session: a 429/408/5xx/network blip is not a sign-out.
+          // Record the failure so the caller can explain the state. When this is
+          // the boot probe there is no session to keep yet, so App must show its
+          // retry screen rather than a bare /login — and a retry that fails the
+          // same way must not make that screen disappear.
+          (set as AuthSet)(
+            wasReady
+              ? { error: i18n.t('sessionCheck.failed') }
+              : { error: i18n.t('sessionCheck.failed'), sessionCheckFailed: true },
+          );
           reportSystemError({
             level: 'warn',
             component: 'AuthStore:refresh',
@@ -198,11 +229,19 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           token: null,
           user: null,
           isAuthenticated: false,
-          isRefreshing: false,
-          isReady: true,
+          sessionCheckFailed: false,
           error: null,
           rememberMe: false,
         });
+        // The session is over, so drop the privileged cache here: the global 401
+        // interceptor no longer does it for `/api/auth/me`, and a sign-in as a
+        // different principal must not paint the previous account's data.
+        try {
+          const { queryClient } = await import('../lib/queryClient');
+          queryClient.clear();
+        } catch {
+          // queryClient may not be available in rare bootstrap failures
+        }
         reportSystemError({
           level: 'error',
           component: 'AuthStore:refresh',
@@ -211,29 +250,37 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         });
         throw error;
       } finally {
-        (set as AuthSet)({ isRefreshing: false, isReady: true });
+        refreshesInFlight = Math.max(0, refreshesInFlight - 1);
+        // Overlapping probes (cross-tab init, SSE-triggered refresh) share this
+        // flag: the last one to settle owns the transition back to idle.
+        if (refreshesInFlight === 0) {
+          (set as AuthSet)({ isRefreshing: false });
+        }
       }
     },
     init: async () => {
-      // Don't set isReady until refresh completes to prevent flashing authenticated
-      // content with a potentially expired server-side session.
+      // The boot probe, and the only path allowed to answer the "is there a
+      // session?" question for routing. `refresh()` settles the store first;
+      // isReady flips afterwards so no guard sees an unresolved session.
       // Guard: if login is in-flight (loginGuard.active), skip the refresh
       // entirely — login() will set isAuthenticated once it completes, and
       // we must not overwrite that with a stale 401 from the old session.
       const { loginGuard } = await import('../services/api/client');
       if (loginGuard.active) {
-        (set as AuthSet)({ isReady: true });
         return;
       }
       try {
         await (get as AuthGet)().refresh();
       } finally {
+        // `refresh()` already recorded the outcome (including whether the check
+        // failed), so this only flips the gate. Clearing the failure flag here
+        // would make a failed retry dismiss the retry screen.
         (set as AuthSet)({ isReady: true });
       }
     },
     logout: async (opts?: { stay?: boolean }) => {
       localStorage.removeItem('catalyst-auth');
-      (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false });
+      (set as AuthSet)({ user: null, token: null, isAuthenticated: false, isReady: true, sessionCheckFailed: false, error: null, rememberMe: false });
       // Drop privileged React Query cache so admin/server data cannot flash
       // if the user signs back in as a different principal.
       try {
@@ -273,6 +320,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
         isAuthenticated: true,
         isLoading: false,
         isReady: true,
+        sessionCheckFailed: false,
         error: null,
       });
     },
@@ -289,6 +337,7 @@ const createAuthState: StateCreator<AuthState, [['zustand/persist', unknown]], [
           isAuthenticated: true,
           isLoading: false,
           isReady: true,
+          sessionCheckFailed: false,
           error: null,
         });
       } catch (err: unknown) {
@@ -321,7 +370,7 @@ export const useAuthStore = create<AuthState>()(
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key === 'catalyst-auth') {
-      useAuthStore.getState().init();
+      useAuthStore.getState().init().catch(() => {});
     }
   });
 
@@ -329,7 +378,7 @@ if (typeof window !== 'undefined') {
   channel.onmessage = (event) => {
     if (event.data?.type === 'logout') {
       useAuthStore.setState({
-        user: null, token: null, isAuthenticated: false, isReady: true, rememberMe: false,
+        user: null, token: null, isAuthenticated: false, isReady: true, sessionCheckFailed: false, rememberMe: false,
       });
       // Best-effort cache clear so other tabs don't flash privileged data.
       import('../lib/queryClient')

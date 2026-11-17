@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient } from '../client';
+import { useAuthStore } from '../../../stores/authStore';
 
 function stubFetch() {
   const calls: Array<{ url: string; init: RequestInit }> = [];
@@ -18,6 +19,20 @@ function stubFetch() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+beforeEach(() => {
+  useAuthStore.setState({
+    user: null,
+    token: null,
+    rememberMe: false,
+    isAuthenticated: false,
+    isLoading: false,
+    isReady: true,
+    isRefreshing: false,
+    sessionCheckFailed: false,
+    error: null,
+  });
 });
 
 describe('apiClient Content-Type handling', () => {
@@ -51,5 +66,28 @@ describe('apiClient Content-Type handling', () => {
 
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBe('application/merge-patch+json');
+  });
+});
+
+describe('apiClient 401 handling', () => {
+  it('leaves a live session alone when the session probe answers 401', async () => {
+    const user = { id: 'user-1', email: 'user@example.com', username: 'user', role: 'user' as const, permissions: [] };
+    useAuthStore.setState({ user, isAuthenticated: true, isReady: true });
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      headers: new Headers(),
+      json: async () => ({ error: 'Unauthorized', code: 'UNAUTHORIZED' }),
+    })));
+
+    // The probe's own answer is handled by the auth store's refresh(), which
+    // distinguishes a real sign-out from a transient failure. The interceptor
+    // must not clear state (or the query cache) behind its back.
+    await expect(apiClient.get('/api/auth/me')).rejects.toMatchObject({ status: 401 });
+
+    const state = useAuthStore.getState();
+    expect(state.isAuthenticated).toBe(true);
+    expect(state.user).toEqual(user);
   });
 });

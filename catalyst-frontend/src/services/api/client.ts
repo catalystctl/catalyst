@@ -247,8 +247,18 @@ class ApiClient {
         errorData = { message: response.statusText || `HTTP ${response.status}` };
       }
 
-      // Global 401 handling — clears auth state, privileged cache, and redirects
-      if (response.status === 401 && !loginGuard.active) {
+      // Global 401 handling — clears auth state, privileged cache, and redirects.
+      // Public endpoints answer 401 as their ordinary "not signed in" reply:
+      // the session probe expects it on a fresh load, and the setup/theme probes
+      // are public. Never touch auth state for them — `/api/auth/me`'s answer is
+      // owned by the store's `refresh()`, which keeps a live session on a
+      // transient failure and signs out on a real 401. Clearing here let any
+      // background probe wipe a session behind the store's back.
+      const isPublicEndpoint =
+        path.startsWith('/api/auth/me') ||
+        path.startsWith('/api/setup/status') ||
+        path.startsWith('/api/theme-settings/public');
+      if (!isPublicEndpoint && response.status === 401 && !loginGuard.active) {
         const code = errorData.code;
         if (code !== 'TWO_FACTOR_REQUIRED' && code !== 'PASSKEY_REQUIRED') {
           useAuthStore.setState({
@@ -256,6 +266,8 @@ class ApiClient {
             token: null,
             isAuthenticated: false,
             isReady: true,
+            sessionCheckFailed: false,
+            error: null,
             rememberMe: false,
           });
           // Drop any privileged React Query cache so stale admin/server data
@@ -271,15 +283,8 @@ class ApiClient {
               currentPath.startsWith('/forgot-password') ||
               currentPath.startsWith('/reset-password') ||
               currentPath.startsWith('/invites');
-            // Session probe and other public endpoints expect 401 when logged
-            // out (fresh install, expired session check). Never hard-redirect
-            // for them — React router guards handle navigation.
-            const isPublicEndpoint =
-              path.startsWith('/api/auth/me') ||
-              path.startsWith('/api/setup/status') ||
-              path.startsWith('/api/theme-settings/public');
             // Avoid redirect loops on public pages and during first-run setup.
-            if (!isPublicRoute && !isPublicEndpoint) {
+            if (!isPublicRoute) {
               const returnTo = encodeURIComponent(currentPath);
               window.location.assign(`/login?from=${returnTo}`);
             }
