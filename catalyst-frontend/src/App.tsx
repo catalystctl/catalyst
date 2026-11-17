@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import SetupPage from './pages/setup/SetupPage';
 import { useSetupStatus } from './hooks/useSetupStatus';
@@ -71,6 +71,37 @@ function PageFallback() {
  );
 }
 
+/**
+ * Recovery screen for a boot session probe that never settled. Shown for every
+ * path except the auth routes, so a signed-out user still has a way in.
+ */
+function SessionCheckFailedPage() {
+ const { t } = useTranslation(['common', 'auth']);
+ const isRefreshing = useAuthStore((s) => s.isRefreshing);
+ const retrySession = useAuthStore((s) => s.init);
+ return (
+ <div className="flex h-screen items-center justify-center bg-background px-6">
+ <div className="max-w-md space-y-3 text-center">
+ <p className="text-sm text-muted-foreground">{t('sessionCheck.failed')}</p>
+ <button
+ type="button"
+ onClick={() => { void retrySession().catch(() => {}); }}
+ disabled={isRefreshing}
+ className="mx-auto inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
+ >
+ {isRefreshing ? t('actions.loading') : t('actions.retry')}
+ </button>
+ <Link
+ to="/login"
+ className="block text-mini text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+ >
+ {t('auth:login.submit')}
+ </Link>
+ </div>
+ </div>
+ );
+}
+
 /** Smooth page transition wrapper */
 function PageTransition({ children }: { children: React.ReactNode }) {
  const reducedMotion = useReducedMotion();
@@ -102,8 +133,6 @@ function App() {
  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
  const isReady = useAuthStore((s) => s.isReady);
  const sessionCheckFailed = useAuthStore((s) => s.sessionCheckFailed);
- const isRefreshing = useAuthStore((s) => s.isRefreshing);
- const retrySession = useAuthStore((s) => s.init);
  const {
  setupRequired,
  isLoading: isSetupLoading,
@@ -296,25 +325,28 @@ function App() {
 
  // The session probe never settled (slow or unreachable backend). Falling
  // through to the router would paint /login for a user whose session may still
- // be valid; offer a retry instead. `init()` clears the flag when the probe
- // answers.
+ // be valid, so every other path gets a retry screen instead — but the auth
+ // routes stay reachable, because `/api/auth/me` alone can be broken while
+ // signing in still works. `init()` and `login()` both clear the flag.
  if (sessionCheckFailed && !isAuthenticated) {
  return (
- <div className="flex h-screen items-center justify-center bg-background px-6">
- <div className="max-w-md space-y-3 text-center">
- <p className="text-sm text-muted-foreground">
- {t('sessionCheck.failed')}
- </p>
- <button
- type="button"
- onClick={() => { void retrySession().catch(() => {}); }}
- disabled={isRefreshing}
- className="mx-auto inline-flex h-8 items-center rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
- >
- {isRefreshing ? t('actions.loading') : t('actions.retry')}
- </button>
- </div>
- </div>
+ <ErrorBoundary resetKey={location.pathname}>
+ <ToastProvider />
+ <DemoBanner />
+ <PluginProvider>
+ <AnimatePresence initial={false}>
+ <Routes>
+ <Route path="/login" element={<LoginPage />} />
+ <Route path="/register" element={<RegisterPage />} />
+ <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+ <Route path="/reset-password" element={<ResetPasswordPage />} />
+ {/* 2FA is handled inline on LoginPage (totp dialog) — keep a redirect for old links */}
+ <Route path="/two-factor" element={<Navigate to="/login" replace />} />
+ <Route path="*" element={<SessionCheckFailedPage />} />
+ </Routes>
+ </AnimatePresence>
+ </PluginProvider>
+ </ErrorBoundary>
  );
  }
 
