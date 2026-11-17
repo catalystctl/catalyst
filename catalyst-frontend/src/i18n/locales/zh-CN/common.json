@@ -141,6 +141,9 @@
     "transfer": "转移服务器",
     "update": "更新服务器设置"
   },
+  "sessionCheck": {
+    "failed": "无法验证您的会话。面板可能仍在启动，或后端无法访问。请稍后重试。"
+  },
   "setupStatus": {
     "checkFailed": "检查初始化状态失败",
     "timedOut": "初始化状态检查超时（{{ms}}ms）"

@@ -141,6 +141,9 @@
     "transfer": "Transférer le serveur",
     "update": "Mettre à jour les paramètres du serveur"
   },
+  "sessionCheck": {
+    "failed": "Impossible de vérifier votre session. Le panneau démarre peut-être encore ou le serveur est injoignable. Réessayez dans un instant."
+  },
   "setupStatus": {
     "checkFailed": "Échec de la vérification de l’état de la configuration",
     "timedOut": "La vérification de la configuration a expiré après {{ms}} ms"
