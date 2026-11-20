@@ -32,6 +32,7 @@ TEST_SUITES=(
     "06-websocket.test.sh"
     "08-container-lifecycle.test.sh"
     "10-full-workflow.test.sh"
+    "31-cpu-affinity.test.sh"
 )
 
 # Results tracking
