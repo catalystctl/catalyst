@@ -25,6 +25,11 @@ export interface NodeInfo {
   sftpEnabled?: boolean;
   maxMemoryMb?: number;
   maxCpuCores?: number;
+  /**
+   * CPU set the node's agent reported (canonical cpuset list). null/absent
+   * means the agent has not reported it yet, so a pin cannot be checked here.
+   */
+  hostCpuSet?: string | null;
   memoryOverallocatePercent?: number;
   cpuOverallocatePercent?: number;
   createdAt?: string;

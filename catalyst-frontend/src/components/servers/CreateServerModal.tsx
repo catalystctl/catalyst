@@ -39,6 +39,8 @@ import {
   SERVER_NAME_PATTERN,
 } from '../../lib/serverLimits';
 import { BracketLabel } from '@/components/deck/primitives';
+import CpuAffinityField from './CpuAffinityField';
+import { countCpus, normalizeCpuAffinity } from '../../lib/cpuAffinity';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
 const fieldClass =
@@ -94,6 +96,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
   const [backupAllocationMb, setBackupAllocationMb] = useState('');
   const [databaseAllocation, setDatabaseAllocation] = useState('');
   const [allocatedSwapMb, setAllocatedSwapMb] = useState('');
+  const [cpuAffinity, setCpuAffinity] = useState('');
   const [port, setPort] = useState('25565');
   const [additionalBindings, setAdditionalBindings] = useState<
     Array<{ allocationId: string; containerPort: string }>
@@ -221,6 +224,17 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
     () => availableNodes.find((node) => node.id === nodeId),
     [availableNodes, nodeId],
   );
+  // The pin is written in the node's own CPU numbering, so the picker may only
+  // offer what that agent reported. A node that has not reported a set (old
+  // agent, offline) leaves it unknown and the form asks for a CPU list instead.
+  const selectedNodeCpuSet = useMemo(() => {
+    const match = [...nodes, ...accessibleNodes].find((node) => node.id === nodeId);
+    return match?.hostCpuSet ?? null;
+  }, [nodes, accessibleNodes, nodeId]);
+  // Canonical form of the pin: the payload never carries a non-canonical list,
+  // and an unparseable one blocks submit with a reason the form can show.
+  const affinity = normalizeCpuAffinity(cpuAffinity);
+  const affinityCpus = affinity.ok ? countCpus(affinity.mask) : 0;
   // The location always belongs to the selected node: no node selected means no
   // location, and a node without one blocks submit instead of guessing.
   const locationId = selectedNode?.locationId || '';
@@ -414,6 +428,11 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
       if (networkMode === 'host' && allocationId) {
         payload.allocationId = allocationId;
       }
+      // Omitted entirely when nothing is pinned: the API reads `null` and an
+      // absent key the same way, and absent keeps the payload minimal.
+      if (affinity.ok && affinity.mask) {
+        payload.cpuAffinity = affinity.mask;
+      }
 
       const server = await serversApi.create(payload);
       if (!server?.id) throw new Error('Server creation did not return an ID');
@@ -442,6 +461,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
       setPrimaryIp('');
       setAdditionalBindings([]);
       setAllocatedSwapMb('');
+      setCpuAffinity('');
       setBackupAllocationMb('');
       setDatabaseAllocation('');
       navigate(`/servers/${serverId}/console`);
@@ -469,6 +489,14 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
   const parsedDisk = Number(disk);
   const parsedPort = Number(port);
   const parsedSwap = allocatedSwapMb.trim() === '' ? undefined : Number(allocatedSwapMb);
+  // The API rejects a pin smaller than the allocation (CPU_AFFINITY_BELOW_ALLOCATION),
+  // so the form blocks it and names the fix instead of letting the save fail.
+  const affinityBelowCores =
+    affinity.ok &&
+    affinity.mask !== null &&
+    Number.isFinite(parsedCpu) &&
+    affinityCpus < parsedCpu;
+  const affinityValid = affinity.ok && !affinityBelowCores;
   const detailsValid =
     Boolean(name.trim()) &&
     SERVER_NAME_PATTERN.test(name) &&
@@ -507,6 +535,8 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
     databaseAllocation.trim() !== '' && (!Number.isFinite(Number(databaseAllocation)) || Number(databaseAllocation) < 0) ? t('createServer.validation.minimum', { field: t('fields.databaseAllocation'), min: 0 }) : null,
     !Number.isFinite(parsedPort) || parsedPort < 1 || parsedPort > 65535 ? t('createServer.validation.portRange') : null,
     networkMode === 'macvlan' && !macvlanInterface ? t('createServer.validation.required', { field: t('createServer.network.interface') }) : null,
+    !affinity.ok ? t('cpuAffinity.invalid') : null,
+    affinityBelowCores ? t('cpuAffinity.belowAllocation', { cores: parsedCpu, cpus: affinityCpus }) : null,
     ...templateVariables.filter((variable) => variable.required && !String(environment[variable.name] ?? '').trim())
       .map((variable) => t('createServer.validation.required', { field: variable.name })),
   ].filter((reason): reason is string => Boolean(reason));
@@ -517,6 +547,7 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
       !resourcesValid ||
       !buildValid ||
       !startupValid ||
+      !affinityValid ||
       locationMissing));
 
   if (!canCreateServer) {
@@ -653,6 +684,14 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                         <input className={monoFieldClass} value={databaseAllocation} onChange={(e) => setDatabaseAllocation(e.target.value)} type="number" min={0} max={MAX_DATABASE_ALLOCATION} step={1}/>
                         <p className="type-meta">{t('fields.leaveBlankDefaults')}</p>
                       </label>
+                    </div>
+                    <div className="mt-3 border-t border-border/50 pt-3">
+                      <CpuAffinityField
+                        hostCpuSet={selectedNodeCpuSet}
+                        value={cpuAffinity}
+                        onChange={setCpuAffinity}
+                        allocatedCpuCores={parsedCpu}
+                      />
                     </div>
                   </FormSection>
 
@@ -809,6 +848,11 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                         <SummaryRow label={t('fields.swapMb')} value={allocatedSwapMb.trim() === '' ? '—' : allocatedSwapMb} mono />
                         <SummaryRow label={t('fields.backupMb')} value={backupAllocationMb.trim() === '' ? '—' : backupAllocationMb} mono />
                         <SummaryRow label={t('fields.databaseAllocation')} value={databaseAllocation.trim() === '' ? '—' : databaseAllocation} mono />
+                        <SummaryRow
+                          label={t('cpuAffinity.title')}
+                          value={affinity.ok ? affinity.mask ?? t('cpuAffinity.allCpus') : '—'}
+                          mono
+                        />
                       </div>
                     </div>
 

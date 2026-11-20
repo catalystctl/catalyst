@@ -107,6 +107,8 @@ export interface Server {
   allocatedDiskMb?: number;
   allocatedSwapMb?: number;
   ioWeight?: number;
+  /** Canonical cpuset mask this server is pinned to; null = no pinning. */
+  cpuAffinity?: string | null;
   backupStorageMode?: BackupStorageMode;
   backupRetentionCount?: number;
   backupRetentionDays?: number;
@@ -165,6 +167,8 @@ export interface CreateServerPayload {
   allocatedCpuCores: number;
   allocatedDiskMb: number;
   allocatedSwapMb?: number;
+  /** Canonical cpuset mask; omit or null for no pinning. */
+  cpuAffinity?: string | null;
   backupAllocationMb?: number;
   databaseAllocation?: number;
   primaryPort: number;
@@ -184,6 +188,8 @@ export interface UpdateServerPayload {
   allocatedMemoryMb?: number;
   allocatedCpuCores?: number;
   allocatedDiskMb?: number;
+  /** Canonical cpuset mask; null clears the pin, omit to leave it unchanged. */
+  cpuAffinity?: string | null;
   primaryPort?: number;
   primaryIp?: string | null;
   allocationId?: string;
@@ -213,6 +219,8 @@ export interface CloneServerPayload extends CloneIncludeOptions {
   allocatedDiskMb?: number;
   allocatedSwapMb?: number;
   ioWeight?: number;
+  /** Canonical cpuset mask; null clears the pin, omit to keep the source's. */
+  cpuAffinity?: string | null;
   backupAllocationMb?: number;
   databaseAllocation?: number;
   environment?: Record<string, string>;

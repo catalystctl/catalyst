@@ -101,6 +101,7 @@
     "warningFreshInstall": "这将使用相同配置创建新服务器，并在新服务器上执行全新安装。",
     "warnings": {
       "CLONE_BACKUP_CREDENTIALS_DROPPED": "备份存储凭据不会被复制；克隆将使用本地备份存储。",
+      "CLONE_CPU_AFFINITY_DROPPED": "目标节点无法提供该服务器的 CPU 绑定，因此克隆将不启用绑定。",
       "CLONE_DATABASES_OMITTED": "源服务器包含不会被复制的数据库。",
       "CLONE_DISK_TIGHT": "可用磁盘空间小于源大小的 1.5 倍。",
       "CLONE_HOST_PORTS_SHIFTED": "主机网络无法重映射端口，端口段已偏移以保持可用。",
@@ -181,6 +182,16 @@
     "starting": "启动中…",
     "stop": "停止",
     "stopping": "停止中…"
+  },
+  "cpuAffinity": {
+    "allCpus": "全部处理器",
+    "appliesOnNextStart": "CPU 绑定将在该服务器下次启动时生效。",
+    "belowAllocation": "此绑定范围小于该服务器分配的 {{cores}} 个核心。请至少选择 {{cores}} 个处理器，或降低分配值。",
+    "invalid": "请输入形如 0-3,6 的处理器列表：按升序排列，不含空格，不含前导零，处理器编号不超过 4095。",
+    "placeholder": "0-3,6",
+    "selection": "已绑定 {{cpus}}/{{total}} 个处理器",
+    "title": "CPU 绑定",
+    "unknownSetHint": "该节点尚未上报其处理器集合，因此绑定将在服务器启动时校验。"
   },
   "createServer": {
     "created": "服务器已创建，安装已开始",

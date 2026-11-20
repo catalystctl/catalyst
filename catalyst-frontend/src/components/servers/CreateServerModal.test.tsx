@@ -9,7 +9,7 @@ const invalidateQueries = vi.fn();
 const setPermissions = { current: ['admin.write'] };
 const templates = [{ id: 'template-1', name: 'Minecraft' }];
 const templateDetail = { id: 'template-1', variables: [] };
-const nodes = [{ id: 'node-1', name: 'Node', locationId: 'location-1' }];
+const nodes = [{ id: 'node-1', name: 'Node', locationId: 'location-1', hostCpuSet: '0-3' }];
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string, args?: { field?: string; error?: string }) => args?.field ? `${key}: ${args.field}` : args?.error ? `${key}: ${args.error}` : key }) }));
 vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
@@ -100,5 +100,29 @@ describe('server creation installation recovery', () => {
     fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
     fireEvent.click(submit);
     await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ locationId: 'location-1' })));
+  });
+
+  it('sends the picked CPU mask with the create request', async () => {
+    render(<CreateServerModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.newServer' }));
+    fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'pinned-server' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
+    // The node reported "0-3", so the picker offers one chip per CPU.
+    fireEvent.click(screen.getByRole('button', { name: '1' }));
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.submit' }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ cpuAffinity: '1-2' })));
+  });
+
+  it('omits cpuAffinity when nothing is pinned', async () => {
+    render(<CreateServerModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.newServer' }));
+    fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'unpinned-server' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.submit' }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create.mock.calls[0][0]).not.toHaveProperty('cpuAffinity');
   });
 });

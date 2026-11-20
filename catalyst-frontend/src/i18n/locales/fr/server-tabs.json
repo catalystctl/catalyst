@@ -455,6 +455,7 @@
         "backupAllocation": "Allocation de sauvegarde",
         "connection": "Connexion",
         "cpu": "CPU",
+        "cpuAffinity": "Épinglage des processeurs",
         "crashes": "Plantages",
         "databaseAllocation": "Allocation de base de données",
         "disk": "Disque",
@@ -552,6 +553,7 @@
       "use": "Utiliser",
       "usersLoadFailed": "Impossible de charger les utilisateurs. Vous n’avez peut-être pas l’autorisation de rechercher des comptes.",
       "values": {
+        "allCpus": "Tous les processeurs",
         "cores": "{{value}} cœurs",
         "databases": "{{value}} bases de données",
         "mb": "{{value}} MB"

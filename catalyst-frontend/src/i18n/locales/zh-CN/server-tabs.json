@@ -425,6 +425,7 @@
         "backupAllocation": "备份分配",
         "connection": "连接",
         "cpu": "CPU",
+        "cpuAffinity": "CPU 绑定",
         "crashes": "崩溃次数",
         "databaseAllocation": "数据库分配",
         "disk": "磁盘",
@@ -522,6 +523,7 @@
       "use": "使用",
       "usersLoadFailed": "无法加载用户。您可能没有搜索账号的权限。",
       "values": {
+        "allCpus": "全部处理器",
         "cores": "{{value}} 核",
         "databases": "{{value}} 个数据库",
         "mb": "{{value}} MB"

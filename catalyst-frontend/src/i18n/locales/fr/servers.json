@@ -101,6 +101,7 @@
     "warningFreshInstall": "Un nouveau serveur avec la même configuration sera créé. Une nouvelle installation sera exécutée sur le nouveau serveur.",
     "warnings": {
       "CLONE_BACKUP_CREDENTIALS_DROPPED": "Les identifiants de stockage des sauvegardes ne sont pas copiés ; le clone utilise le stockage local.",
+      "CLONE_CPU_AFFINITY_DROPPED": "L’épinglage des processeurs de ce serveur n’est pas disponible sur le nœud cible ; le clone fonctionnera sans épinglage.",
       "CLONE_DATABASES_OMITTED": "La source possède des bases de données qui ne seront pas copiées.",
       "CLONE_DISK_TIGHT": "L’espace disque libre est inférieur à 1,5× la taille de la source.",
       "CLONE_HOST_PORTS_SHIFTED": "Le réseau hôte ne permet pas de remapper les ports ; le bloc de ports a été décalé pour rester libre.",
@@ -183,6 +184,16 @@
     "starting": "Démarrage…",
     "stop": "Arrêter",
     "stopping": "Arrêt en cours…"
+  },
+  "cpuAffinity": {
+    "allCpus": "Tous les processeurs",
+    "appliesOnNextStart": "L’épinglage des processeurs s’appliquera au prochain démarrage de ce serveur.",
+    "belowAllocation": "Cet épinglage est plus étroit que l’allocation de {{cores}} cœurs du serveur. Sélectionnez au moins {{cores}} processeurs ou réduisez l’allocation.",
+    "invalid": "Saisissez une liste de processeurs du type 0-3,6 : ordre croissant, sans espaces, sans zéros initiaux, processeurs jusqu’à 4095.",
+    "placeholder": "0-3,6",
+    "selection": "{{cpus}} processeurs épinglés sur {{total}}",
+    "title": "Épinglage des processeurs",
+    "unknownSetHint": "Ce nœud n’a pas encore signalé son ensemble de processeurs : l’épinglage sera vérifié au démarrage du serveur."
   },
   "createServer": {
     "created": "Serveur créé et installation lancée",

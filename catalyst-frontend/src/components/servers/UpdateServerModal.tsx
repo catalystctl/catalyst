@@ -23,6 +23,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { FormSection } from '@/components/ui/form-section';
+import CpuAffinityField from './CpuAffinityField';
+import { useNodes } from '../../hooks/useNodes';
+import { countCpus, normalizeCpuAffinity } from '../../lib/cpuAffinity';
 import { BracketLabel } from '@/components/deck/primitives';
 import { cn } from '@/lib/utils';
 import {
@@ -77,6 +80,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const [databaseAllocation, setDatabaseAllocation] = useState('0');
   const [backupAllocationMb, setBackupAllocationMb] = useState('0');
   const [backupRetentionCount, setBackupRetentionCount] = useState('0');
+  const [cpuAffinity, setCpuAffinity] = useState('');
   const [name, setName] = useState('');
   const [primaryIp, setPrimaryIp] = useState('');
   const [allocationId, setAllocationId] = useState('');
@@ -115,6 +119,24 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   const existingDiskMb = server?.allocatedDiskMb ?? (diskValue || 10240);
   const isShrink = Number.isFinite(diskValue) && diskValue > 0 && diskValue < existingDiskMb;
 
+  // CPU pinning: the form holds the raw text, the request carries the canonical
+  // mask, and only a real change is sent (a mask that canonicalises to what is
+  // stored is a no-op, not an update).
+  const { data: nodes = [] } = useNodes();
+  const nodeCpuSet = nodes.find((node) => node.id === server?.nodeId)?.hostCpuSet ?? null;
+  const affinity = normalizeCpuAffinity(cpuAffinity);
+  const storedAffinity = normalizeCpuAffinity(server?.cpuAffinity ?? null);
+  const affinityChanged =
+    affinity.ok && storedAffinity.ok && affinity.mask !== storedAffinity.mask;
+  const affinityCpus = affinity.ok ? countCpus(affinity.mask) : 0;
+  const resolvedCpuCores = Number.isFinite(cpuValue) ? cpuValue : existingCpuCores;
+  // The API rejects a pin smaller than the allocation with
+  // CPU_AFFINITY_BELOW_ALLOCATION; block the save here and name the fix.
+  const affinityBelowCores =
+    affinity.ok &&
+    affinity.mask !== null &&
+    affinityCpus < resolvedCpuCores;
+
   const mutation = useMutation({
     mutationFn: async () => {
       const updates: UpdateServerPayload = {};
@@ -147,6 +169,10 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       }
       if (isIpamNetwork && primaryIp !== (server?.primaryIp ?? '')) {
         updates.primaryIp = primaryIp.trim() || null;
+      }
+      if (affinityChanged) {
+        // `null` clears the pin; the API reads it the same as an empty list.
+        updates.cpuAffinity = affinity.ok ? affinity.mask : null;
       }
       if (isBridgeNetwork && allocationId) {
         updates.allocationId = allocationId;
@@ -202,6 +228,7 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
       setBackupAllocationMb(String(server.backupAllocationMb ?? 0));
       setBackupRetentionCount(String(server.backupRetentionCount ?? 0));
       setPrimaryIp(server.primaryIp ?? '');
+      setCpuAffinity(server.cpuAffinity ?? '');
     },
     { active: open },
   );
@@ -490,6 +517,15 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                       </span>
                     </label>
                   </div>
+                  <div className="mt-3 border-t border-border/60 pt-3">
+                    <CpuAffinityField
+                      hostCpuSet={nodeCpuSet}
+                      value={cpuAffinity}
+                      onChange={setCpuAffinity}
+                      allocatedCpuCores={resolvedCpuCores}
+                      appliesOnNextStart={isRunning}
+                    />
+                  </div>
                 </FormSection>
 
                 {/* 3 — Network: which IP / allocation answers for this server */}
@@ -588,6 +624,10 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                       label={t('updateServer.backupRetention')}
                       value={backupRetentionCount.trim() || '—'}
                     />
+                    <SummaryRow
+                      label={t('cpuAffinity.title')}
+                      value={affinity.ok ? affinity.mask ?? t('cpuAffinity.allCpus') : '—'}
+                    />
                     <SummaryRow label={t('fields.networkMode')} value={networkModeLabel} />
                     {isIpamNetwork ? (
                       <SummaryRow
@@ -618,6 +658,8 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
                 backupSettingsMutation.isPending ||
                 retentionInvalid ||
                 backupAllocationInvalid ||
+                !affinity.ok ||
+                affinityBelowCores ||
                 (isRunning && isShrink) ||
                 disabled
               }

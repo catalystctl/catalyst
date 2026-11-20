@@ -101,6 +101,7 @@
     "warningFreshInstall": "This will create a new server with the same configuration. A fresh install will run on the new server.",
     "warnings": {
       "CLONE_BACKUP_CREDENTIALS_DROPPED": "Backup storage credentials are not copied; the clone uses local backup storage.",
+      "CLONE_CPU_AFFINITY_DROPPED": "This server's CPU pin is not available on the target node, so the clone runs unpinned.",
       "CLONE_DATABASES_OMITTED": "The source has databases that will not be copied.",
       "CLONE_DISK_TIGHT": "Free disk space is less than 1.5× the source size.",
       "CLONE_HOST_PORTS_SHIFTED": "Host networking cannot remap ports, so the port block was shifted to stay free.",
@@ -182,6 +183,16 @@
     "starting": "Starting…",
     "stop": "Stop",
     "stopping": "Stopping…"
+  },
+  "cpuAffinity": {
+    "allCpus": "All CPUs",
+    "appliesOnNextStart": "CPU pinning applies the next time this server starts.",
+    "belowAllocation": "This pin is narrower than the server's {{cores}}-core allocation. Select at least {{cores}} CPUs, or lower the allocation.",
+    "invalid": "Enter a CPU list like 0-3,6: ascending, no spaces, no leading zeros, CPUs up to 4095.",
+    "placeholder": "0-3,6",
+    "selection": "{{cpus}} of {{total}} CPUs pinned",
+    "title": "CPU pinning",
+    "unknownSetHint": "This node has not reported its CPU set yet, so the pin is checked when the server starts."
   },
   "createServer": {
     "created": "Server created and installation started",

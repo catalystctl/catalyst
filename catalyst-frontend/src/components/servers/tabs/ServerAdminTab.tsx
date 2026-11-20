@@ -41,6 +41,7 @@ import SectionHeader from './SectionHeader';
 import DataField from './DataField';
 import SettingsRow from './SettingsRow';
 import { formatDateTime } from '@/i18n/format';
+import { normalizeCpuAffinity } from '../../../lib/cpuAffinity';
 
 
 // ── Types ──
@@ -81,6 +82,8 @@ interface ServerInfo {
  allocatedDiskMb?: number;
  allocatedSwapMb?: number;
  ioWeight?: number;
+ /** Canonical cpuset mask the server is pinned to; null = all CPUs. */
+ cpuAffinity?: string | null;
  environment?: Record<string, string>;
  restartPolicy?: 'always' | 'on-failure' | 'never';
  crashCount?: number;
@@ -330,6 +333,13 @@ export default function ServerAdminTab({
  }
  return null;
  }, [server.owner, server.ownerId]);
+
+ // The stored mask is already canonical; normalising keeps a legacy or
+ // hand-edited row from showing a spelling the API would never write.
+ const affinityMask = useMemo(() => {
+ const normalized = normalizeCpuAffinity(server.cpuAffinity ?? null);
+ return normalized.ok ? normalized.mask : null;
+ }, [server.cpuAffinity]);
 
  // Rows the raw editor may change: the panel derives
 // IMAGE_VARIANT/TEMPLATE_IMAGE/CATALYST_NETWORK_IP, so they are shown
@@ -818,6 +828,10 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
           <DataField label={t('tabs.admin.fields.cpu')} value={t('tabs.admin.values.cores', { value: server.allocatedCpuCores ?? 0 })} />
           <DataField label={t('tabs.admin.fields.disk')} value={t('tabs.admin.values.mb', { value: server.allocatedDiskMb ?? 0 })} />
           <DataField label={t('tabs.admin.fields.swap')} value={t('tabs.admin.values.mb', { value: server.allocatedSwapMb ?? 0 })} />
+          <DataField
+            label={t('tabs.admin.fields.cpuAffinity')}
+            value={affinityMask ?? t('tabs.admin.values.allCpus')}
+          />
           <DataField
             label={t('tabs.admin.fields.backupAllocation')}
             value={

@@ -440,6 +440,7 @@
         "backupAllocation": "Backup allocation",
         "connection": "Connection",
         "cpu": "CPU",
+        "cpuAffinity": "CPU pinning",
         "crashes": "Crashes",
         "databaseAllocation": "Database allocation",
         "disk": "Disk",
@@ -537,6 +538,7 @@
       "use": "Use",
       "usersLoadFailed": "Unable to load users. You may not have permission to search accounts.",
       "values": {
+        "allCpus": "All CPUs",
         "cores": "{{value}} cores",
         "databases": "{{value}} databases",
         "mb": "{{value}} MB"

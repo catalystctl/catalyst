@@ -19,6 +19,16 @@ export const MAX_DATABASE_ALLOCATION = 1024;
 export const MAX_BACKUP_ALLOCATION_MB = 1048576;
 
 /**
+ * CPU affinity (cpuset) bounds. Deliberately not `MAX_CPU_CORES`: that bounds
+ * the quota math, while a mask names CPUs on the node's own numbering, which
+ * routinely exceeds the admin capacity cap. These mirror
+ * `MAX_CPU_AFFINITY_LENGTH` / `MAX_CPU_INDEX` in
+ * `catalyst-backend/src/lib/cpu-affinity.ts`.
+ */
+export const MAX_CPU_AFFINITY_LENGTH = 512;
+export const MAX_CPU_INDEX = 4095;
+
+/**
  * Characters a server name may contain. The backend `serverNameSchema` is the
  * authority; the forms validate with the same pattern so a rejected name is
  * reported next to the input instead of as a failed request.
