@@ -92,6 +92,7 @@
     "addVariable": "添加变量",
     "advancedFeatures": "高级功能",
     "allocatedCpu": "分配的 CPU 核心",
+    "allocatedDisk": "默认磁盘（MB）",
     "allocatedMemory": "分配的内存（MB）",
     "author": "作者",
     "backupPaths": "备份路径（可选）",
@@ -146,6 +147,7 @@
   "missing": {
     "author": "作者",
     "cpu": "分配的 CPU 核心",
+    "disk": "默认磁盘",
     "image": "容器镜像",
     "memory": "分配的内存",
     "name": "名称",
@@ -226,6 +228,7 @@
     "title": "Mod 与插件提供方"
   },
   "resources": "资源",
+  "resourcesSummary": "{{cpu}} CPU · {{memory}} MB 内存 · {{disk}} MB 磁盘",
   "state": {
     "notAvailable": "不适用"
   },

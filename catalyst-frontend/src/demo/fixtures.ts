@@ -325,6 +325,7 @@ export const demoTemplates = [
     supportedPorts: [25565],
     allocatedMemoryMb: 4096,
     allocatedCpuCores: 2,
+    allocatedDiskMb: 10240,
   },
   {
     id: 'demo-template-forge',
@@ -342,6 +343,7 @@ export const demoTemplates = [
     supportedPorts: [25565],
     allocatedMemoryMb: 6144,
     allocatedCpuCores: 4,
+    allocatedDiskMb: 10240,
   },
   {
     id: 'demo-template-vanilla',
@@ -359,6 +361,7 @@ export const demoTemplates = [
     supportedPorts: [25565],
     allocatedMemoryMb: 2048,
     allocatedCpuCores: 1,
+    allocatedDiskMb: 10240,
   },
   {
     id: 'demo-template-cs16',
@@ -376,6 +379,7 @@ export const demoTemplates = [
     supportedPorts: [27015],
     allocatedMemoryMb: 2048,
     allocatedCpuCores: 1,
+    allocatedDiskMb: 10240,
   },
 ];
 

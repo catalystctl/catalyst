@@ -18,7 +18,7 @@ type Props = {
  */
 export const TEMPLATE_GRID =
   'grid grid-cols-1 items-center gap-x-3 gap-y-1 ' +
-  'md:grid-cols-[minmax(0,1fr)_12rem_10rem_5.5rem]';
+  'md:grid-cols-[minmax(0,1fr)_11rem_14rem_5.5rem]';
 
 /** Dense browser row — no card shell, no per-item stat tiles. */
 function TemplateCard({ template }: Props) {
@@ -69,7 +69,7 @@ function TemplateCard({ template }: Props) {
 
       {/* resources */}
       <span className="hidden justify-end md:flex">
-        <Segmented muted>{template.allocatedCpuCores} CPU · {template.allocatedMemoryMb} MB</Segmented>
+        <Segmented muted>{t('resourcesSummary', { cpu: template.allocatedCpuCores, memory: template.allocatedMemoryMb, disk: template.allocatedDiskMb })}</Segmented>
       </span>
 
       {/* actions */}

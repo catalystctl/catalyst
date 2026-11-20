@@ -188,7 +188,11 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
         setPort(String(selectedTemplate.supportedPorts[0]));
       }
     }
-    const recommendedDisk = Number(selectedTemplate?.features?.recommendedDiskMb);
+    // Template default disk wins; the old features.recommendedDiskMb hint is
+    // kept as a fallback for templates imported before the column existed.
+    const recommendedDisk =
+      selectedTemplate?.allocatedDiskMb ??
+      Number(selectedTemplate?.features?.recommendedDiskMb);
     if (Number.isFinite(recommendedDisk) && recommendedDisk > 0) {
       setDisk(String(recommendedDisk));
     }

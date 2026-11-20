@@ -87,6 +87,7 @@ function TemplateCreateModal() {
  const [supportedPorts, setSupportedPorts] = useState('25565');
  const [allocatedMemoryMb, setAllocatedMemoryMb] = useState('1024');
  const [allocatedCpuCores, setAllocatedCpuCores] = useState('2');
+ const [allocatedDiskMb, setAllocatedDiskMb] = useState('10240');
  const [iconUrl, setIconUrl] = useState('');
  const [restartOnExit, setRestartOnExit] = useState(false);
  const [maxInstances, setMaxInstances] = useState('');
@@ -208,6 +209,10 @@ function TemplateCreateModal() {
  supportedPorts: ports.length ? ports : [25565],
  allocatedMemoryMb: toNumber(payload.allocatedMemoryMb, 1024),
  allocatedCpuCores: toNumber(payload.allocatedCpuCores, 2),
+ allocatedDiskMb: toNumber(
+  payload.allocatedDiskMb ?? (payload.features as Record<string, unknown> | undefined)?.recommendedDiskMb,
+  10240,
+ ),
  features: (() => {
  const features = (payload.features ?? {}) as Record<string, unknown>;
  return {
@@ -258,6 +263,7 @@ function TemplateCreateModal() {
  supportedPorts: parsedPorts,
  allocatedMemoryMb: Number(allocatedMemoryMb),
  allocatedCpuCores: Number(allocatedCpuCores),
+ allocatedDiskMb: Number(allocatedDiskMb),
  features: {
  ...templateFeatures,
  ...(iconUrl ? { iconUrl } : {}),
@@ -321,6 +327,7 @@ function TemplateCreateModal() {
  setSupportedPorts('25565');
  setAllocatedMemoryMb('1024');
  setAllocatedCpuCores('2');
+ setAllocatedDiskMb('10240');
  setIconUrl('');
  setRestartOnExit(false);
  setMaxInstances('');
@@ -396,6 +403,13 @@ function TemplateCreateModal() {
  );
  setAllocatedMemoryMb(payload.allocatedMemoryMb ? String(payload.allocatedMemoryMb) : '1024');
  setAllocatedCpuCores(payload.allocatedCpuCores ? String(payload.allocatedCpuCores) : '2');
+ setAllocatedDiskMb(
+  payload.allocatedDiskMb
+  ? String(payload.allocatedDiskMb)
+  : features.recommendedDiskMb
+  ? String(features.recommendedDiskMb)
+  : '10240',
+ );
  setIconUrl(String(features.iconUrl ?? ''));
  setRestartOnExit(Boolean(features.restartOnExit));
  setMaxInstances(String(features.maxInstances ?? ''));
@@ -570,6 +584,8 @@ function TemplateCreateModal() {
  !parsedPorts.length ||
  !Number(allocatedMemoryMb) ||
  !Number(allocatedCpuCores) ||
+ !Number(allocatedDiskMb) ||
+ Number(allocatedDiskMb) < 1024 ||
  mutation.isPending;
 
  // Compute missing required fields for display
@@ -586,6 +602,7 @@ function TemplateCreateModal() {
  if (!parsedPorts.length) missing.push(t('missing.ports'));
  if (!Number(allocatedMemoryMb)) missing.push(t('missing.memory'));
  if (!Number(allocatedCpuCores)) missing.push(t('missing.cpu'));
+ if (!Number(allocatedDiskMb) || Number(allocatedDiskMb) < 1024) missing.push(t('missing.disk'));
  return missing;
  }, [
  name,
@@ -598,6 +615,7 @@ function TemplateCreateModal() {
  parsedPorts.length,
  allocatedMemoryMb,
  allocatedCpuCores,
+ allocatedDiskMb,
    t,
  ]);
 
@@ -974,7 +992,7 @@ function TemplateCreateModal() {
  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
  <BracketLabel tone="muted">{t('form.resourcesPorts')}</BracketLabel>
  </div>
- <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+ <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
  <label className="block space-y-1">
  <span className="type-overline">{t('form.ports')}</span>
  <input
@@ -1003,6 +1021,18 @@ function TemplateCreateModal() {
  step={1}
  value={allocatedCpuCores}
  onChange={(event) => setAllocatedCpuCores(event.target.value)}
+ />
+ </label>
+ <label className="block space-y-1">
+ <span className="type-overline">{t('form.allocatedDisk')}</span>
+ <input
+ className="h-8 w-full rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ type="number"
+ min={1024}
+ max={1048576}
+ step={1024}
+ value={allocatedDiskMb}
+ onChange={(event) => setAllocatedDiskMb(event.target.value)}
  />
  </label>
  </div>

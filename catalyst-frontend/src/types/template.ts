@@ -100,6 +100,7 @@ export interface Template {
   supportedPorts: number[];
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
+  allocatedDiskMb: number;
   features?: TemplateFeatures;
   /** List payloads carry a count; only the detail endpoint carries `variables`. */
   variablesCount?: number;

@@ -94,6 +94,7 @@
     "addVariable": "Add variable",
     "advancedFeatures": "Advanced features",
     "allocatedCpu": "Allocated CPU cores",
+    "allocatedDisk": "Default disk (MB)",
     "allocatedMemory": "Allocated memory (MB)",
     "author": "Author",
     "backupPaths": "Backup paths (optional)",
@@ -148,6 +149,7 @@
   "missing": {
     "author": "Author",
     "cpu": "Allocated CPU cores",
+    "disk": "Default disk",
     "image": "Container image",
     "memory": "Allocated memory",
     "name": "Name",
@@ -234,6 +236,7 @@
     "title": "Mod & Plugin Providers"
   },
   "resources": "Resources",
+  "resourcesSummary": "{{cpu}} CPU · {{memory}} MB RAM · {{disk}} MB disk",
   "state": {
     "notAvailable": "n/a"
   },

@@ -96,6 +96,7 @@
     "addVariable": "Ajouter une variable",
     "advancedFeatures": "Fonctionnalités avancées",
     "allocatedCpu": "Cœurs CPU alloués",
+    "allocatedDisk": "Disque par défaut (Mo)",
     "allocatedMemory": "Mémoire allouée (MB)",
     "author": "Auteur",
     "backupPaths": "Chemins de sauvegarde (facultatif)",
@@ -150,6 +151,7 @@
   "missing": {
     "author": "Auteur",
     "cpu": "Cœurs CPU alloués",
+    "disk": "Disque par défaut",
     "image": "Image de conteneur",
     "memory": "Mémoire allouée",
     "name": "Nom",
@@ -242,6 +244,7 @@
     "title": "Fournisseurs de mods et de plugins"
   },
   "resources": "Ressources",
+  "resourcesSummary": "{{cpu}} CPU · {{memory}} Mo de RAM · {{disk}} Mo de disque",
   "state": {
     "notAvailable": "n/d"
   },

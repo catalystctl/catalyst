@@ -42,6 +42,7 @@ export const templatesApi = {
     supportedPorts: number[];
     allocatedMemoryMb: number;
     allocatedCpuCores: number;
+    allocatedDiskMb?: number;
     features?: Template['features'];
     nestId?: string | null;
   }) => {
@@ -67,6 +68,7 @@ export const templatesApi = {
       supportedPorts: number[];
       allocatedMemoryMb: number;
       allocatedCpuCores: number;
+      allocatedDiskMb?: number;
       features?: Template['features'];
       nestId?: string | null;
     }>,

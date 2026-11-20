@@ -179,7 +179,11 @@ function TemplateDetailsPage() {
             <DataField label={t('details.ports')} value={portList} />
             <DataField
               label={t('resources')}
-              value={`${template.allocatedCpuCores} CPU · ${template.allocatedMemoryMb} MB`}
+              value={t('resourcesSummary', {
+                cpu: template.allocatedCpuCores,
+                memory: template.allocatedMemoryMb,
+                disk: template.allocatedDiskMb,
+              })}
             />
             <DataField
               label={t('details.configFiles')}

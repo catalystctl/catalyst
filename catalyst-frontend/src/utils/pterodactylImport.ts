@@ -384,6 +384,36 @@ function addBuiltinVariables(
   return result;
 }
 
+/** Disk recommendations mirrored from the backend egg importer. */
+const STEAM_APP_DISK_MB: Record<string, number> = {
+  '730': 40960, // Counter-Strike 2 dedicated
+  '740': 15360, // CS:S
+  '232250': 20480, // TF2
+  '2394010': 20480, // Palworld
+  '1690800': 20480, // Satisfactory
+  '2465200': 20480, // Sons of the Forest
+  '376030': 30720, // ARK
+  '2430930': 20480, // Palworld (alt)
+};
+
+function recommendedDiskForEgg(egg: PtdlEgg): number {
+  const appVar = (egg.variables ?? []).find((item) => {
+    const name = String(item.env_variable ?? '').toUpperCase();
+    return (
+      name === 'SRCDS_APPID' ||
+      name === 'STEAM_APPID' ||
+      name === 'STEAMAPPID' ||
+      name === 'APPID'
+    );
+  });
+  const appId = String(appVar?.default_value ?? '').trim();
+  if (appId && STEAM_APP_DISK_MB[appId]) return STEAM_APP_DISK_MB[appId];
+  if (Array.isArray(egg.features) && egg.features.includes('steam_disk_space')) {
+    return 20480;
+  }
+  return 10240;
+}
+
 /** Convert a Pterodactyl/Pelican egg to a Catalyst-compatible template object. */
 export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
   // Extract docker images
@@ -523,6 +553,12 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     features.pterodactylFeatures = egg.features;
   }
 
+  const recommendedDiskMb = recommendedDiskForEgg(egg);
+  if (recommendedDiskMb > 10240) {
+    features.recommendedDiskMb = recommendedDiskMb;
+    features.minimumDiskMb = recommendedDiskMb;
+  }
+
   // Add config files metadata if available — preserve full object AND keys list
   if (configFiles && Object.keys(configFiles).length > 0) {
     features.pterodactylConfigFiles = configFiles;
@@ -599,6 +635,7 @@ export function convertPterodactylEgg(egg: PtdlEgg): Record<string, unknown> {
     supportedPorts: [defaultPort],
     allocatedMemoryMb: defaultMemory,
     allocatedCpuCores: 2,
+    allocatedDiskMb: recommendedDiskMb,
     features,
   };
 }
