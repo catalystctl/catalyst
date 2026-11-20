@@ -47,6 +47,7 @@ model User {
   alerts          Alert[]
   apiKeys         apikey[]             @relation("UserApiKeys")
   nodeAssignments NodeAssignment[]
+  permanentSftpTokens SftpPermanentToken[]
 }
 
 model session {
@@ -348,6 +349,9 @@ model SystemSetting {
   // Defaults false (invite/admin-created users only). Admins may enable via security settings.
   // First setup also forces false after complete.
   registrationEnabled          Boolean  @default(false)
+  // Allow users to mint non-expiring SFTP passwords (Admin > Security). Off
+  // by default: a permanent credential is a deliberate admin choice.
+  sftpPermanentTokensEnabled   Boolean  @default(false)
   // Instance-wide default language (row id "localization"). Applies to the
   // panel and to emails/alerts for anyone who has not chosen a language;
   // NULL means the built-in default (English).
@@ -592,6 +596,10 @@ model ServerTemplate {
   supportedPorts    Int[]
   allocatedMemoryMb Int
   allocatedCpuCores Int
+  // Default disk allocation a server created from this template starts with.
+  // Admins can override it per server, and the create wizard still lets the
+  // user change it before submitting.
+  allocatedDiskMb   Int      @default(10240)
   features          Json     @default("{}")
   nest        Nest?     @relation(fields: [nestId], references: [id])
   nestId      String?
@@ -681,6 +689,7 @@ model Server {
   allocations    NodeAllocation[]
   installedMods  InstalledMod[]
   stats          ServerStat[]
+  permanentSftpTokens SftpPermanentToken[]
 
   @@index([status])
   @@index([nodeId])
@@ -691,6 +700,27 @@ model Server {
   @@index([updatedAt(sort: Desc)])
   @@index([ownerId, updatedAt(sort: Desc)])
   @@index([nodeId, updatedAt(sort: Desc)])
+}
+
+// A non-expiring SFTP password for one user on one server. The raw token is
+// never stored as-is: `tokenHash` validates it on connect, and
+// `tokenCiphertext` (AES-256-GCM under a key derived from
+// BETTER_AUTH_SECRET) lets the panel show the value back to its owner. The
+// row survives panel restarts, unlike the in-memory short-lived tokens.
+model SftpPermanentToken {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serverId        String
+  server          Server    @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  tokenHash       String    @unique
+  tokenCiphertext String    @db.Text
+  createdAt       DateTime  @default(now())
+  lastUsedAt      DateTime?
+
+  @@unique([userId, serverId])
+  @@index([serverId])
+  @@index([userId])
 }
 
 // ============================================================================

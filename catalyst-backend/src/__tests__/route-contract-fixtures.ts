@@ -9,6 +9,7 @@
  */
 import { prisma } from '../db.js';
 import { nanoid } from 'nanoid';
+import { invalidateConfig } from '../lib/config-cache.js';
 
 export interface PersonaInfo {
   userId: string;
@@ -29,6 +30,8 @@ export interface ContractFixtures {
   alertRuleId: string;
   alertId: string;
   taskId: string;
+  /** Previous SFTP opt-in value, or null when the security row did not exist. */
+  previousSftpPermanentTokensEnabled: boolean | null;
 }
 
 const suffix = () => nanoid(8);
@@ -133,6 +136,17 @@ export async function provisionContractFixtures(): Promise<ContractFixtures> {
     },
   });
 
+  const securityRow = await prisma.systemSetting.findUnique({
+    where: { id: 'security' },
+    select: { id: true, sftpPermanentTokensEnabled: true },
+  });
+  await prisma.systemSetting.upsert({
+    where: { id: 'security' },
+    create: { id: 'security', sftpPermanentTokensEnabled: true },
+    update: { sftpPermanentTokensEnabled: true },
+  });
+  await invalidateConfig('security');
+
   return {
     star,
     ar,
@@ -146,6 +160,9 @@ export async function provisionContractFixtures(): Promise<ContractFixtures> {
     alertRuleId: alertRule.id,
     alertId: alert.id,
     taskId: task.id,
+    previousSftpPermanentTokensEnabled: securityRow
+      ? securityRow.sftpPermanentTokensEnabled
+      : null,
   };
 }
 
@@ -177,6 +194,18 @@ export async function teardownContractFixtures(fx: ContractFixtures): Promise<vo
   if (fx.locationId) {
     await prisma.location.delete({ where: { id: fx.locationId } }).catch(() => {});
   }
+  // Restore the panel-wide SFTP opt-in this suite turned on for its route row.
+  if (fx.previousSftpPermanentTokensEnabled === null) {
+    await prisma.systemSetting.delete({ where: { id: 'security' } }).catch(() => {});
+  } else {
+    await prisma.systemSetting
+      .update({
+        where: { id: 'security' },
+        data: { sftpPermanentTokensEnabled: fx.previousSftpPermanentTokensEnabled },
+      })
+      .catch(() => {});
+  }
+  await invalidateConfig('security').catch(() => {});
 }
 
 /**
@@ -243,4 +272,13 @@ export async function resetFixtureServer(fx: ContractFixtures): Promise<void> {
       enabled: false,
     },
   }).catch(() => {});
+  // Keep the SFTP opt-in on between rows: the security-settings contract row
+  // legitimately writes the defaults (off), which would otherwise make the
+  // permanent-token row order-dependent.
+  await prisma.systemSetting.upsert({
+    where: { id: 'security' },
+    create: { id: 'security', sftpPermanentTokensEnabled: true },
+    update: { sftpPermanentTokensEnabled: true },
+  });
+  await invalidateConfig('security');
 }

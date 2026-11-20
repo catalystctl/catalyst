@@ -11,6 +11,7 @@
 import crypto from "crypto";
 import { prisma } from "../db.js";
 import { broadcastCacheInvalidate, onCacheInvalidate } from "../lib/cache-bus.js";
+import { decryptSftpToken, encryptSftpToken } from "../lib/sftp-token-vault.js";
 
 function broadcastSftpRevoke(): void {
   try {
@@ -61,6 +62,19 @@ interface SftpTokenEntry {
 /** Default TTL if none specified: 15 minutes (short-lived by default). */
 const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
+/**
+ * Permanent tokens share the agent's required `sftp_` prefix but carry a
+ * distinct marker so logs and validation can tell them apart without a DB
+ * lookup for every short-lived token.
+ */
+export const PERMANENT_SFTP_TOKEN_PREFIX = "sftp_perm_";
+
+/** How often a permanent token's lastUsedAt is written (connections are cheap; writes are not). */
+const LAST_USED_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+
+/** id -> last lastUsedAt write, in this process. */
+const lastPermanentUsageWrite = new Map<string, number>();
+
 /** Minimum TTL: 1 minute */
 const MIN_TTL_MS = 60 * 1000;
 
@@ -84,6 +98,141 @@ export function resolveSftpTtl(ttlMs?: number | null): number {
   if (ttlMs === null || ttlMs === undefined) return DEFAULT_TTL_MS;
   if (!Number.isFinite(ttlMs) || ttlMs <= 0) return DEFAULT_TTL_MS;
   return Math.min(MAX_TTL_MS, Math.max(MIN_TTL_MS, ttlMs));
+}
+
+/** SHA-256 hash used to look a permanent token up without storing it. */
+function hashPermanentToken(token: string): string {
+  return crypto.createHash("sha256").update(token).digest("hex");
+}
+
+export interface PermanentSftpTokenInfo {
+  token: string | null;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+export interface PermanentSftpTokenRow {
+  id: string;
+  userId: string;
+  serverId: string;
+  tokenHash: string;
+  tokenCiphertext: string;
+  createdAt: Date;
+  lastUsedAt: Date | null;
+}
+
+/**
+ * Create (or rotate) the single permanent SFTP token for a user+server pair.
+ * The raw value is returned once; the stored ciphertext lets the owner read it
+ * back later. Callers must check the admin setting before calling.
+ */
+export async function generatePermanentSftpToken(
+  userId: string,
+  serverId: string,
+): Promise<PermanentSftpTokenInfo> {
+  const token = `${PERMANENT_SFTP_TOKEN_PREFIX}${crypto.randomBytes(32).toString("hex")}`;
+  const tokenHash = hashPermanentToken(token);
+  const tokenCiphertext = encryptSftpToken(token);
+  const row = await prisma.sftpPermanentToken.upsert({
+    where: { userId_serverId: { userId, serverId } },
+    create: { userId, serverId, tokenHash, tokenCiphertext },
+    update: {
+      tokenHash,
+      tokenCiphertext,
+      createdAt: new Date(),
+      lastUsedAt: null,
+    },
+  });
+  lastPermanentUsageWrite.delete(row.id);
+  return {
+    token,
+    createdAt: row.createdAt.getTime(),
+    lastUsedAt: null,
+  };
+}
+
+/** Read a user's permanent token for a server, decrypting the display copy. */
+export async function getPermanentSftpToken(
+  userId: string,
+  serverId: string,
+): Promise<PermanentSftpTokenInfo | null> {
+  const row = await prisma.sftpPermanentToken.findUnique({
+    where: { userId_serverId: { userId, serverId } },
+  });
+  if (!row) return null;
+  return {
+    token: decryptSftpToken(row.tokenCiphertext),
+    createdAt: row.createdAt.getTime(),
+    lastUsedAt: row.lastUsedAt?.getTime() ?? null,
+  };
+}
+
+/** Metadata for every permanent token on a server (raw values stay owner-only). */
+export async function listPermanentSftpTokensForServer(
+  serverId: string,
+): Promise<PermanentSftpTokenRow[]> {
+  return prisma.sftpPermanentToken.findMany({
+    where: { serverId },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
+/**
+ * Validate a permanent token on connect. Checks the admin toggle first so
+ * turning the feature off makes existing permanent credentials inert until it
+ * is turned back on; the rows are kept so the setting is reversible.
+ */
+export async function validatePermanentSftpToken(
+  token: string,
+  serverId: string,
+): Promise<{ userId: string; serverId: string } | null> {
+  if (!token.startsWith(PERMANENT_SFTP_TOKEN_PREFIX)) return null;
+  try {
+    const { getSecuritySettings } = await import("./mailer.js");
+    const settings = await getSecuritySettings();
+    if (!settings.sftpPermanentTokensEnabled) return null;
+
+    const row = await prisma.sftpPermanentToken.findUnique({
+      where: { tokenHash: hashPermanentToken(token) },
+      select: { id: true, userId: true, serverId: true },
+    });
+    if (!row || row.serverId !== serverId) return null;
+
+    const account = await prisma.user.findUnique({
+      where: { id: row.userId },
+      select: { banned: true, lockedUntil: true },
+    });
+    if (!account || account.banned) return null;
+    if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
+      return null;
+    }
+
+    const now = Date.now();
+    if (now - (lastPermanentUsageWrite.get(row.id) ?? 0) > LAST_USED_WRITE_INTERVAL_MS) {
+      lastPermanentUsageWrite.set(row.id, now);
+      void prisma.sftpPermanentToken
+        .update({ where: { id: row.id }, data: { lastUsedAt: new Date(now) } })
+        .catch(() => {});
+    }
+
+    return { userId: row.userId, serverId: row.serverId };
+  } catch {
+    // Fail closed: a DB/vault outage must not turn into an open SFTP door.
+    return null;
+  }
+}
+
+/**
+ * Validate either a short-lived cache token or a persisted permanent token.
+ * The fast path stays synchronous; only `sftp_perm_` values touch the DB.
+ */
+export async function validateSftpTokenAsync(
+  token: string,
+  serverId: string,
+): Promise<{ userId: string; serverId: string } | null> {
+  const ephemeral = validateSftpToken(token, serverId);
+  if (ephemeral) return ephemeral;
+  return validatePermanentSftpToken(token, serverId);
 }
 
 /**
@@ -194,7 +343,7 @@ export async function revalidateSftpSession(
     });
     if (!account) return false;
     if (account.banned) {
-      revokeSftpTokensForUser(userId, serverId);
+      await revokeSftpTokensForUser(userId, serverId);
       return false;
     }
     if (account.lockedUntil && new Date(account.lockedUntil).getTime() > Date.now()) {
@@ -205,7 +354,7 @@ export async function revalidateSftpSession(
       select: { id: true, ownerId: true, suspendedAt: true },
     });
     if (!server) {
-      revokeSftpTokensForUser(userId, serverId);
+      await revokeSftpTokensForUser(userId, serverId);
       return false;
     }
     if (process.env.SUSPENSION_ENFORCED !== "false" && server.suspendedAt) return false;
@@ -215,7 +364,7 @@ export async function revalidateSftpSession(
       select: { userId: true },
     });
     if (!grant) {
-      revokeSftpTokensForUser(userId, serverId);
+      await revokeSftpTokensForUser(userId, serverId);
       return false;
     }
     return true;
@@ -225,9 +374,9 @@ export async function revalidateSftpSession(
 }
 
 /** Kill every live SFTP session for a node (revoke/suspend path). */
-export function revokeSftpTokensForNodeServers(serverIds: string[]): number {
+export async function revokeSftpTokensForNodeServers(serverIds: string[]): Promise<number> {
   let count = 0;
-  for (const serverId of serverIds) count += revokeAllSftpTokensForServer(serverId);
+  for (const serverId of serverIds) count += await revokeAllSftpTokensForServer(serverId);
   return count;
 }
 
@@ -392,10 +541,34 @@ export function revokeSftpToken(
 }
 
 /**
+ * Revoke a user's permanent token for one server.
+ * Returns true when a row existed.
+ */
+export async function revokePermanentSftpToken(
+  userId: string,
+  serverId: string,
+): Promise<boolean> {
+  const result = await prisma.sftpPermanentToken.deleteMany({
+    where: { userId, serverId },
+  });
+  if (result.count > 0) broadcastSftpRevoke();
+  return result.count > 0;
+}
+
+/** Revoke every permanent token for a server. Returns the row count. */
+export async function revokeAllPermanentSftpTokensForServer(
+  serverId: string,
+): Promise<number> {
+  const result = await prisma.sftpPermanentToken.deleteMany({ where: { serverId } });
+  if (result.count > 0) broadcastSftpRevoke();
+  return result.count;
+}
+
+/**
  * Revoke ALL SFTP tokens for a specific server.
  * Used when a server is deleted or when the owner wants to kill all sessions.
  */
-export function revokeAllSftpTokensForServer(serverId: string): number {
+export async function revokeAllSftpTokensForServer(serverId: string): Promise<number> {
   let count = 0;
   for (const [key, entry] of sftpTokenCache) {
     if (entry.serverId === serverId) {
@@ -404,6 +577,7 @@ export function revokeAllSftpTokensForServer(serverId: string): number {
       count++;
     }
   }
+  count += await revokeAllPermanentSftpTokensForServer(serverId);
   if (count > 0) broadcastSftpRevoke();
   return count;
 }
@@ -413,7 +587,10 @@ export function revokeAllSftpTokensForServer(serverId: string): number {
  * Used when a user is removed from a server or when their account is disabled.
  * If serverId is provided, only revokes tokens for that server.
  */
-export function revokeSftpTokensForUser(userId: string, serverId?: string): number {
+export async function revokeSftpTokensForUser(
+  userId: string,
+  serverId?: string,
+): Promise<number> {
   let count = 0;
   for (const [key, entry] of sftpTokenCache) {
     if (entry.userId === userId) {
@@ -423,6 +600,10 @@ export function revokeSftpTokensForUser(userId: string, serverId?: string): numb
       count++;
     }
   }
+  const permanent = await prisma.sftpPermanentToken.deleteMany({
+    where: serverId ? { userId, serverId } : { userId },
+  });
+  count += permanent.count;
   if (count > 0) broadcastSftpRevoke();
   return count;
 }

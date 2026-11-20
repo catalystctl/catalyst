@@ -784,7 +784,7 @@ export async function serverInvitesRoutes(app: FastifyInstance) {
       });
 
       // Instantly revoke SFTP tokens for the removed user on this server
-      revokeSftpTokensForUser(targetUserId, serverId);
+      await revokeSftpTokensForUser(targetUserId, serverId);
       try { (app as any).wsGateway?.invalidateServerAccess?.(serverId); } catch { /* ignore */ }
       try { publishCacheInvalidate('server-access', { serverId }); } catch { /* degraded */ }
 

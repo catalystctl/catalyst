@@ -5,12 +5,19 @@ import { resolveServerPermissions } from "../lib/permissions-catalog.js";
 import { hasNodeAccess, enforceKeyScope } from "./servers/_helpers.js";
 import {
 	generateSftpToken,
+	generatePermanentSftpToken,
+	getPermanentSftpToken,
+	listPermanentSftpTokensForServer,
+	revokePermanentSftpToken,
 	rotateSftpToken,
 	listSftpTokensForServer,
 	revokeSftpToken,
 	revokeAllSftpTokensForServer,
 	SFTP_TTL_OPTIONS,
 } from "../services/sftp-token-manager.js";
+import { decryptSftpToken } from "../lib/sftp-token-vault.js";
+import { apiError } from "../lib/http-error.js";
+import { ErrorCodes } from "../shared-types.js";
 
 /**
  * Panel-side SFTP routes, extracted from server.ts (behavior-preserving
@@ -138,6 +145,15 @@ export async function sftpRoutes(app: FastifyInstance) {
 				Number((request.query as { ttl?: string }).ttl) || undefined;
 			const result = generateSftpToken(userId, serverId, ttlMs);
 
+			// Permanent tokens are an admin opt-in. Read the setting for every
+			// caller so the tab can show/hide the option without a second query.
+			const { getSecuritySettings } = await import("../services/mailer.js");
+			const security = await getSecuritySettings();
+			const permanentTokensEnabled = Boolean(security.sftpPermanentTokensEnabled);
+			const permanentToken = permanentTokensEnabled
+				? await getPermanentSftpToken(userId, serverId)
+				: null;
+
 			reply.send({
 				success: true,
 				data: {
@@ -153,6 +169,8 @@ export async function sftpRoutes(app: FastifyInstance) {
 						label: o.label,
 						value: o.value,
 					})),
+					permanentTokensEnabled,
+					permanentToken: permanentToken ? { ...permanentToken, userId } : null,
 				},
 			});
 		},
@@ -232,6 +250,82 @@ export async function sftpRoutes(app: FastifyInstance) {
 		},
 	);
 
+	// Create or rotate the caller's non-expiring SFTP password. Admin-gated:
+	// the security setting must be on, and the caller needs the same effective
+	// file access as a normal mint.
+	app.post(
+		"/api/sftp/permanent-token",
+		{
+			schema: {
+				summary: "Create or rotate a permanent SFTP token",
+				tags: ["SFTP"],
+				body: { type: "object", required: ["serverId"], properties: { serverId: { type: "string" } } },
+				response: { 200: { type: "object", additionalProperties: true }, 400: { type: "object", additionalProperties: true }, 403: { type: "object", additionalProperties: true }, 404: { type: "object", additionalProperties: true } },
+			},
+			preHandler: [authenticate],
+			config: { requiredPermission: "file.read" },
+		},
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			const userId = request.user?.userId;
+			const { serverId } = request.body as { serverId?: string };
+			if (!userId || !serverId) {
+				return reply.status(400).send({ error: "serverId is required" });
+			}
+
+			const { getSecuritySettings } = await import("../services/mailer.js");
+			const security = await getSecuritySettings();
+			if (!security.sftpPermanentTokensEnabled) {
+				return apiError(
+					reply,
+					403,
+					ErrorCodes.SFTP_PERMANENT_TOKENS_DISABLED,
+					"Permanent SFTP tokens are disabled by the panel administrator",
+				);
+			}
+
+			const permServerRow = await prisma.server.findUnique({
+				where: { id: serverId },
+				select: { ownerId: true, nodeId: true },
+			});
+			if (!permServerRow) {
+				return reply.status(404).send({ error: "Server not found" });
+			}
+			const permAccessRow = await prisma.serverAccess.findFirst({
+				where: { serverId, userId },
+				select: { permissions: true },
+			});
+			const permHasFileAccess = Boolean(
+				permAccessRow?.permissions?.some((p: string) =>
+					(SFTP_FILE_ACCESS as readonly string[]).includes(p),
+				),
+			);
+			const permRolePerms = await resolveServerPermissions(
+				userId,
+				serverId,
+				permServerRow.nodeId,
+			);
+			const permDecision = decideServerAccess({
+				isOwner: permServerRow.ownerId === userId,
+				hasExplicitServerAccess: permHasFileAccess,
+				rolePermissions: permRolePerms,
+				hasNodeAccess: await hasNodeAccess(prisma, userId, permServerRow.nodeId),
+				requiredPermission: "file.read",
+			});
+			if (!permDecision.allowed) {
+				return reply.status(403).send({ error: "Forbidden" });
+			}
+			// Same capability as minting a short-lived token: file access is
+			// the SFTP capability, and the admin opt-in is the extra guard for
+			// a credential that does not expire.
+			if (!enforceKeyScope(request.user, "file.read")) {
+				return reply.status(403).send({ error: "Forbidden" });
+			}
+
+			const minted = await generatePermanentSftpToken(userId, serverId);
+			reply.send({ success: true, data: minted });
+		},
+	);
+
 	// List all SFTP tokens for a server (metadata for all, raw values for
 	// the caller's own entries; non-managers see only their own entries)
 	app.get(
@@ -282,33 +376,71 @@ export async function sftpRoutes(app: FastifyInstance) {
 				return reply.status(403).send({ error: "Forbidden" });
 			}
 			const canManageTokens = canManageTokensFor(isOwner, rolePerms);
-			const tokens = listSftpTokensForServer(
+			const ephemeralTokens = listSftpTokensForServer(
 				serverId,
 				userId,
 			).filter((t) => canManageTokens || t.userId === userId);
 
+			// Permanent tokens live in the database. They are only listed while
+			// the admin setting is on; a disabled feature makes them inert and
+			// hides them rather than showing credentials that cannot be used.
+			const { getSecuritySettings } = await import("../services/mailer.js");
+			const security = await getSecuritySettings();
+			const permanentRows = security.sftpPermanentTokensEnabled
+				? (await listPermanentSftpTokensForServer(serverId)).filter(
+						(row) => canManageTokens || row.userId === userId,
+					)
+				: [];
+
             // Enrich tokens with user info in one query instead of one query
             // per token.
-            const userIds = [...new Set(tokens.map((token) => token.userId))];
-            const users = await prisma.user.findMany({
-                where: { id: { in: userIds } },
-                select: { id: true, email: true, username: true },
-            });
+            const userIds = [
+                ...new Set([
+                    ...ephemeralTokens.map((token) => token.userId),
+                    ...permanentRows.map((row) => row.userId),
+                ]),
+            ];
+            const users = userIds.length
+                ? await prisma.user.findMany({
+                    where: { id: { in: userIds } },
+                    select: { id: true, email: true, username: true },
+                })
+                : [];
             const usersById = new Map(users.map((user) => [user.id, user]));
-            const enriched = tokens.map((t) => {
-                const user = usersById.get(t.userId);
-                return {
-						userId: t.userId,
-						email: user?.email ?? t.userId,
-						username: user?.username ?? null,
-						expiresAt: t.expiresAt,
-						ttlMs: t.ttlMs,
-						createdAt: t.createdAt,
-						// Raw token values are visible to their owner only.
-						...(t.isSelf ? { token: t.token } : {}),
-						isSelf: t.isSelf,
-                };
-            });
+            const enriched = [
+                ...ephemeralTokens.map((t) => {
+                    const user = usersById.get(t.userId);
+                    return {
+                        userId: t.userId,
+                        email: user?.email ?? t.userId,
+                        username: user?.username ?? null,
+                        expiresAt: t.expiresAt,
+                        ttlMs: t.ttlMs,
+                        createdAt: t.createdAt,
+                        lastUsedAt: null,
+                        permanent: false,
+                        // Raw token values are visible to their owner only.
+                        ...(t.isSelf ? { token: t.token } : {}),
+                        isSelf: t.isSelf,
+                    };
+                }),
+                ...permanentRows.map((row) => {
+                    const user = usersById.get(row.userId);
+                    const isSelf = row.userId === userId;
+                    return {
+                        userId: row.userId,
+                        email: user?.email ?? row.userId,
+                        username: user?.username ?? null,
+                        expiresAt: null,
+                        ttlMs: null,
+                        createdAt: row.createdAt.getTime(),
+                        lastUsedAt: row.lastUsedAt?.getTime() ?? null,
+                        permanent: true,
+                        ...(isSelf ? { token: decryptSftpToken(row.tokenCiphertext) } : {}),
+                        isSelf,
+                    };
+                }),
+            ];
 
 			reply.send({ success: true, data: enriched });
 		},
@@ -359,8 +491,14 @@ export async function sftpRoutes(app: FastifyInstance) {
 				userId,
 				canManageTokens,
 			);
+			// A permanent token is a separate credential; revoking a user's
+			// access must kill both or the "permanent" one survives the action.
+			const revokedPermanent =
+				targetUserId === userId || canManageTokens
+					? await revokePermanentSftpToken(targetUserId, serverId)
+					: false;
 
-			if (!revoked) {
+			if (!revoked && !revokedPermanent) {
 				return reply
 					.status(404)
 					.send({ error: "No active token found, or not authorized" });
@@ -404,7 +542,7 @@ export async function sftpRoutes(app: FastifyInstance) {
 					.send({ error: "Only the server owner can revoke all tokens" });
 			}
 
-			const count = revokeAllSftpTokensForServer(serverId);
+			const count = await revokeAllSftpTokensForServer(serverId);
 			reply.send({ success: true, data: { revoked: count } });
 		},
 	);

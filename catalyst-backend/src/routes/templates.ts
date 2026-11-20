@@ -44,6 +44,7 @@ const templateListSelect = {
   supportedPorts: true,
   allocatedMemoryMb: true,
   allocatedCpuCores: true,
+  allocatedDiskMb: true,
   variables: true,
   nest: { select: { id: true, name: true, icon: true } },
 } as const;
@@ -53,6 +54,13 @@ function clearTemplateCache() {
   // Cross-worker/host coherence for the process-local list cache (contract
   // documented in lib/cache.ts): local clear + broadcast to siblings.
   publishCacheInvalidate('template', { flushAll: true });
+}
+
+/** Template disk defaults: 1 GiB floor, 1 TiB ceiling, 10 GiB when omitted. */
+function normalizeTemplateDiskMb(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 10240;
+  return Math.min(1048576, Math.max(1024, Math.floor(parsed)));
 }
 
 // Apply remote template invalidations from sibling workers/hosts.
@@ -213,6 +221,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				supportedPorts,
 				allocatedMemoryMb,
 				allocatedCpuCores,
+				allocatedDiskMb,
 				features,
 				nestId,
 			} = request.body as {
@@ -234,9 +243,12 @@ export async function templateRoutes(app: FastifyInstance) {
 				supportedPorts: number[];
 				allocatedMemoryMb: number;
 				allocatedCpuCores: number;
+				allocatedDiskMb?: number;
 				features?: Record<string, any>;
 				nestId?: string | null;
 			};
+
+			const normalizedDiskMb = normalizeTemplateDiskMb(allocatedDiskMb);
 
 			const existing = await prisma.serverTemplate.findUnique({
 				where: { name },
@@ -275,6 +287,7 @@ export async function templateRoutes(app: FastifyInstance) {
 					supportedPorts,
 					allocatedMemoryMb,
 					allocatedCpuCores,
+					allocatedDiskMb: normalizedDiskMb,
 					features: {
 						...(features || {}),
 						...(configFile ? { configFile } : {}),
@@ -344,6 +357,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				supportedPorts,
 				allocatedMemoryMb,
 				allocatedCpuCores,
+				allocatedDiskMb,
 				features,
 				nestId,
 			} = request.body as {
@@ -363,6 +377,7 @@ export async function templateRoutes(app: FastifyInstance) {
 				supportedPorts?: number[];
 				allocatedMemoryMb?: number;
 				allocatedCpuCores?: number;
+				allocatedDiskMb?: number;
 				nestId?: string | null;
 				features?: Record<string, any>;
 			};
@@ -391,6 +406,9 @@ export async function templateRoutes(app: FastifyInstance) {
 				nextData.allocatedMemoryMb = allocatedMemoryMb;
 			if (allocatedCpuCores !== undefined)
 				nextData.allocatedCpuCores = allocatedCpuCores;
+			if (allocatedDiskMb !== undefined) {
+				nextData.allocatedDiskMb = normalizeTemplateDiskMb(allocatedDiskMb);
+			}
 			if (features !== undefined) {
 				nextData.features = {
 					...features,
@@ -564,6 +582,7 @@ export async function templateRoutes(app: FastifyInstance) {
 					supportedPorts: converted.supportedPorts,
 					allocatedMemoryMb: converted.allocatedMemoryMb,
 					allocatedCpuCores: converted.allocatedCpuCores,
+					allocatedDiskMb: converted.allocatedDiskMb,
 					features: converted.features as any,
 					nestId: resolvedNestId,
 				},
@@ -769,6 +788,7 @@ export async function templateRoutes(app: FastifyInstance) {
 								supportedPorts: converted.supportedPorts,
 								allocatedMemoryMb: converted.allocatedMemoryMb,
 								allocatedCpuCores: converted.allocatedCpuCores,
+								allocatedDiskMb: converted.allocatedDiskMb,
 								features: converted.features as any,
 								nestId: resolvedNestId,
 							},

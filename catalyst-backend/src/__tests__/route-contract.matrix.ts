@@ -522,6 +522,11 @@ const NON_OPENAPI_ROWS: readonly ContractRow[] = [
     // callers rotate — decideServerAccess(file.read) admits admin.read.
     klass: 'write', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'Y',
     payload: { serverId: '__SERVER__' } },
+  { op: 'POST /api/sftp/permanent-token', method: 'POST', path: '/api/sftp/permanent-token',
+    // Admin-gated by the security row (the contract fixture enables it); the
+    // SFTP capability is file access, exactly like temporary token minting.
+    klass: 'write', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'Y',
+    payload: { serverId: '__SERVER__' } },
   { op: 'GET /api/sftp/tokens', method: 'GET', path: '/api/sftp/tokens',
     klass: 'read', ar: 'allow', aw: 'allow', pu: 'masked', star: 'allow', tier: 'T1', keyScope: 'Y',
     query: { serverId: '__SERVER__' } },

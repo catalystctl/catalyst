@@ -840,7 +840,7 @@ export async function adminRoutes(app: FastifyInstance) {
         });
         // Instantly revoke SFTP tokens for all removed server assignments
         for (const removed of removedAccess) {
-          revokeSftpTokensForUser(userId, removed.serverId);
+          await revokeSftpTokensForUser(userId, removed.serverId);
         }
         try {
           const gw = (app as any).wsGateway;
@@ -1078,7 +1078,7 @@ export async function adminRoutes(app: FastifyInstance) {
       }
 
       // Revoke all SFTP tokens for this user across all servers
-      revokeSftpTokensForUser(userId);
+      await revokeSftpTokensForUser(userId);
       // Agent API keys cascade-delete with the user, but success cache lives
       // up to 30s: flush it now so a deleted user's node key stops working.
       invalidateAgentApiKeyCache();
@@ -2922,6 +2922,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelConcurrentMax = DEFAULT_SECURITY_SETTINGS.fileTunnelConcurrentMax,
         requireEmailVerification = DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
         registrationEnabled = DEFAULT_SECURITY_SETTINGS.registrationEnabled,
+        sftpPermanentTokensEnabled = DEFAULT_SECURITY_SETTINGS.sftpPermanentTokensEnabled,
       } = request.body as Partial<typeof DEFAULT_SECURITY_SETTINGS>;
 
       const numericFields = [
@@ -2991,6 +2992,7 @@ export async function adminRoutes(app: FastifyInstance) {
         fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
         requireEmailVerification: effectiveRequireEmailVerification,
         registrationEnabled: Boolean(registrationEnabled),
+        sftpPermanentTokensEnabled: Boolean(sftpPermanentTokensEnabled),
       });
 
       await createAuditLog(user.userId, {
@@ -3021,6 +3023,7 @@ export async function adminRoutes(app: FastifyInstance) {
           fileTunnelConcurrentMax,
           requireEmailVerification: effectiveRequireEmailVerification,
           registrationEnabled,
+          sftpPermanentTokensEnabled: Boolean(sftpPermanentTokensEnabled),
         },
       });
 

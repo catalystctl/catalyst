@@ -425,7 +425,7 @@ export const handleFailedLogin = async (
     // and drop cached agent-key verifications so the 30s/60s windows close.
     try {
       const { revokeSftpTokensForUser } = await import('../services/sftp-token-manager.js');
-      revokeSftpTokensForUser(user.id);
+      revokeSftpTokensForUser(user.id).catch(() => {});
     } catch { /* best-effort */ }
     try {
       const { invalidateAgentApiKeyCache } = await import('../lib/agent-auth.js');

@@ -53,6 +53,8 @@ export type SecuritySettings = {
   requireEmailVerification: boolean;
   // Open self-registration for /register and better-auth sign-up
   registrationEnabled: boolean;
+  // Allow non-expiring SFTP passwords (Admin > Security). Off by default.
+  sftpPermanentTokensEnabled: boolean;
   // File tunnel security settings
   fileTunnelRateLimitMax: number;
   fileTunnelRateLimitWindowMs: number;
@@ -135,6 +137,8 @@ export const DEFAULT_SECURITY_SETTINGS: SecuritySettings = {
   requireEmailVerification: true,
   // Open registration defaults OFF. First setup keeps it false; admins may enable.
   registrationEnabled: false,
+  // Permanent SFTP passwords are an explicit admin opt-in.
+  sftpPermanentTokensEnabled: false,
   // File tunnel security settings
   fileTunnelRateLimitMax: 100,
   fileTunnelRateLimitWindowMs: RATE_LIMIT_TIME_WINDOWS_MS.minute,
@@ -273,6 +277,8 @@ export const getSecuritySettings = async (): Promise<SecuritySettings> => {
     maxBufferMb: settings.maxBufferMb ?? DEFAULT_SECURITY_SETTINGS.maxBufferMb,
     requireEmailVerification: settings.requireEmailVerification ?? DEFAULT_SECURITY_SETTINGS.requireEmailVerification,
     registrationEnabled: settings.registrationEnabled ?? DEFAULT_SECURITY_SETTINGS.registrationEnabled,
+    sftpPermanentTokensEnabled:
+      settings.sftpPermanentTokensEnabled ?? DEFAULT_SECURITY_SETTINGS.sftpPermanentTokensEnabled,
     fileTunnelRateLimitMax: settings.fileTunnelRateLimitMax ?? DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitMax,
     fileTunnelRateLimitWindowMs: resolveWindow(settings.fileTunnelRateLimitWindowMs, DEFAULT_SECURITY_SETTINGS.fileTunnelRateLimitWindowMs),
     fileTunnelMaxPendingPerNode: settings.fileTunnelMaxPendingPerNode ?? DEFAULT_SECURITY_SETTINGS.fileTunnelMaxPendingPerNode,
@@ -359,6 +365,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       maxBufferMb: payload.maxBufferMb,
       requireEmailVerification: payload.requireEmailVerification,
       registrationEnabled: payload.registrationEnabled,
+      sftpPermanentTokensEnabled: payload.sftpPermanentTokensEnabled,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,
@@ -384,6 +391,7 @@ export const upsertSecuritySettings = async (payload: SecuritySettings) => {
       maxBufferMb: payload.maxBufferMb,
       requireEmailVerification: payload.requireEmailVerification,
       registrationEnabled: payload.registrationEnabled,
+      sftpPermanentTokensEnabled: payload.sftpPermanentTokensEnabled,
       fileTunnelRateLimitMax: payload.fileTunnelRateLimitMax,
       fileTunnelRateLimitWindowMs,
       fileTunnelMaxUploadMb: payload.fileTunnelMaxUploadMb,

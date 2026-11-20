@@ -66,7 +66,7 @@ import {
 	backgroundJobOwnerLabel,
 } from "./cluster";
 import { createServerBackup } from "./services/create-backup";
-import { validateSftpToken } from "./services/sftp-token-manager";
+import { validateSftpTokenAsync } from "./services/sftp-token-manager";
 import { startAuditRetention } from "./services/audit-retention";
 import { startStatRetention } from "./services/stat-retention";
 import { startBackupRetention, startStuckBackupStateWatchdog } from "./services/backup-retention";
@@ -1366,7 +1366,7 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 						.send({ error: "token and serverId are required" });
 				}
 
-				const result = validateSftpToken(token, serverId);
+				const result = await validateSftpTokenAsync(token, serverId);
 				if (!result) {
 					return reply.send({ success: true, data: { valid: false } });
 				}
@@ -1430,6 +1430,19 @@ await app.register(providerKeyRoutes, { prefix: "/api/providers" });
 							]
 						: [],
 				);
+
+				// A permanent token outlives the grant that created it, and a
+				// stale short-lived token can outlive a revoked grant by seconds.
+				// No file capability means no SFTP session, regardless of how the
+				// token was minted.
+				const hasFileAccess =
+					permissions.includes("*") ||
+					permissions.includes("admin.write") ||
+					permissions.includes("file.read") ||
+					permissions.includes("file.write");
+				if (!hasFileAccess) {
+					return reply.send({ success: true, data: { valid: false } });
+				}
 
 				// The server UUID names the agent's FileManager data directory
 				// (e.g. /var/lib/catalyst/<uuid>).

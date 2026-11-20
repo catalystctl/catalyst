@@ -126,6 +126,7 @@ export interface ImportedEggResult {
 	supportedPorts: number[];
 	allocatedMemoryMb: number;
 	allocatedCpuCores: number;
+	allocatedDiskMb: number;
 	features: Record<string, unknown>;
 	nestId?: string | null;
 }
@@ -646,6 +647,7 @@ export function importPterodactylEgg(
 		supportedPorts: [defaultPort],
 		allocatedMemoryMb: defaultMemory,
 		allocatedCpuCores: 2,
+		allocatedDiskMb: recommendedDiskMb,
 		features,
 		nestId: options?.nestId || null,
 	};
