@@ -17,6 +17,7 @@ describe('backend i18n locale resolution', () => {
   it('accepts supported locales and rejects everything else', () => {
     expect(isSupportedLocale('en')).toBe(true);
     expect(isSupportedLocale('fr')).toBe(true);
+    expect(isSupportedLocale('ru')).toBe(true);
     expect(isSupportedLocale('zh-CN')).toBe(true);
     expect(isSupportedLocale('zh-TW')).toBe(false);
     expect(isSupportedLocale(undefined)).toBe(false);
@@ -24,6 +25,7 @@ describe('backend i18n locale resolution', () => {
 
   it('reads the locale out of stored user preferences', () => {
     expect(resolveUserLocale({ locale: 'fr' })).toBe('fr');
+    expect(resolveUserLocale({ locale: 'ru' })).toBe('ru');
     expect(resolveUserLocale({ locale: 'zh-CN' })).toBe('zh-CN');
     expect(resolveUserLocale({ locale: 'de' })).toBe('en');
     expect(resolveUserLocale({})).toBe('en');
@@ -42,6 +44,10 @@ describe('backend i18n translate', () => {
 
   it('renders French for fr', () => {
     expect(translate('fr', 'welcome.subject', { panelName: 'Catalyst' })).toBe('Bienvenue sur Catalyst');
+  });
+
+  it('renders Russian for ru', () => {
+    expect(translate('ru', 'welcome.subject', { panelName: 'Catalyst' })).toBe('Добро пожаловать в Catalyst');
   });
 
   it('leaves unknown parameters untouched and falls back to the key', () => {
@@ -81,11 +87,23 @@ describe('localized account emails', () => {
     expect(fr.subject).toBe('Réinitialisez votre mot de passe Catalyst');
     expect(fr.html).toContain('Bonjour Ada,');
     expect(fr.text).toContain('https://panel.example/reset?token=abc');
+
+    const ru = renderResetPasswordEmail({
+      locale: 'ru',
+      panelName: 'Catalyst',
+      userName: 'Ада',
+      url: 'https://panel.example/reset?token=abc',
+    });
+    expect(ru.subject).toBe('Сбросьте пароль Catalyst');
+    expect(ru.html).toContain('Здравствуйте, Ада,');
+    expect(ru.text).toContain('https://panel.example/reset?token=abc');
   });
 
   it('renders the verification email in the recipient locale', () => {
     expect(renderVerifyEmail({ locale: 'zh-CN', panelName: 'Catalyst', userName: '张三', url: 'https://x/y' }).subject)
       .toBe('验证您的 Catalyst 邮箱');
+    expect(renderVerifyEmail({ locale: 'ru', panelName: 'Catalyst', userName: 'Ада', url: 'https://x/y' }).subject)
+      .toBe('Подтвердите свой адрес электронной почты Catalyst.');
     expect(renderVerifyEmail({ locale: 'fr', panelName: 'Catalyst', userName: 'Ada', url: 'https://x/y' }).subject)
       .toBe('Vérifiez votre adresse e-mail Catalyst');
     expect(renderVerifyEmail({ locale: 'en', panelName: 'Catalyst', userName: 'Ada', url: 'https://x/y' }).subject)

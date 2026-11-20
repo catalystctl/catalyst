@@ -50,9 +50,9 @@ non-trivial, all of them:
 ## i18n rules
 
 - English (`en`) is the source language; every user-visible string goes through `t()`.
-- Catalogs: `catalyst-frontend/src/i18n/locales/{en,fr,zh-CN}/<namespace>.json` and `catalyst-backend/src/i18n/locales/{en,fr,zh-CN}/email.json` (account emails and alerts).
+- Catalogs: `catalyst-frontend/src/i18n/locales/{en,fr,ru,zh-CN}/<namespace>.json` and `catalyst-backend/src/i18n/locales/{en,fr,ru,zh-CN}/email.json` (account emails and alerts).
 - Add the string in code first, then run `pnpm --filter catalyst-frontend run i18n:extract`. The extractor owns key order — never hand-reorder or invent keys; `i18n:verify` fails when the catalogs drift from the code.
-- Add every new key to `en`, `fr` and `zh-CN` in the same change: `pnpm i18n:check` requires every translated locale to stay 100% translated (`--strict` also fails on empty values).
+- Add every new key to `en`, `fr`, `ru` and `zh-CN` in the same change: `pnpm i18n:check` requires every translated locale to stay 100% translated (`--strict` also fails on empty values).
 - Backend errors carry stable codes from `catalyst-backend/src/lib/error-codes/*.ts`; the frontend translates them (`catalyst-frontend/src/i18n/locales/en/errors.json`, `catalyst-frontend/src/i18n/api-errors.ts`). Emit with `apiError(reply, status, code, message, { params })` and pass `params` for every `{{placeholder}}` in the message.
 - `pnpm i18n:hardcoded` enforces that: CI fails on any literal string the linter
   finds that is neither translated nor listed in `scripts/i18n-hardcoded-baseline.json`
