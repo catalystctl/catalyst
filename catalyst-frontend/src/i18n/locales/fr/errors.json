@@ -223,6 +223,7 @@
   "SERVER_VARIABLE_VALIDATION_TIMEOUT": "Le délai de validation de la variable {{name}} est dépassé.",
   "SETUP_ALREADY_COMPLETED": "La configuration initiale a déjà été effectuée.",
   "SETUP_OPERATOR_VERIFICATION_FAILED": "La configuration initiale ne peut pas être terminée : vérifiez les identifiants du compte opérateur.",
+  "SFTP_PERMANENT_TOKENS_DISABLED": "Les mots de passe SFTP permanents sont désactivés par l’administrateur du panneau.",
   "SSE_SUBSCRIBER_LIMIT_REACHED": "Trop d’abonnés aux événements. Veuillez réessayer plus tard.",
   "TASK_INVALID_ACTION": "Action non valide. Elle doit être l’une des suivantes : {{actions}}",
   "TASK_INVALID_CRON": "Expression cron non valide.",

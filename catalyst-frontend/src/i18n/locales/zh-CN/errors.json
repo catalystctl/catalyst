@@ -223,6 +223,7 @@
   "SERVER_VARIABLE_VALIDATION_TIMEOUT": "变量 {{name}} 校验超时。",
   "SETUP_ALREADY_COMPLETED": "初始化设置已完成。",
   "SETUP_OPERATOR_VERIFICATION_FAILED": "无法完成设置：请验证管理员账号凭据。",
+  "SFTP_PERMANENT_TOKENS_DISABLED": "永久 SFTP 密码已被面板管理员禁用。",
   "SSE_SUBSCRIBER_LIMIT_REACHED": "事件订阅者过多，请稍后重试。",
   "TASK_INVALID_ACTION": "操作无效，必须是以下之一：{{actions}}",
   "TASK_INVALID_CRON": "Cron 表达式无效。",

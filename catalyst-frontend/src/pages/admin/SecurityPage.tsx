@@ -403,6 +403,7 @@ function SecurityPage() {
  const [fileTunnelMaxPendingPerNode, setFileTunnelMaxPendingPerNode] = useState('50');
  const [fileTunnelConcurrentMax, setFileTunnelConcurrentMax] = useState('10');
  const [requireEmailVerification, setRequireEmailVerification] = useState(false);
+ const [sftpPermanentTokensEnabled, setSftpPermanentTokensEnabled] = useState(false);
 
  const { data: lockoutResponse, isLoading: lockoutsLoading } = useAuthLockouts({
  page: lockoutPage,
@@ -441,6 +442,7 @@ function SecurityPage() {
  setFileTunnelMaxPendingPerNode(String(settings.fileTunnelMaxPendingPerNode ?? 50));
  setFileTunnelConcurrentMax(String(settings.fileTunnelConcurrentMax ?? 10));
  setRequireEmailVerification(settings.requireEmailVerification ?? false);
+ setSftpPermanentTokensEnabled(settings.sftpPermanentTokensEnabled ?? false);
  }
  }
 
@@ -519,6 +521,7 @@ function SecurityPage() {
  fileTunnelMaxPendingPerNode: Number(fileTunnelMaxPendingPerNode),
  fileTunnelConcurrentMax: Number(fileTunnelConcurrentMax),
  requireEmailVerification: emailVerificationEnabled,
+ sftpPermanentTokensEnabled,
  }),
  onSuccess: () => notifySuccess(t('security.toastUpdated')),
  onSettled: () => {
@@ -724,6 +727,30 @@ function SecurityPage() {
  tooltip={t('security.maxConcurrentTooltip')}
  />
  </div>
+ </Section>
+
+ {/* ── Permanent SFTP passwords ── */}
+ <Section
+ title={t('security.sftpPermanentTokens')}
+ subtitle={t('security.sftpPermanentTokensDescription')}
+ icon={<FolderSync className="h-3.5 w-3.5" />}
+ footer={saveButton}
+ >
+ <div className="flex items-center justify-between gap-4">
+ <div>
+ <p className="text-sm text-foreground">{t('security.sftpPermanentTokensEnable')}</p>
+ <p className="text-micro text-muted-foreground">{t('security.sftpPermanentTokensEnableDescription')}</p>
+ </div>
+ <Switch
+ checked={sftpPermanentTokensEnabled}
+ onCheckedChange={setSftpPermanentTokensEnabled}
+ aria-label={t('security.sftpPermanentTokensAria')}
+ className="h-5"
+ />
+ </div>
+ <p className="mt-3 text-micro leading-relaxed text-muted-foreground">
+ {t('security.sftpPermanentTokensWarning')}
+ </p>
  </Section>
 
  {/* ── Panel-hosted MCP ── */}

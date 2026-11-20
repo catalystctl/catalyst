@@ -223,6 +223,7 @@
   "SERVER_VARIABLE_VALIDATION_TIMEOUT": "Validation timed out for variable {{name}}.",
   "SETUP_ALREADY_COMPLETED": "Setup has already been completed.",
   "SETUP_OPERATOR_VERIFICATION_FAILED": "Setup cannot be completed: verify the operator account credentials.",
+  "SFTP_PERMANENT_TOKENS_DISABLED": "Permanent SFTP passwords are disabled by the panel administrator.",
   "SSE_SUBSCRIBER_LIMIT_REACHED": "Too many event subscribers. Please try again later.",
   "TASK_INVALID_ACTION": "Invalid action. Must be one of: {{actions}}",
   "TASK_INVALID_CRON": "Invalid cron expression.",

@@ -223,6 +223,7 @@
   "SERVER_VARIABLE_VALIDATION_TIMEOUT": "Время проверки переменной {{name}} истекло.",
   "SETUP_ALREADY_COMPLETED": "Настройка уже завершена.",
   "SETUP_OPERATOR_VERIFICATION_FAILED": "Невозможно завершить настройку: проверьте учетные данные оператора.",
+  "SFTP_PERMANENT_TOKENS_DISABLED": "Постоянные пароли SFTP отключены администратором панели.",
   "SSE_SUBSCRIBER_LIMIT_REACHED": "Слишком много подписчиков на события. Пожалуйста, повторите попытку позже.",
   "TASK_INVALID_ACTION": "Недопустимое действие. Должно быть одно из: {{actions}}",
   "TASK_INVALID_CRON": "Недопустимое выражение cron.",

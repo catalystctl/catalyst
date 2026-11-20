@@ -317,7 +317,23 @@ export const serversApi = {
       expiresAt: number;
       ttlMs: number;
       ttlOptions: Array<{ label: string; value: number }>;
+      permanentTokensEnabled: boolean;
+      permanentToken: {
+        userId?: string;
+        token: string | null;
+        createdAt: number;
+        lastUsedAt: number | null;
+      } | null;
     }>>(`/api/sftp/connection-info`, { params });
+    return data.data;
+  },
+
+  createPermanentSftpToken: async (serverId: string) => {
+    const data = await apiClient.post<ApiResponse<{
+      token: string | null;
+      createdAt: number;
+      lastUsedAt: number | null;
+    }>>('/api/sftp/permanent-token', { serverId });
     return data.data;
   },
 
@@ -335,9 +351,12 @@ export const serversApi = {
       userId: string;
       email: string;
       username: string | null;
-      expiresAt: number;
-      ttlMs: number;
+      expiresAt: number | null;
+      ttlMs: number | null;
       createdAt: number;
+      lastUsedAt?: number | null;
+      /** Non-expiring database-backed token (admin-enabled). */
+      permanent?: boolean;
       token: string | null;
       isSelf: boolean;
     }>>>(`/api/sftp/tokens`, { params: { serverId } });

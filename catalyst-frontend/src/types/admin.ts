@@ -287,6 +287,8 @@ export interface SecuritySettings {
   maxBufferMb: number;
   // Email verification
   requireEmailVerification: boolean;
+  // Allow non-expiring SFTP passwords (Admin > Security)
+  sftpPermanentTokensEnabled: boolean;
   // File tunnel settings
   fileTunnelRateLimitMax: number;
   fileTunnelRateLimitWindowMs: number;

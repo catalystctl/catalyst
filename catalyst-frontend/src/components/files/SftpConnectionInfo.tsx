@@ -85,6 +85,10 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const [copiedField, setCopiedField] = useState<string | null>(null);
  const [selectedTtl, setSelectedTtl] = useState<number | undefined>(undefined);
  const [now, setNow] = useState(() => Date.now());
+ const [tokenMode, setTokenMode] = useState<'temporary' | 'permanent'>('temporary');
+ const [permanentValue, setPermanentValue] = useState<string | null>(null);
+ const [prevServerPermanentToken, setPrevServerPermanentToken] = useState<string | null | undefined>(undefined);
+ const [modeInitialized, setModeInitialized] = useState(false);
 
  const { data: sftpInfo, isLoading } = useQuery({
  queryKey: qk.sftpConnectionInfo(serverId, selectedTtl),
@@ -122,6 +126,23 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  if (tokens.some(t => t.userId === targetUserId && t.isSelf)) {
  setShowPassword(false);
  }
+ setPermanentValue(null);
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.sftpConnectionInfo(serverId) });
+ },
+ onError: (error: any) => {
+ notifyError(error);
+ },
+ });
+
+ const permanentMutation = useMutation({
+ mutationFn: () => serversApi.createPermanentSftpToken(serverId),
+ onSuccess: (data) => {
+ setPermanentValue(data?.token ?? null);
+ setShowPassword(false);
+ notifySuccess(t('files.sftp.permanentCreated'));
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
@@ -138,6 +159,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  const count = data?.revoked ?? 0;
  notifySuccess(t('files.sftp.revokedCount', { count }));
  setShowPassword(false);
+ setPermanentValue(null);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.sftpTokens(serverId) });
@@ -167,6 +189,33 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  : false;
  const ttlOptions = sftpInfo?.ttlOptions ?? [];
  const password = sftpInfo?.sftpPassword || '';
+
+ // Default to the permanent token once one exists; otherwise keep the
+ // short-lived flow. Runs once so the user's explicit choice is not overridden
+ // by the 15s refetch.
+ if (sftpInfo && !modeInitialized) {
+ setModeInitialized(true);
+ if (sftpInfo.permanentToken) setTokenMode('permanent');
+ }
+ // An admin can turn the setting off while the tab is open: fall back to the
+ // temporary flow instead of leaving an unusable permanent panel.
+ if (sftpInfo && !sftpInfo.permanentTokensEnabled && tokenMode === 'permanent') {
+ setTokenMode('temporary');
+ }
+ const permanentInfo = sftpInfo?.permanentToken ?? null;
+ // When the server's stored token changes (another tab rotated it, or a
+ // refetch landed after our own creation), drop the local copy so the display
+ // follows the source of truth instead of a stale value.
+ const serverPermanentToken = permanentInfo?.token ?? null;
+ if (serverPermanentToken !== prevServerPermanentToken) {
+ setPrevServerPermanentToken(serverPermanentToken);
+ if (permanentValue !== null) setPermanentValue(null);
+ }
+ const permanentToken = permanentValue ?? permanentInfo?.token ?? '';
+ const permanentRevokeTargetId = permanentInfo?.userId ?? tokens.find((token) => token.isSelf)?.userId;
+ const activePassword = tokenMode === 'permanent' ? permanentToken : password;
+ const activeExpired = tokenMode === 'temporary' && isExpired;
+ const permanentValueHidden = tokenMode === 'permanent' && Boolean(permanentInfo) && !permanentToken;
 
  const copyToClipboard = (value: string, field: string, label: string) => {
  navigator.clipboard.writeText(value).then(() => {
@@ -217,8 +266,39 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {t('files.sftp.description')}
  </p>
 
+ {/* Token type — only when the administrator enabled permanent tokens */}
+ {sftpInfo.permanentTokensEnabled && (
+ <div className="flex flex-wrap items-center gap-2">
+ <span className="type-overline">{t('files.sftp.tokenType')}</span>
+ <div className="inline-flex rounded-sm border border-border/60 bg-background/40 p-0.5">
+ <button
+ type="button"
+ onClick={() => setTokenMode('temporary')}
+ className={`h-6 rounded-sm px-2.5 text-micro font-medium transition-colors ${
+ tokenMode === 'temporary'
+ ? 'bg-primary text-primary-foreground'
+ : 'text-muted-foreground hover:text-foreground'
+ }`}
+ >
+ {t('files.sftp.tokenTypeTemporary')}
+ </button>
+ <button
+ type="button"
+ onClick={() => setTokenMode('permanent')}
+ className={`h-6 rounded-sm px-2.5 text-micro font-medium transition-colors ${
+ tokenMode === 'permanent'
+ ? 'bg-primary text-primary-foreground'
+ : 'text-muted-foreground hover:text-foreground'
+ }`}
+ >
+ {t('files.sftp.tokenTypePermanent')}
+ </button>
+ </div>
+ </div>
+ )}
+
  {/* Expiry status banner */}
- {isExpired ? (
+ {tokenMode === 'temporary' && (isExpired ? (
  <div className="flex items-center gap-2 rounded-sm border border-danger/30 bg-danger/10 px-3 py-1.5 text-mini text-danger">
  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
  <span className="font-medium">{t('files.sftp.expiredBanner')}</span>
@@ -251,9 +331,67 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <div className="h-1.5 w-1.5 flex-shrink-0 rounded-sm bg-success" />
  {t('files.sftp.activeWithTime', { time: formatExpiry(sftpInfo.expiresAt) })}
  </div>
+ ) : null)}
+
+ {/* Permanent token controls (admin-enabled) */}
+ {tokenMode === 'permanent' && (
+ <div className="space-y-3">
+ {permanentInfo ? (
+ <div className="flex flex-wrap items-center gap-2 rounded-sm border border-success/25 bg-success/10 px-3 py-1.5 text-mini text-success">
+ <Shield className="h-4 w-4 flex-shrink-0" />
+ <span className="font-medium">
+ {t('files.sftp.permanentActive', { time: formatTimeAgo(permanentInfo.createdAt) })}
+ </span>
+ {permanentInfo.lastUsedAt ? (
+ <span className="text-success/80">
+ {t('files.sftp.permanentLastUsed', { time: formatTimeAgo(permanentInfo.lastUsedAt) })}
+ </span>
  ) : null}
+ </div>
+ ) : (
+ <div className="flex items-center gap-2 rounded-sm border border-info/30 bg-info/10 px-3 py-1.5 text-mini text-info">
+ <Info className="h-4 w-4 flex-shrink-0" />
+ <span className="font-medium">{t('files.sftp.permanentNone')}</span>
+ </div>
+ )}
+
+ {permanentValueHidden && (
+ <div className="flex items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 py-1.5 text-mini text-warning">
+ <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+ <span>{t('files.sftp.permanentUnavailable')}</span>
+ </div>
+ )}
+
+ <div className="flex flex-wrap items-center gap-2">
+ <button
+ type="button"
+ onClick={() => permanentMutation.mutate()}
+ disabled={permanentMutation.isPending}
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+ >
+ <Shield className={`h-3.5 w-3.5 ${permanentMutation.isPending ? 'animate-pulse' : ''}`} />
+ {permanentInfo ? t('files.sftp.permanentRotate') : t('files.sftp.permanentCreate')}
+ </button>
+ {permanentInfo && permanentRevokeTargetId ? (
+ <button
+ type="button"
+ onClick={() => revokeMutation.mutate(permanentRevokeTargetId)}
+ disabled={revokeMutation.isPending}
+ className="inline-flex h-8 items-center gap-1.5 rounded-sm border border-danger/30 px-3 text-mini font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+ >
+ <Trash2 className="h-3.5 w-3.5" />
+ {t('files.sftp.permanentRevoke')}
+ </button>
+ ) : null}
+ </div>
+ <p className="text-micro leading-relaxed text-muted-foreground">
+ {t('files.sftp.permanentHelp')}
+ </p>
+ </div>
+ )}
 
  {/* TTL selector + Rotate */}
+ {tokenMode === 'temporary' && (
  <div className="flex flex-wrap items-end gap-3">
  <label className="block text-mini text-muted-foreground">
  <span className="flex items-center gap-1">
@@ -287,6 +425,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {isExpired ? t('files.sftp.generateNew') : t('files.sftp.rotatePassword')}
  </button>
  </div>
+ )}
 
  {/* Connection fields */}
  <div className="deck-panel divide-y divide-border/40">
@@ -322,14 +461,16 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {t('files.sftp.password')}
  </span>
  <span className="min-w-0 flex-1 truncate font-mono text-data tabular-nums text-foreground">
- {password && !isExpired
- ? (showPassword ? password : '••••••••••••••••')
- : isExpired
+ {activePassword && !activeExpired
+ ? (showPassword ? activePassword : '••••••••••••••••')
+ : activeExpired
  ? t('files.sftp.expiredRotate')
+ : tokenMode === 'permanent'
+ ? (permanentInfo ? t('files.sftp.permanentHidden') : t('files.sftp.permanentNoToken'))
  : t('files.sftp.noToken')}
  </span>
  <div className="flex flex-shrink-0 items-center gap-1">
- {password && !isExpired && (
+ {activePassword && !activeExpired && (
  <>
  <button
  type="button"
@@ -345,7 +486,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </button>
  <button
  type="button"
- onClick={() => copyToClipboard(password, 'Password', t('files.sftp.password'))}
+ onClick={() => copyToClipboard(activePassword, 'Password', t('files.sftp.password'))}
  className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground"
  title={t('files.sftp.copyPassword')}
  >
@@ -362,7 +503,7 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  </div>
 
  {/* Quick connect URI */}
- {password && !isExpired && (
+ {activePassword && !activeExpired && (
  <div className="deck-panel flex items-center gap-3 px-3 py-1.5">
  <span className="type-overline w-24 shrink-0">
  {t('files.sftp.quickConnectUri')}
@@ -437,10 +578,10 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  <span className="text-right">{t('files.sftp.actions')}</span>
  </div>
  {tokens.map((token, index) => {
- const expired = token.expiresAt <= now;
+ const expired = token.expiresAt != null && token.expiresAt <= now;
  return (
  <div
- key={token.userId}
+ key={`${token.userId}:${token.permanent ? 'permanent' : 'temporary'}`}
  className={`${SESSION_GRID} items-center px-3 py-1.5 transition-colors hover:bg-surface-1/40 ${
  index > 0 ? 'border-t border-border/40' : ''
  } ${expired ? 'opacity-50' : ''}`}
@@ -456,13 +597,25 @@ export default function SftpConnectionInfo({ serverId, isOwner }: SftpConnection
  {t('files.sftp.you')}
  </span>
  )}
+ {token.permanent && (
+ <span className="rounded-sm bg-primary/15 px-1.5 py-0.5 text-micro font-medium text-primary">
+ {t('files.sftp.permanentBadge')}
+ </span>
+ )}
  </div>
  <span className="truncate font-mono text-micro text-muted-foreground">{token.email}</span>
  </div>
 
  {/* Expires */}
- <span className={`text-right font-mono text-micro tabular-nums ${expired ? 'text-danger' : 'text-muted-foreground'}`}>
- {expired ? t('files.sftp.expired') : formatExpiry(token.expiresAt)}
+ <span
+ className={`text-right font-mono text-micro tabular-nums ${expired ? 'text-danger' : 'text-muted-foreground'}`}
+ title={token.permanent && token.lastUsedAt ? t('files.sftp.permanentLastUsed', { time: formatTimeAgo(token.lastUsedAt) }) : undefined}
+ >
+ {token.permanent || token.expiresAt == null
+ ? t('files.sftp.never')
+ : expired
+ ? t('files.sftp.expired')
+ : formatExpiry(token.expiresAt)}
  </span>
 
  {/* Created */}
