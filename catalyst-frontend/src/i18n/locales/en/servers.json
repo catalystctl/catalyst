@@ -480,6 +480,7 @@
     "shrinkWarning": "Shrinking requires the server to be stopped.",
     "title": "Update server",
     "trigger": "Update",
+    "triggerDisabledHint": "This server is suspended. Unsuspend it to edit resources.",
     "updated": "Server updated"
   }
 }

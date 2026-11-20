@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { SlidersHorizontal } from 'lucide-react';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -380,15 +381,19 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
   return (
     <>
       {controlledOpen === undefined && (
-        <button
-          className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 px-3 text-mini text-foreground"
           onClick={() => {
             if (!disabled) setOpen(true);
           }}
           disabled={disabled}
+          title={disabled ? t('updateServer.triggerDisabledHint') : t('updateServer.title')}
         >
+          <SlidersHorizontal className="h-3.5 w-3.5" />
           {t('updateServer.trigger')}
-        </button>
+        </Button>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">

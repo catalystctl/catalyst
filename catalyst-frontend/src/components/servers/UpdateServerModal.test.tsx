@@ -86,6 +86,14 @@ describe('update server CPU pinning', () => {
   });
   afterEach(cleanup);
 
+  it('renders the update trigger as an enabled action, not muted text', () => {
+    render(<UpdateServerModal serverId="server-1" />);
+    const trigger = screen.getByRole('button', { name: /updateServer.trigger/ });
+    expect(trigger).not.toBeDisabled();
+    expect(trigger.className).toContain('text-foreground');
+    expect(trigger.className).not.toContain('text-muted-foreground');
+  });
+
   /** Render the editor and wait for the form to be seeded from the server row. */
   const renderSeeded = async () => {
     render(<UpdateServerModal serverId="server-1" open />);

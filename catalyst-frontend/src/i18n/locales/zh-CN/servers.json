@@ -478,6 +478,7 @@
     "shrinkWarning": "缩容前需先停止服务器。",
     "title": "更新服务器",
     "trigger": "更新",
+    "triggerDisabledHint": "此服务器已暂停。请取消暂停后再编辑资源。",
     "updated": "服务器已更新"
   }
 }

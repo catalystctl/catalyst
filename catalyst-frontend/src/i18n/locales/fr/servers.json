@@ -482,6 +482,7 @@
     "shrinkWarning": "La réduction nécessite que le serveur soit arrêté.",
     "title": "Mettre à jour le serveur",
     "trigger": "Mettre à jour",
+    "triggerDisabledHint": "Ce serveur est suspendu. Réactivez-le pour modifier les ressources.",
     "updated": "Serveur mis à jour"
   }
 }
