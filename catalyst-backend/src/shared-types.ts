@@ -241,6 +241,8 @@ export interface ServerInstance {
   allocatedMemoryMb: number;
   allocatedCpuCores: number;
   allocatedDiskMb: number;
+  /** Canonical cpuset list the container is pinned to; null/absent = any CPU. */
+  cpuAffinity?: string | null;
   container: {
     id: string;
     name: string;

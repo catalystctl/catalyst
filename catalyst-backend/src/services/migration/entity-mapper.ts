@@ -22,6 +22,7 @@ import {
   type PterodactylSubuser,
 } from "./types";
 import { getPterodactylAllocationServerId } from "./pterodactyl-client";
+import { countCpus, formatCpuList, parseCpuList } from "../../lib/cpu-affinity.js";
 
 /** Maps Pterodactyl location IDs → Catalyst location IDs */
 export type IdMap = Map<number, string>;
@@ -359,14 +360,33 @@ export class EntityMapper {
     }
 
     // Handle CPU allocation — Pterodactyl uses percentage (0-100*thread count)
-    // Catalyst uses core count
+    // Catalyst uses core count, plus an optional CPU pin.
+    //
+    // `limits.threads` is Pterodactyl's CPU *pinning* field (a cpuset list such
+    // as "0,2,4"), not a core count. Reading it with `parseInt` turned "0,2,4"
+    // into 0 and fell back to a single core, so migrated pinned servers lost
+    // both the pin and the allocation they paid for. Parse it as a mask when it
+    // looks like one and take the cores from `limits.cpu`; anything else keeps
+    // the historical interpretation so exotic exports behave as before.
     const cpuPercent = ptero.limits?.cpu || 0;
     const threads = ptero.limits?.threads;
     let cpuCores = 1;
     // Ensure primary port is always in portBindings
     portBindings[primaryPort] = primaryPort;
 
-    if (threads && threads !== "0") {
+    const pinnedCpus =
+      typeof threads === "string" && threads !== "0" ? parseCpuList(threads) : null;
+    const cpuAffinity = pinnedCpus && pinnedCpus.size > 0 ? formatCpuList(pinnedCpus) : null;
+
+    if (cpuAffinity !== null) {
+      const pinnedCount = countCpus(cpuAffinity);
+      const declaredCores =
+        cpuPercent > 0 ? Math.max(1, Math.round(cpuPercent / 100)) : pinnedCount;
+      // A pin can never be wider than the quota it must serve: the panel
+      // refuses to store fewer pinned CPUs than allocated cores (see
+      // lib/cpu-affinity.ts), so the import must not create such a row.
+      cpuCores = Math.min(declaredCores, pinnedCount);
+    } else if (threads && threads !== "0") {
       cpuCores = parseInt(threads, 10) || 1;
     } else if (cpuPercent > 0) {
       cpuCores = Math.max(1, Math.round(cpuPercent / 100));
@@ -420,6 +440,7 @@ export class EntityMapper {
         // Resource limits
         allocatedMemoryMb: memoryMb,
         allocatedCpuCores: cpuCores,
+        cpuAffinity,
         allocatedDiskMb: diskMb,
         allocatedSwapMb: ptero.limits?.swap || 0,
         ioWeight: ptero.limits?.io || 500,

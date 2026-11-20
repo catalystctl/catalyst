@@ -462,6 +462,12 @@ model Node {
   memoryOverallocatePercent Int @default(0)
   cpuOverallocatePercent    Int @default(0)
   agentVersion  String?
+  // Effective CPU set the agent reports for this host (cpuset grammar, e.g.
+  // "0-15,32-47"), read from the container parent cgroup at each health
+  // report. Used to validate and pick CPU pins in the panel; null means the
+  // agent has not reported it (old agent, never connected) and the panel then
+  // defers validation to the agent at start time.
+  hostCpuSet    String?
   // Opt-in: only nodes with this enabled receive automatic agent updates when
   // the panel notices they are behind. Off by default so an update can never
   // roll out to a node the admin did not explicitly approve; every other node
@@ -624,6 +630,9 @@ model Server {
   allocatedDiskMb   Int            @default(10240)
   allocatedSwapMb  Int            @default(0)
   ioWeight          Int            @default(500)
+  // CPU pinning (cpuset). Canonical Linux list, e.g. "0-3,6"; null = no pin.
+  // Bounds come from lib/cpu-affinity.ts, not from allocatedCpuCores.
+  cpuAffinity       String?
 
   // Container info
   containerId   String?

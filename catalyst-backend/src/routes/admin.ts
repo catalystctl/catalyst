@@ -5,7 +5,8 @@ import { auth, syncUserAdminRoleColumn } from '../auth';
 import { ErrorCodes, ServerState, CPU_DISPLAY_FORMATS } from '../shared-types';
 import { apiError } from '../lib/http-error';
 import { ServerStateMachine } from '../services/state-machine';
-import { normalizeHostIp, releaseIpForServer, summarizePool } from '../utils/ipam';
+import { buildServerStartMessage } from '../services/start-message.js';
+import { releaseIpForServer, summarizePool } from '../utils/ipam';
 import { describeError } from '../utils/describe-error.js';
 import { createAuditLog, buildServerAuditDetails } from '../middleware/audit';
 import { revokeSftpTokensForUser } from '../services/sftp-token-manager';
@@ -153,45 +154,6 @@ export async function adminRoutes(app: FastifyInstance) {
         timestamp: new Date().toISOString(),
       });
     } catch { /* WS push is best-effort */ }
-  };
-
-  const parseStoredPortBindings = (value: unknown): Record<number, number> => {
-    if (!value || typeof value !== 'object') {
-      return {};
-    }
-    const bindings: Record<number, number> = {};
-    for (const [containerKey, hostValue] of Object.entries(value as Record<string, unknown>)) {
-      const containerPort = typeof containerKey === 'string' ? Number(containerKey) : Number.NaN;
-      const hostPort = typeof hostValue === 'string' ? Number(hostValue) : Number(hostValue);
-      if (!Number.isInteger(containerPort) || !Number.isInteger(hostPort)) {
-        continue;
-      }
-      bindings[containerPort] = hostPort;
-    }
-    return bindings;
-  };
-
-  const resolveTemplateImage = (
-    template: { image: string; images?: any; defaultImage?: string | null },
-    environment: Record<string, string>
-  ) => {
-    const options = Array.isArray(template.images) ? template.images : [];
-    if (!options.length) return template.image;
-    const requested = environment.IMAGE_VARIANT;
-    if (requested) {
-      const match = options.find((option) => option?.name === requested);
-      if (match?.image) {
-        return match.image;
-      }
-    }
-    if (template.defaultImage) {
-      const defaultMatch = options.find((option) => option?.image === template.defaultImage);
-      if (defaultMatch?.image) {
-        return defaultMatch.image;
-      }
-      return template.defaultImage;
-    }
-    return template.image;
   };
 
   // Get system-wide stats (requires any admin permission)
@@ -1797,49 +1759,14 @@ export async function adminRoutes(app: FastifyInstance) {
               if (!gateway) {
                 return { serverId: server.id, status: 'failed', error: 'WebSocket gateway not available' };
               }
-              const serverDir = config.serverData.dir;
-              const fullServerDir = `${serverDir}/${server.uuid}`;
-              const templateVariables = (server.template?.variables as any[]) || [];
-              const templateDefaults = templateVariables.reduce((acc, variable) => {
-                if (variable?.name && variable?.default !== undefined) {
-                  acc[variable.name] = String(variable.default);
-                }
-                return acc;
-              }, {} as Record<string, string>);
-              const environment: Record<string, string> = {
-                ...templateDefaults,
-                ...(server.environment as Record<string, string>),
-                SERVER_DIR: fullServerDir,
-              };
-              if (server.template?.image) {
-                const resolvedImage = resolveTemplateImage(server.template as any, environment);
-                if (resolvedImage) {
-                  environment.TEMPLATE_IMAGE = resolvedImage;
-                }
-              }
-              if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-                environment.CATALYST_NETWORK_IP = server.primaryIp;
-              }
-              if (server.networkMode === 'host' && !environment.CATALYST_NETWORK_IP) {
-                try {
-                  environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-                } catch (error: any) {
-                  return { serverId: server.id, status: 'failed', error: error.message };
-                }
-              }
-              const success = await gateway.sendToAgent(server.nodeId, {
+              const { message: startMessage, hostNetworkIpError } = buildServerStartMessage({
                 type: 'start_server',
-                serverId: server.id,
-                serverUuid: server.uuid,
-                template: server.template,
-                environment,
-                allocatedMemoryMb: server.allocatedMemoryMb,
-                allocatedCpuCores: server.allocatedCpuCores,
-                allocatedDiskMb: server.allocatedDiskMb,
-                primaryPort: server.primaryPort,
-                portBindings: parseStoredPortBindings(server.portBindings),
-                networkMode: server.networkMode,
+                server,
               });
+              if (hostNetworkIpError) {
+                return { serverId: server.id, status: 'failed', error: hostNetworkIpError };
+              }
+              const success = await gateway.sendToAgent(server.nodeId, startMessage);
               if (!success) {
                 return { serverId: server.id, status: 'failed', error: 'Failed to send command to agent' };
               }
@@ -1995,41 +1922,14 @@ export async function adminRoutes(app: FastifyInstance) {
                   }).catch(() => {});
                 }
               }
-              const serverDir = config.serverData.dir;
-              const fullServerDir = `${serverDir}/${server.uuid}`;
-              const environment: Record<string, string> = {
-                ...(server.environment as Record<string, string>),
-                SERVER_DIR: fullServerDir,
-              };
-              if (server.template?.image) {
-                const resolvedImage = resolveTemplateImage(server.template as any, environment);
-                if (resolvedImage) {
-                  environment.TEMPLATE_IMAGE = resolvedImage;
-                }
-              }
-              if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-                environment.CATALYST_NETWORK_IP = server.primaryIp;
-              }
-              if (server.networkMode === 'host' && !environment.CATALYST_NETWORK_IP) {
-                try {
-                  environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-                } catch (error: any) {
-                  return { serverId: server.id, status: 'failed', error: error.message };
-                }
-              }
-              const success = await gateway.sendToAgent(server.nodeId, {
+              const { message: restartMessage, hostNetworkIpError } = buildServerStartMessage({
                 type: 'restart_server',
-                serverId: server.id,
-                serverUuid: server.uuid,
-                template: server.template,
-                environment,
-                allocatedMemoryMb: server.allocatedMemoryMb,
-                allocatedCpuCores: server.allocatedCpuCores,
-                allocatedDiskMb: server.allocatedDiskMb,
-                primaryPort: server.primaryPort,
-                portBindings: parseStoredPortBindings(server.portBindings),
-                networkMode: server.networkMode,
+                server,
               });
+              if (hostNetworkIpError) {
+                return { serverId: server.id, status: 'failed', error: hostNetworkIpError };
+              }
+              const success = await gateway.sendToAgent(server.nodeId, restartMessage);
               if (!success) {
                 return { serverId: server.id, status: 'failed', error: 'Failed to send command to agent' };
               }

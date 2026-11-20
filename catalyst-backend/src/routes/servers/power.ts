@@ -3,9 +3,10 @@ import { prisma } from "../../db.js";
 import { describeError } from "../../utils/describe-error.js";
 import { createAuditLog, buildServerAuditDetails } from "../../middleware/audit.js";
 import { hasGrant } from "../../lib/permissions.js";
-import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, enforceKeyScope, injectPterodactylCompatibilityVars, isHostNetworkDisabledAgentError, normalizeHostIp, parseStoredPortBindings, patchTemplateForRuntime, resolveTemplateImage, syncPortEnvironmentVariables } from './_helpers.js';
+import { ServerState, ServerStateMachine, checkIsAdmin, ensureNotSuspended, ensureServerAccess, ensureSuspendPermission, enforceKeyScope, isCpuAffinityUnavailableAgentError, isHostNetworkDisabledAgentError, isInvalidCpuAffinityAgentError, parseStoredPortBindings, patchTemplateForRuntime } from './_helpers.js';
 import { emitServerOperationProgress } from "../../lib/server-operation-progress.js";
 import { buildInstallCommand, InstallPayloadError } from "../../services/server-install.js";
+import { buildServerStartMessage } from "../../services/start-message.js";
 import { emitServerStatusEvent } from "../../plugins/host-events.js";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
@@ -801,89 +802,25 @@ export async function serverPowerRoutes(app: FastifyInstance) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
 
-      // Automatically add SERVER_DIR to environment
-      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
-      const fullServerDir = `${serverDir}/${server.uuid}`;
-
-      const templateVariables = (server.template.variables as any[]) || [];
-      const templateDefaults = templateVariables.reduce((acc, variable) => {
-        if (variable?.name && variable?.default !== undefined) {
-          acc[variable.name] = String(variable.default);
-        }
-        return acc;
-      }, {} as Record<string, string>);
-
-      const environment = {
-        ...templateDefaults,
-        ...(server.environment as Record<string, string>),
-        SERVER_DIR: fullServerDir,
-      };
-      if (server.template?.image) {
-        const resolvedImage = resolveTemplateImage(server.template, environment);
-        environment.TEMPLATE_IMAGE = resolvedImage;
-      }
-      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-        environment.CATALYST_NETWORK_IP = server.primaryIp;
-      }
-      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-        try {
-          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-        } catch (error: any) {
-          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
-        }
-      }
-      const runtimeTemplate = patchTemplateForRuntime(server.template);
-      if (server.startupCommand) {
-        runtimeTemplate.startup = server.startupCommand;
-      }
-
-      // Sync port environment variables with primaryPort
-      const portBindings = parseStoredPortBindings(server.portBindings);
-      let syncedEnvironment = syncPortEnvironmentVariables(
-        environment,
-        server.primaryPort,
-        portBindings
-      );
-
-      // Inject Pterodactyl-compatible env vars (SERVER_MEMORY, SERVER_PORT, …)
-      syncedEnvironment = injectPterodactylCompatibilityVars(
-        syncedEnvironment,
-        {
-          uuid: server.uuid,
-          name: server.name,
-          primaryIp: server.primaryIp,
-          primaryPort: server.primaryPort,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedDiskMb: server.allocatedDiskMb,
+      const { message: startMessage, hostNetworkIpError } = buildServerStartMessage({
+        type: "start_server",
+        server,
+        portBindings: parseStoredPortBindings(server.portBindings),
+        autoRestart: {
+          enabled: server.restartPolicy !== "never",
+          delay: 10,
+          maxRestarts: server.maxCrashCount ?? 5,
+          windowSecs: 60,
         },
-        portBindings,
-        { startupCommand: runtimeTemplate.startup },
-      );
+      });
+      if (hostNetworkIpError) {
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, hostNetworkIpError);
+      }
 
       const powerResult = await sendPowerCommand(
         gateway,
         server.nodeId,
-        {
-          type: "start_server",
-          serverId: server.id,
-          serverUuid: server.uuid,
-          template: runtimeTemplate,
-          environment: syncedEnvironment,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedCpuCores: server.allocatedCpuCores,
-          allocatedDiskMb: server.allocatedDiskMb,
-          allocatedSwapMb: server.allocatedSwapMb,
-          ioWeight: server.ioWeight,
-          primaryPort: server.primaryPort,
-          portBindings: portBindings,
-          networkMode: server.networkMode,
-          autoRestart: {
-            enabled: server.restartPolicy !== "never",
-            delay: 10,
-            maxRestarts: server.maxCrashCount ?? 5,
-            windowSecs: 60,
-          },
-        },
+        startMessage,
         POWER_ACK_TIMEOUT.start,
       );
 
@@ -899,6 +836,38 @@ export async function serverPowerRoutes(app: FastifyInstance) {
             ErrorCodes.HOST_NETWORK_DISABLED,
             `Host networking is disabled on node ${server.node.name ?? server.nodeId}. Enable it on the node and try again.`,
             { params: { nodeId: server.nodeId, nodeName: server.node.name } },
+          );
+        }
+        // The agent owns the live CPU set, so a pin the panel accepted (node
+        // had not reported its set) can still be refused when the container is
+        // created. Keep the coded error so the panel can say which CPUs and
+        // offer to clear the pin, instead of a raw agent string.
+        if (isCpuAffinityUnavailableAgentError(agentMessage)) {
+          return apiError(
+            reply,
+            409,
+            ErrorCodes.CPU_AFFINITY_UNAVAILABLE,
+            `CPU pinning ${server.cpuAffinity ?? ""} is not available on node ${server.node.name ?? server.nodeId}: ${agentMessage}`,
+            {
+              params: {
+                requested: server.cpuAffinity ?? "",
+                // The agent names the live set; fall back to what the panel
+                // last heard when the message shape changes.
+                available:
+                  /available:\s*([0-9,\-\s]+)/i.exec(agentMessage)?.[1]?.trim() ||
+                  server.node.hostCpuSet ||
+                  "unknown",
+              },
+            },
+          );
+        }
+        if (isInvalidCpuAffinityAgentError(agentMessage)) {
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.CPU_AFFINITY_INVALID,
+            `The node rejected the stored CPU list: ${agentMessage}`,
+            { params: { value: server.cpuAffinity ?? "" } },
           );
         }
         return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
@@ -1269,10 +1238,6 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       if (!gateway) {
         return apiError(reply, 500, ErrorCodes.GATEWAY_NOT_AVAILABLE, "WebSocket gateway not available");
       }
-      const runtimeTemplate = patchTemplateForRuntime(server.template);
-      if (server.startupCommand) {
-        runtimeTemplate.startup = server.startupCommand;
-      }
 
       // If running, stop first (best-effort; restart path still proceeds)
       if (currentState === ServerState.RUNNING) {
@@ -1286,70 +1251,54 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       }
 
       // Start after a delay (agent will handle the actual timing)
-      const serverDir = server.node.serverDataDir || "/var/lib/catalyst/servers";
-      const fullServerDir = `${serverDir}/${server.uuid}`;
-
-      const environment: Record<string, string> = {
-        ...(server.environment as Record<string, string>),
-        SERVER_DIR: fullServerDir,
-      };
-      if (server.template?.image) {
-        const resolvedImage = resolveTemplateImage(server.template, environment);
-        environment.TEMPLATE_IMAGE = resolvedImage;
+      const { message: restartMessage, hostNetworkIpError } = buildServerStartMessage({
+        type: "restart_server",
+        server,
+        portBindings: parseStoredPortBindings(server.portBindings),
+      });
+      if (hostNetworkIpError) {
+        return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, hostNetworkIpError);
       }
-      if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-        environment.CATALYST_NETWORK_IP = server.primaryIp;
-      }
-      if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-        try {
-          environment.CATALYST_NETWORK_IP = normalizeHostIp(server.node.publicAddress) || "";
-        } catch (error: any) {
-          return apiError(reply, 400, ErrorCodes.SERVER_NETWORK_IP_INVALID, error.message);
-        }
-      }
-      // Sync port environment variables with primaryPort
-      const portBindings = parseStoredPortBindings(server.portBindings);
-      let syncedEnvironment = syncPortEnvironmentVariables(
-        environment,
-        server.primaryPort,
-        portBindings
-      );
-      syncedEnvironment = injectPterodactylCompatibilityVars(
-        syncedEnvironment,
-        {
-          uuid: server.uuid,
-          name: server.name,
-          primaryIp: server.primaryIp,
-          primaryPort: server.primaryPort,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedDiskMb: server.allocatedDiskMb,
-        },
-        portBindings,
-        { startupCommand: runtimeTemplate.startup },
-      );
 
       const powerResult = await sendPowerCommand(
         gateway,
         server.nodeId,
-        {
-          type: "restart_server",
-          serverId: server.id,
-          serverUuid: server.uuid,
-          template: runtimeTemplate,
-          environment: syncedEnvironment,
-          allocatedMemoryMb: server.allocatedMemoryMb,
-          allocatedCpuCores: server.allocatedCpuCores,
-          allocatedDiskMb: server.allocatedDiskMb,
-          primaryPort: server.primaryPort,
-          portBindings: portBindings,
-          networkMode: server.networkMode,
-        },
+        restartMessage,
         POWER_ACK_TIMEOUT.restart,
       );
 
       if (powerResult.mode === "failed") {
+        const agentMessage = powerResult.error.message || "";
+        if (isCpuAffinityUnavailableAgentError(agentMessage)) {
+          return apiError(
+            reply,
+            409,
+            ErrorCodes.CPU_AFFINITY_UNAVAILABLE,
+            `CPU pinning ${server.cpuAffinity ?? ""} is not available on node ${server.node.name ?? server.nodeId}: ${agentMessage}`,
+            {
+              params: {
+                requested: server.cpuAffinity ?? "",
+                // The agent names the live set; fall back to what the panel
+                // last heard when the message shape changes.
+                available:
+                  /available:\s*([0-9,\-\s]+)/i.exec(agentMessage)?.[1]?.trim() ||
+                  server.node.hostCpuSet ||
+                  "unknown",
+              },
+            },
+          );
+        }
+        if (isInvalidCpuAffinityAgentError(agentMessage)) {
+          return apiError(
+            reply,
+            400,
+            ErrorCodes.CPU_AFFINITY_INVALID,
+            `The node rejected the stored CPU list: ${agentMessage}`,
+            { params: { value: server.cpuAffinity ?? "" } },
+          );
+        }
         return apiError(reply, powerFailureStatus(powerResult), ErrorCodes.AGENT_COMMAND_FAILED,
-          powerResult.error.message || "Failed to send command to agent");
+          agentMessage || "Failed to send command to agent");
       }
 
       // Optimistic transitional state; final via server_state_update

@@ -38,6 +38,10 @@ import {
 } from '../routes/servers/_helpers.js';
 import { ErrorCodes } from '../shared-types';
 import {
+  isCpuSubset,
+  normalizeCpuAffinity,
+} from '../lib/cpu-affinity.js';
+import {
   findDisallowedServerEnvironmentKeys,
   resolveStoredServerEnvironment,
   type ServerEnvironmentExecutionTrust,
@@ -65,6 +69,11 @@ export interface CloneRequest {
   allocatedDiskMb?: number;
   allocatedSwapMb?: number;
   ioWeight?: number;
+  /**
+   * Canonical CPU pin mask. Omitted keeps the source's pin; an explicit null
+   * unpins the clone.
+   */
+  cpuAffinity?: string | null;
   backupAllocationMb?: number;
   databaseAllocation?: number;
   environment?: Record<string, string>;
@@ -178,6 +187,8 @@ export interface ClonePlan {
     allocatedDiskMb: number;
     allocatedSwapMb: number;
     ioWeight: number;
+    /** Canonical CPU pin, or null when the clone runs unpinned. */
+    cpuAffinity: string | null;
     backupAllocationMb: number;
     databaseAllocation: number;
     backupStorageMode: string;
@@ -694,6 +705,31 @@ export async function buildClonePlan(args: {
   const resolvedDiskMb = raw.allocatedDiskMb ?? source.allocatedDiskMb;
   const resolvedSwapMb = raw.allocatedSwapMb ?? source.allocatedSwapMb ?? 0;
   const resolvedIoWeight = raw.ioWeight ?? source.ioWeight ?? 500;
+
+  // CPU pinning travels with a clone only when the target node can honour it.
+  // A mask is host CPU numbering, not a portable server property: "4-7" means
+  // nothing on a node whose set is "0-3". A same-node clone always keeps it,
+  // and an unknown target set (agent has not reported one) is not evidence
+  // against it — the agent re-checks at container start either way.
+  let resolvedCpuAffinity: string | null = null;
+  let cpuAffinityDropped = false;
+  const requestedCpuAffinity =
+    raw.cpuAffinity === undefined ? (source.cpuAffinity ?? null) : raw.cpuAffinity;
+  try {
+    resolvedCpuAffinity = normalizeCpuAffinity(requestedCpuAffinity);
+  } catch {
+    // A pin stored before this format existed cannot be carried forward.
+    resolvedCpuAffinity = null;
+    cpuAffinityDropped = true;
+  }
+  if (
+    resolvedCpuAffinity !== null &&
+    targetNodeId !== source.nodeId &&
+    !isCpuSubset(resolvedCpuAffinity, node.hostCpuSet)
+  ) {
+    resolvedCpuAffinity = null;
+    cpuAffinityDropped = true;
+  }
   const resolvedBackupAllocationMb = raw.backupAllocationMb ?? source.backupAllocationMb ?? 0;
   const resolvedDatabaseAllocation = raw.databaseAllocation ?? source.databaseAllocation ?? 0;
   const resolvedBackupStorageMode = raw.copyBackupCredentials
@@ -705,6 +741,20 @@ export async function buildClonePlan(args: {
   const hasBackupCredentials =
     (source.backupS3Config && Object.keys(source.backupS3Config as object).length > 0) ||
     (source.backupSftpConfig && Object.keys(source.backupSftpConfig as object).length > 0);
+  if (cpuAffinityDropped) {
+    // A warning rather than a blocker: the clone dialog has no affinity editor,
+    // so a blocker would be a dead end. Acknowledging it in the review step is
+    // the explicit "clone it unpinned" decision.
+    warnings.push({
+      // A plan warning code, not an API error: rendered from servers.json
+      // (cloneServer.warnings.*), same as CLONE_BACKUP_CREDENTIALS_DROPPED.
+      code: 'CLONE_CPU_AFFINITY_DROPPED',
+      message:
+        'This server is pinned to CPUs the target node does not have, so the clone will not be pinned.',
+      field: 'cpuAffinity',
+    });
+  }
+
   if (hasBackupCredentials && !raw.copyBackupCredentials) {
     warnings.push({
       code: 'CLONE_BACKUP_CREDENTIALS_DROPPED',
@@ -1101,6 +1151,7 @@ export async function buildClonePlan(args: {
       allocatedDiskMb: resolvedDiskMb,
       allocatedSwapMb: resolvedSwapMb,
       ioWeight: resolvedIoWeight,
+      cpuAffinity: resolvedCpuAffinity,
       backupAllocationMb: resolvedBackupAllocationMb,
       databaseAllocation: resolvedDatabaseAllocation,
       backupStorageMode: resolvedBackupStorageMode,
@@ -1227,6 +1278,7 @@ export async function persistClone(plan: ClonePlan, auth: CloneAuth): Promise<Pe
           allocatedDiskMb: plan.resolved.allocatedDiskMb,
           allocatedSwapMb: plan.resolved.allocatedSwapMb,
           ioWeight: plan.resolved.ioWeight,
+          cpuAffinity: plan.resolved.cpuAffinity,
           backupAllocationMb: plan.resolved.backupAllocationMb,
           databaseAllocation: plan.resolved.databaseAllocation,
           backupStorageMode: plan.resolved.backupStorageMode,

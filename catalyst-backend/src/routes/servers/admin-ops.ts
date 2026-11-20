@@ -8,6 +8,7 @@ import { streamServerData } from "../../services/server-file-stream.js";
 import { publishCacheInvalidate } from "../../lib/event-bus.js";
 import { requestedCgroupMemoryMb, SERVER_CGROUP_MEMORY_SELECT, sumCgroupMemoryMb } from "../../utils/java-memory.js";
 import { apiError } from "../../lib/http-error";
+import { isCpuSubset } from "../../lib/cpu-affinity.js";
 import { ErrorCodes } from "../../shared-types";
 
 export async function serverAdminopsRoutes(app: FastifyInstance) {
@@ -468,6 +469,26 @@ export async function serverAdminopsRoutes(app: FastifyInstance) {
       // Check if target node is online
       if (!targetNode.isOnline) {
         return apiError(reply, 400, ErrorCodes.NODE_OFFLINE, "Target node is offline");
+      }
+
+      // CPU pinning is host CPU numbering, not a portable server property, so a
+      // pin cannot follow the server to another node. Refuse with an actionable
+      // error instead of silently dropping the operator's pin: this route has no
+      // warnings channel, and the fix is one edit (clear the pin, transfer, then
+      // re-pin on the new node).
+      if (server.cpuAffinity && !isCpuSubset(server.cpuAffinity, targetNode.hostCpuSet)) {
+        return apiError(
+          reply,
+          400,
+          ErrorCodes.CPU_AFFINITY_UNAVAILABLE,
+          `This server is pinned to CPUs ${server.cpuAffinity}, which the target node does not have (available: ${targetNode.hostCpuSet ?? "unknown"}). Clear the CPU pinning before transferring.`,
+          {
+            params: {
+              requested: server.cpuAffinity,
+              available: targetNode.hostCpuSet ?? "unknown",
+            },
+          },
+        );
       }
 
       const serversOnTarget = await prisma.server.findMany({

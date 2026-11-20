@@ -42,6 +42,7 @@ export interface ServerAuditSnapshot {
   allocatedMemoryMb?: number | null;
   allocatedCpuCores?: number | null;
   allocatedDiskMb?: number | null;
+  cpuAffinity?: string | null;
   suspendedAt?: Date | string | null;
   suspensionReason?: string | null;
 }
@@ -109,6 +110,7 @@ export function buildServerAuditDetails(
     allocatedMemoryMb: server.allocatedMemoryMb ?? undefined,
     allocatedCpuCores: server.allocatedCpuCores ?? undefined,
     allocatedDiskMb: server.allocatedDiskMb ?? undefined,
+    cpuAffinity: server.cpuAffinity ?? undefined,
   };
 
   if (server.suspendedAt) {

@@ -14,6 +14,8 @@ import { READ_PERMISSIONS } from "../../lib/permission-vocabulary.js";
 import { decideServerAccess } from "../../lib/server-access.js";
 import { publishCacheInvalidate, subscribeCacheInvalidations } from "../../lib/event-bus.js";
 import { apiError } from "../../lib/http-error";
+import { validateCpuAffinityWrite } from "../../lib/cpu-affinity.js";
+import { cpuAffinityWriteError } from "../../lib/cpu-affinity-http.js";
 import { ErrorCodes } from "../../shared-types";
 import {
   assertPlanHasNoBlockers,
@@ -312,6 +314,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         allocatedMemoryMb,
         allocatedCpuCores,
         allocatedDiskMb,
+        cpuAffinity,
         backupAllocationMb,
         databaseAllocation,
         primaryPort,
@@ -330,6 +333,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         allocatedMemoryMb: number;
         allocatedCpuCores: number;
         allocatedDiskMb: number;
+        cpuAffinity?: string | null;
         backupAllocationMb?: number;
         databaseAllocation?: number;
         primaryPort: number;
@@ -554,6 +558,19 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return apiError(reply, 404, ErrorCodes.NODE_NOT_FOUND, "Node not found");
       }
 
+      // CPU pinning: canonicalise, then check it against this node's reported
+      // CPU set and the allocation being created. Runs before any write, so a
+      // bad mask can never leave a half-created server behind.
+      const cpuAffinityCheck = validateCpuAffinityWrite({
+        raw: cpuAffinity,
+        resolvedCores: allocatedCpuCores,
+        hostCpuSet: node.hostCpuSet,
+      });
+      if (!cpuAffinityCheck.ok) {
+        return cpuAffinityWriteError(reply, cpuAffinityCheck);
+      }
+      const resolvedCpuAffinity = cpuAffinityCheck.value;
+
       if (
         resolvedDatabaseAllocation !== undefined &&
         (!Number.isFinite(resolvedDatabaseAllocation) || resolvedDatabaseAllocation < 0)
@@ -716,6 +733,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               allocatedMemoryMb,
               allocatedCpuCores,
               allocatedDiskMb,
+              cpuAffinity: resolvedCpuAffinity,
               backupAllocationMb: resolvedBackupAllocationMb ?? 0,
               databaseAllocation: resolvedDatabaseAllocation ?? 0,
               primaryPort: allocationPort ?? validatedPrimaryPort,
@@ -1900,6 +1918,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         allocatedMemoryMb,
         allocatedCpuCores,
         allocatedDiskMb,
+        cpuAffinity,
         backupAllocationMb,
         databaseAllocation,
         primaryPort,
@@ -1914,6 +1933,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         allocatedMemoryMb?: number;
         allocatedCpuCores?: number;
         allocatedDiskMb?: number;
+        cpuAffinity?: string | null;
         backupAllocationMb?: number;
         databaseAllocation?: number;
         primaryPort?: number;
@@ -1943,6 +1963,7 @@ export async function serverCoreRoutes(app: FastifyInstance) {
             allocatedMemoryMb !== undefined ||
             allocatedCpuCores !== undefined ||
             allocatedDiskMb !== undefined ||
+            cpuAffinity !== undefined ||
             backupAllocationMb !== undefined ||
             databaseAllocation !== undefined,
         },
@@ -2021,6 +2042,26 @@ export async function serverCoreRoutes(app: FastifyInstance) {
         return apiError(reply, 409, ErrorCodes.SERVER_NOT_STOPPED, "Server must be stopped to update resource allocation", {
           params: { status: server.status },
         });
+      }
+
+      // CPU pinning is validated against the node's reported CPU set and the
+      // resolved allocation. Deliberately NOT gated on a stopped server (unlike
+      // quotas below): the pin is only read when the container is created, so a
+      // running server can be re-pinned and picks it up on its next start.
+      // Validation runs whenever the pin or the core count changes, because the
+      // two constrain each other; only a pin the caller actually sent is stored.
+      const pinProvided = cpuAffinity !== undefined;
+      let resolvedCpuAffinity: string | null | undefined;
+      if (pinProvided || allocatedCpuCores !== undefined) {
+        const cpuAffinityCheck = validateCpuAffinityWrite({
+          raw: pinProvided ? cpuAffinity : (server.cpuAffinity ?? null),
+          resolvedCores: allocatedCpuCores ?? server.allocatedCpuCores,
+          hostCpuSet: server.node.hostCpuSet,
+        });
+        if (!cpuAffinityCheck.ok) {
+          return cpuAffinityWriteError(reply, cpuAffinityCheck);
+        }
+        resolvedCpuAffinity = pinProvided ? cpuAffinityCheck.value : undefined;
       }
 
       // Validate resource changes if provided
@@ -2308,6 +2349,9 @@ export async function serverCoreRoutes(app: FastifyInstance) {
               allocatedMemoryMb: allocatedMemoryMb ?? server.allocatedMemoryMb,
               allocatedCpuCores: allocatedCpuCores ?? server.allocatedCpuCores,
               allocatedDiskMb: allocatedDiskMb ?? server.allocatedDiskMb,
+              ...(resolvedCpuAffinity !== undefined
+                ? { cpuAffinity: resolvedCpuAffinity }
+                : {}),
               backupAllocationMb: backupAllocationMb ?? server.backupAllocationMb ?? 0,
               databaseAllocation: databaseAllocation ?? server.databaseAllocation ?? 0,
               primaryPort: nextPrimaryPort,

@@ -14,10 +14,12 @@ import {
 import { hasGrant, hasPermission, hasNodeAccess } from "../lib/permissions";
 import { ALL_SERVER_PERMISSIONS } from "../lib/permissions-catalog";
 import { ServerStateMachine } from "../services/state-machine";
-import { normalizeHostIp } from "../utils/ipam";
+import { buildServerStartMessage } from "../services/start-message.js";
+import { normalizeCpuAffinity } from "../lib/cpu-affinity.js";
+import { broadcastCacheInvalidate } from "../lib/cache-bus.js";
+import { parseStoredPortBindings } from "../lib/template-runtime.js";
 import { captureSystemError } from "../services/error-logger";
 import { isNodeAutoUpdateEnabled } from "../services/node-update-policy";
-import { injectPterodactylCompatibilityVars } from "../utils/pterodactyl-env.js";
 import { getSecuritySettings, maxUploadBytesFromMb } from "../services/mailer";
 import { getMetrics } from "../services/metrics-exporter";
 import {
@@ -63,45 +65,6 @@ const resolveConsoleOutputByteLimit = (value?: number | null) => {
   return Math.min(MAX_CONSOLE_OUTPUT_BYTE_LIMIT, Math.max(MIN_CONSOLE_OUTPUT_BYTE_LIMIT, raw));
 };
 
-/**
- * Syncs port-related environment variables with the primaryPort.
- * This ensures that the server listens on the same port that is used for port forwarding.
- */
-const syncPortEnvironmentVariables = (
-  environment: Record<string, string>,
-  primaryPort: number,
-  portBindings?: Record<string, unknown>
-): Record<string, string> => {
-  const syncedEnv = { ...environment };
-
-  // List of common primary port environment variable names
-  const primaryPortVarNames = ["SERVER_PORT", "PORT", "GAME_PORT"];
-
-  // Sync primary port variables if they exist in the environment
-  for (const varName of primaryPortVarNames) {
-    if (syncedEnv[varName] !== undefined) {
-      syncedEnv[varName] = String(primaryPort);
-    }
-  }
-
-  // Handle QUERY_PORT specially - if it's the primary port + 1, update it accordingly
-  if (syncedEnv.QUERY_PORT !== undefined && portBindings) {
-    // Find if there's a secondary port binding that's primary + 1
-    const queryBinding = Object.entries(portBindings).find(
-      ([containerPort, hostPort]) => {
-        const cp = Number(containerPort);
-        const hp = Number(hostPort);
-        // Check if this is a query port (typically game port + 1)
-        return cp === primaryPort + 1 || hp === primaryPort + 1;
-      }
-    );
-    if (queryBinding) {
-      syncedEnv.QUERY_PORT = queryBinding[0]; // Use container port
-    }
-  }
-
-  return syncedEnv;
-};
 
 interface ConnectedAgent {
   nodeId: string;
@@ -124,6 +87,8 @@ interface DiscoveredContainer {
   networkMode?: string;
   memoryLimitMb?: number;
   cpuCores?: number;
+  /** CPU pin (cpuset) the container was created with, when it has one. */
+  cpuCpus?: string;
   startupCommand?: string;
   envVarNames?: string[];
   discoveredAt: number;
@@ -2066,6 +2031,16 @@ export class WebSocketGateway {
         const uptimeSeconds = Math.round(sanitizeMetric(message.uptimeSeconds, 0, INT4_MAX));
         const networkRxBytes = toByteCounterBig(message.networkRxBytes);
         const networkTxBytes = toByteCounterBig(message.networkTxBytes);
+        // Reported CPU set for CPU pinning: canonicalise, and drop anything
+        // that is not a cpuset list rather than storing junk from a buggy or
+        // compromised agent. It only feeds panel-side validation and pickers;
+        // the agent re-checks the mask against the live cgroup at start.
+        const reportedCpuSet =
+          typeof message.hostCpuSet === "string" && message.hostCpuSet.trim() !== ""
+            ? normalizeCpuAffinity(message.hostCpuSet)
+            : null;
+        const hostCpuSetChanged =
+          reportedCpuSet !== null && reportedCpuSet !== node.hostCpuSet;
         try {
           await this.prisma.node.update({
             where: { id: nodeId },
@@ -2073,6 +2048,7 @@ export class WebSocketGateway {
               isOnline: true,
               lastSeenAt: new Date(),
               ...(message.agentVersion ? { agentVersion: String(message.agentVersion) } : {}),
+              ...(reportedCpuSet !== null ? { hostCpuSet: reportedCpuSet } : {}),
             },
           });
           await this.prisma.nodeMetrics.create({
@@ -2098,6 +2074,12 @@ export class WebSocketGateway {
             metadata: { nodeId },
           }).catch(() => {});
           this.logger.error({ err, nodeId }, 'WebSocket handler error: failed to persist health report');
+        }
+
+        // The node list is cached pre-serialized (5s TTL, per process); a
+        // freshly reported CPU set is exactly what the affinity picker reads.
+        if (hostCpuSetChanged) {
+          broadcastCacheInvalidate('node-list', { flushAll: true });
         }
 
         // Fan out to admin SSE so node dashboards stop hard-polling.
@@ -2746,75 +2728,15 @@ export class WebSocketGateway {
             state: ServerState.STARTING,
             timestamp: Date.now(),
           });
-          const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
-          const fullServerDir = `${serverDir}/${server.uuid}`;
-          const templateVariables = (server.template.variables as any[]) || [];
-          const templateDefaults = templateVariables.reduce((acc, variable) => {
-            if (variable?.name && variable?.default !== undefined) {
-              acc[variable.name] = String(variable.default);
-            }
-            return acc;
-          }, {} as Record<string, string>);
-          const environment = {
-            ...templateDefaults,
-            ...(server.environment as Record<string, string>),
-            SERVER_DIR: fullServerDir,
-          };
-          if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-            environment.CATALYST_NETWORK_IP = server.primaryIp;
-          }
-          if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-            try {
-              environment.CATALYST_NETWORK_IP =
-                normalizeHostIp(server.node.publicAddress) ?? undefined;
-            } catch (error: any) {
-              this.logger.warn(
-                { nodeId: server.nodeId, hostIp: server.node.publicAddress, error: error.message },
-                "Invalid host network IP"
-              );
-            }
-          }
-
-          // Sync port environment variables with primaryPort
-          const portBindings =
+          const portBindings = parseStoredPortBindings(
             message.portBindings && typeof message.portBindings === "object"
               ? message.portBindings
-              : server.portBindings;
-          const syncedEnvironment = injectPterodactylCompatibilityVars(
-            syncPortEnvironmentVariables(
-              environment,
-              server.primaryPort,
-              portBindings as Record<string, unknown> | undefined
-            ),
-            {
-              uuid: server.uuid,
-              name: server.name,
-              primaryIp: server.primaryIp,
-              primaryPort: server.primaryPort,
-              allocatedMemoryMb: server.allocatedMemoryMb,
-              allocatedDiskMb: server.allocatedDiskMb,
-            },
-            portBindings as Record<number, number> | undefined,
-            {
-              startupCommand:
-                (server as any).startupCommand ||
-                (server.template as any)?.startup ||
-                undefined,
-            },
+              : server.portBindings,
           );
-
-          const restartSent = await this.sendToAgent(server.nodeId, {
+          const { message: restartMessage, hostNetworkIpError } = buildServerStartMessage({
             type: "start_server",
-            serverId: server.id,
-            serverUuid: server.uuid,
-            template: server.template,
-            environment: syncedEnvironment,
-            allocatedMemoryMb: server.allocatedMemoryMb,
-            allocatedCpuCores: server.allocatedCpuCores,
-            allocatedDiskMb: server.allocatedDiskMb,
-            primaryPort: server.primaryPort,
+            server,
             portBindings,
-            networkMode: server.networkMode,
             autoRestart: {
               enabled: true,
               delay: 10,
@@ -2822,6 +2744,13 @@ export class WebSocketGateway {
               windowSecs: 60,
             },
           });
+          if (hostNetworkIpError) {
+            this.logger.warn(
+              { serverId: server.id, nodeId: server.nodeId, error: hostNetworkIpError },
+              "Crash restart continues without CATALYST_NETWORK_IP: invalid host network IP"
+            );
+          }
+          const restartSent = await this.sendToAgent(server.nodeId, restartMessage);
           if (!restartSent) {
             this.autoRestartingServers.delete(server.id);
             await this.prisma.server.update({
@@ -2995,7 +2924,7 @@ export class WebSocketGateway {
           },
           select: {
             id: true, nodeId: true, status: true, suspendedAt: true,
-            uuid: true,
+            uuid: true, name: true,
             template: true, node: true, allocatedMemoryMb: true, allocatedCpuCores: true,
             allocatedDiskMb: true, allocatedSwapMb: true, ioWeight: true, primaryPort: true,
             primaryIp: true, portBindings: true, networkMode: true, environment: true,
@@ -3016,31 +2945,10 @@ export class WebSocketGateway {
             // node reboot. Replay its persisted start configuration; an
             // intentional stop remains represented by STOPPED and is skipped.
             if (server.status === ServerState.RUNNING) {
-              const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
-              const environment: Record<string, string> = {
-                ...(server.environment as Record<string, string>),
-                SERVER_DIR: `${serverDir}/${server.uuid}`,
-              };
-              if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-                environment.CATALYST_NETWORK_IP = server.primaryIp;
-              }
-              const template = server.startupCommand
-                ? { ...server.template, startup: server.startupCommand }
-                : server.template;
-              const sent = await this.sendToAgent(server.nodeId, {
+              const { message: replayMessage, hostNetworkIpError } = buildServerStartMessage({
                 type: "start_server",
-                serverId: server.id,
-                serverUuid: server.uuid,
-                template,
-                environment,
-                allocatedMemoryMb: server.allocatedMemoryMb,
-                allocatedCpuCores: server.allocatedCpuCores,
-                allocatedDiskMb: server.allocatedDiskMb,
-                allocatedSwapMb: server.allocatedSwapMb,
-                ioWeight: server.ioWeight,
-                primaryPort: server.primaryPort,
-                portBindings: server.portBindings ?? {},
-                networkMode: server.networkMode,
+                server,
+                portBindings: parseStoredPortBindings(server.portBindings),
                 autoRestart: {
                   enabled: server.restartPolicy !== "never",
                   delay: 10,
@@ -3048,6 +2956,13 @@ export class WebSocketGateway {
                   windowSecs: 60,
                 },
               });
+              if (hostNetworkIpError) {
+                this.logger.warn(
+                  { serverId: server.id, nodeId: server.nodeId, error: hostNetworkIpError },
+                  "Replaying start without CATALYST_NETWORK_IP: invalid host network IP"
+                );
+              }
+              const sent = await this.sendToAgent(server.nodeId, replayMessage);
               if (sent) {
                 this.logger.info({ serverId: server.id }, "Restoring server after node reconnect");
                 await this.prisma.serverLog.create({
@@ -3679,6 +3594,7 @@ export class WebSocketGateway {
           networkMode: typeof c.networkMode === "string" ? c.networkMode : undefined,
           memoryLimitMb: typeof c.memoryLimitMb === "number" ? c.memoryLimitMb : undefined,
           cpuCores: typeof c.cpuCores === "number" ? c.cpuCores : undefined,
+          cpuCpus: typeof c.cpuCpus === "string" ? c.cpuCpus : undefined,
           startupCommand: typeof c.startupCommand === "string" ? c.startupCommand : undefined,
           envVarNames: Array.isArray(c.envVarNames) ? c.envVarNames : undefined,
           discoveredAt: Date.now(),
@@ -5089,39 +5005,19 @@ export class WebSocketGateway {
       return;
     }
 
-    const serverDir = process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
-    const environment: Record<string, string> = {
-      ...(server.environment as Record<string, string>),
-      SERVER_DIR: `${serverDir}/${server.uuid}`,
-    };
-    if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-      environment.CATALYST_NETWORK_IP = server.primaryIp;
-    }
-    if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-      try {
-        const normalized = normalizeHostIp(server.node.publicAddress);
-        if (normalized) environment.CATALYST_NETWORK_IP = normalized;
-      } catch (error: any) {
-        this.logger.warn(
-          { nodeId: server.nodeId, hostIp: server.node.publicAddress, error: error.message },
-          "Invalid host network IP",
-        );
-      }
+    const { message: startMessage, hostNetworkIpError } = buildServerStartMessage({
+      type: "start_server",
+      server,
+      portBindings: parseStoredPortBindings(server.portBindings),
+    });
+    if (hostNetworkIpError) {
+      this.logger.warn(
+        { serverId, nodeId: server.nodeId, error: hostNetworkIpError },
+        "Starting after backup without CATALYST_NETWORK_IP: invalid host network IP",
+      );
     }
 
-    const sent = await this.sendToAgent(server.nodeId, {
-      type: "start_server",
-      serverId: server.id,
-      serverUuid: server.uuid,
-      template: server.template,
-      environment,
-      allocatedMemoryMb: server.allocatedMemoryMb,
-      allocatedCpuCores: server.allocatedCpuCores,
-      allocatedDiskMb: server.allocatedDiskMb,
-      primaryPort: server.primaryPort,
-      portBindings: server.portBindings ?? {},
-      networkMode: server.networkMode,
-    });
+    const sent = await this.sendToAgent(server.nodeId, startMessage);
     if (sent) {
       this.logger.info({ serverId }, "Started server after scheduled backup");
     } else {

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import type { ZodIssue } from 'zod';
 import { describeError } from '../utils/describe-error.js';
 import { isValidPermission } from './permissions-catalog.js';
+import { MAX_CPU_AFFINITY_LENGTH } from './cpu-affinity.js';
 import { ErrorCodes } from '../shared-types.js';
 
 /**
@@ -113,6 +114,15 @@ export const storageResizeSchema = z.object({
 });
 
 /**
+ * CPU pinning mask (cpuset grammar, e.g. "0-3,6"). MAX length only: the
+ * grammar and the bounds are owned by `lib/cpu-affinity.ts`, which the routes
+ * run so a bad mask comes back as CPU_AFFINITY_INVALID naming the value —
+ * "Invalid request body" would not tell an operator which mask was refused.
+ * "" and null both mean "no pinning"; a form round-trips "".
+ */
+export const cpuAffinitySchema = z.string().max(MAX_CPU_AFFINITY_LENGTH).nullable().optional();
+
+/**
  * Server creation validation
  */
 export const serverCreateSchema = z.object({
@@ -130,6 +140,7 @@ export const serverCreateSchema = z.object({
   allocatedMemoryMb: z.number().int().min(512).max(131072),
   allocatedCpuCores: z.number().int().min(1).max(128),
   allocatedDiskMb: z.number().int().min(1024).max(1048576),
+  cpuAffinity: cpuAffinitySchema,
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: databaseAllocationSchema,
   networkMode: z.enum(SERVER_NETWORK_MODES).default('mc-lan-static'),
@@ -162,6 +173,7 @@ const cloneOverrideFields = {
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
   allocatedSwapMb: z.number().int().min(0).max(131072).optional(),
   ioWeight: z.number().int().min(10).max(1000).optional(),
+  cpuAffinity: cpuAffinitySchema,
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: databaseAllocationSchema,
   environment: serverEnvironmentSchema.optional(),
@@ -224,6 +236,7 @@ export const serverUpdateSchema = z.object({
   allocatedMemoryMb: z.number().int().min(512).max(131072).optional(),
   allocatedCpuCores: z.number().int().min(1).max(128).optional(),
   allocatedDiskMb: z.number().int().min(1024).max(1048576).optional(),
+  cpuAffinity: cpuAffinitySchema,
   backupAllocationMb: z.number().int().min(0).max(1048576).optional(),
   databaseAllocation: databaseAllocationSchema,
   primaryPort: z.number().int().min(1).max(65535).optional(),

@@ -327,6 +327,34 @@ describe('server.update split (#319)', () => {
 
     await app.close();
   });
+
+  it('keeps CPU pinning inside server.resources', async () => {
+    // Pinning is a resource field: it reserves nothing (the CFS quota still
+    // applies) but it decides placement, so it follows memory/CPU/disk.
+    currentUserId = await grantSubuser(['server.read', 'server.startup']);
+    let app = buildApp();
+    const denied = await app.inject({
+      method: 'PUT',
+      url: `/api/servers/${serverId}`,
+      payload: { cpuAffinity: '0-1' },
+    });
+    expect(denied.statusCode).toBe(403);
+    await app.close();
+
+    currentUserId = await grantSubuser(['server.read', 'server.resources']);
+    app = buildApp();
+    const allowed = await app.inject({
+      method: 'PUT',
+      url: `/api/servers/${serverId}`,
+      payload: { allocatedCpuCores: 2, cpuAffinity: '0-1' },
+    });
+    expect(allowed.statusCode).toBe(200);
+
+    const stored = await prisma.server.findUnique({ where: { id: serverId } });
+    expect(stored?.cpuAffinity).toBe('0-1');
+
+    await app.close();
+  });
 });
 
 describe('backup settings allocation gate (#318)', () => {

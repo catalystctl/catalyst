@@ -60,6 +60,12 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
           .min(1)
           .max(128)
           .describe("CPU allocation in whole cores (1-128)"),
+        cpuAffinity: z
+          .string()
+          .max(512)
+          .nullable()
+          .optional()
+          .describe('CPU pin mask in cpuset form (e.g. "0-3,6"); must name at least allocatedCpuCores CPUs'),
         allocatedDiskMb: z
           .number()
           .int()
@@ -108,6 +114,12 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
           .max(128)
           .optional()
           .describe("CPU allocation in whole cores (1-128)"),
+        cpuAffinity: z
+          .string()
+          .max(512)
+          .nullable()
+          .optional()
+          .describe('CPU pin mask in cpuset form (e.g. "0-3,6"); null unpins, omit to leave unchanged'),
         allocatedDiskMb: z
           .number()
           .int()
@@ -148,6 +160,7 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
         ownerId: z.string().optional().describe("Owner for the clone"),
         allocatedMemoryMb: z.number().int().min(512).max(131072).optional().describe("Memory override (MB)"),
         allocatedCpuCores: z.number().int().min(1).max(128).optional().describe("CPU override (cores)"),
+        cpuAffinity: z.string().max(512).nullable().optional().describe('CPU pin mask override in cpuset form (e.g. "0-3,6")'),
         allocatedDiskMb: z.number().int().min(1024).max(1048576).optional().describe("Disk override (MB)"),
       }),
     },
@@ -175,6 +188,7 @@ export function registerServerTools(server: McpServer, client: CatalystClient): 
         networkMode: z.enum(["bridge", "macvlan", "host", "mc-lan-static", "mc-lan-dynamic"]).optional().describe("Network mode override"),
         allocatedMemoryMb: z.number().int().min(512).max(131072).optional().describe("Memory override (MB)"),
         allocatedCpuCores: z.number().int().min(1).max(128).optional().describe("CPU override (cores)"),
+        cpuAffinity: z.string().max(512).nullable().optional().describe('CPU pin mask override in cpuset form (e.g. "0-3,6")'),
         allocatedDiskMb: z.number().int().min(1024).max(1048576).optional().describe("Disk override (MB)"),
       }),
     },

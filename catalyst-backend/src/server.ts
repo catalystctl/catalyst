@@ -74,12 +74,12 @@ import { startLogRetention } from "./services/log-retention";
 import { startMetricsRetention } from "./services/metrics-retention";
 import { startAuthRetention } from "./services/auth-retention";
 import { auth } from "./auth";
-import { normalizeHostIp } from "./utils/ipam";
 import { PluginLoader } from "./plugins/loader";
 import { collectAuthProviders } from "./plugins/auth-providers";
 import { DISCLAIMER_VERSION } from "./plugins/safety";
 import { pluginRoutes } from "./routes/plugins";
 import { FileTunnelService } from "./services/file-tunnel";
+import { buildServerStartMessage } from "./services/start-message.js";
 import { fileTunnelRoutes } from "./routes/file-tunnel";
 import { migrationRoutes } from "./routes/migration";
 import { mcpRoutes } from "./routes/mcp";
@@ -322,33 +322,6 @@ taskScheduler.setTaskExecutor({
 			);
 			return;
 		}
-		const serverDir =
-			process.env.SERVER_DATA_DIR || "/var/lib/catalyst/servers";
-		const fullServerDir = `${serverDir}/${server.uuid}`;
-		const environment: Record<string, string> = {
-			...(server.environment as Record<string, string>),
-			SERVER_DIR: fullServerDir,
-		};
-		if (server.primaryIp && !environment.CATALYST_NETWORK_IP) {
-			environment.CATALYST_NETWORK_IP = server.primaryIp;
-		}
-		if (server.networkMode === "host" && !environment.CATALYST_NETWORK_IP) {
-			try {
-				const normalized = normalizeHostIp(server.node.publicAddress);
-				if (normalized) {
-					environment.CATALYST_NETWORK_IP = normalized;
-				}
-			} catch (error: any) {
-				logger.warn(
-					{
-						nodeId: server.nodeId,
-						hostIp: server.node.publicAddress,
-						error: error.message,
-					},
-					"Invalid host network IP",
-				);
-			}
-		}
 		if (action === "backup") {
 			const stopBeforeBackup = task.payload?.stopBeforeBackup === true;
 			const startAfterBackup = task.payload?.startAfterBackup === true;
@@ -456,37 +429,21 @@ taskScheduler.setTaskExecutor({
 			return;
 		}
 
-		if (action === "restart") {
-			await wsGateway.sendToAgent(server.nodeId, {
-				type: "restart_server",
-				serverId: server.id,
-				serverUuid: server.uuid,
-				template: server.template,
-				environment,
-				allocatedMemoryMb: server.allocatedMemoryMb,
-				allocatedCpuCores: server.allocatedCpuCores,
-				allocatedDiskMb: server.allocatedDiskMb,
-				primaryPort: server.primaryPort,
-				portBindings: server.portBindings ?? {},
-				networkMode: server.networkMode,
+		if (action === "restart" || action === "start") {
+			// Same payload builder as the HTTP power routes: a task must not
+			// start the server with a different image, startup command or
+			// environment than a manual start would.
+			const { message, hostNetworkIpError } = buildServerStartMessage({
+				type: action === "restart" ? "restart_server" : "start_server",
+				server,
 			});
-			return;
-		}
-
-		if (action === "start") {
-			await wsGateway.sendToAgent(server.nodeId, {
-				type: "start_server",
-				serverId: server.id,
-				serverUuid: server.uuid,
-				template: server.template,
-				environment,
-				allocatedMemoryMb: server.allocatedMemoryMb,
-				allocatedCpuCores: server.allocatedCpuCores,
-				allocatedDiskMb: server.allocatedDiskMb,
-				primaryPort: server.primaryPort,
-				portBindings: server.portBindings ?? {},
-				networkMode: server.networkMode,
-			});
+			if (hostNetworkIpError) {
+				logger.warn(
+					{ taskId: task.id, serverId: server.id, error: hostNetworkIpError },
+					"Scheduled start without CATALYST_NETWORK_IP: invalid host network IP",
+				);
+			}
+			await wsGateway.sendToAgent(server.nodeId, message);
 			return;
 		}
 

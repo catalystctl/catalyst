@@ -18,7 +18,7 @@ import { getSecuritySettings } from "../../services/mailer";
 import { apiError } from "../../lib/http-error";
 import { ErrorCodes } from "../../shared-types";
 
-export const MAX_PORT = 65535;
+
 export const INVITE_EXPIRY_DAYS = 7;
 export const DEFAULT_PERMISSION_PRESETS = {
   readOnly: [
@@ -97,31 +97,27 @@ export const OWNER_SERVER_PERMISSIONS = [
   ...DEFAULT_PERMISSION_PRESETS.full,
 ] as const;
 
-export const parsePortValue = (value: unknown) => {
-  const parsed = typeof value === "string" ? Number(value) : value;
-  if (!Number.isFinite(parsed)) return null;
-  const port = Number(parsed);
-  if (!Number.isInteger(port) || port <= 0 || port > MAX_PORT) {
-    return null;
-  }
-  return port;
-};
 
-export const parseStoredPortBindings = (value: unknown): Record<number, number> => {
-  if (!value || typeof value !== "object") {
-    return {};
-  }
-  const bindings: Record<number, number> = {};
-  for (const [containerKey, hostValue] of Object.entries(value as Record<string, unknown>)) {
-    const containerPort = parsePortValue(containerKey);
-    const hostPort = parsePortValue(hostValue);
-    if (!containerPort || !hostPort) {
-      continue;
-    }
-    bindings[containerPort] = hostPort;
-  }
-  return bindings;
-};
+
+// Runtime derivation helpers live in lib/template-runtime.ts so the non-HTTP
+// start paths (cron tasks, crash restart, start-after-backup, node-reconnect
+// replay) can share one implementation instead of re-deriving a subset.
+import {
+  MAX_PORT,
+  parsePortValue,
+  parseStoredPortBindings,
+  patchTemplateForRuntime,
+} from "../../lib/template-runtime.js";
+
+// Re-exported for the routes that import them from this module by name.
+export {
+  MAX_PORT,
+  parsePortValue,
+  parseStoredPortBindings,
+  patchTemplateForRuntime,
+  resolveTemplateImage,
+  syncPortEnvironmentVariables,
+} from "../../lib/template-runtime.js";
 
 export const normalizePortBindings = (value: unknown, primaryPort: number) => {
   // The map keeps request-supplied port numbers out of dynamic property writes.
@@ -160,6 +156,20 @@ export const WILDCARD_HOST = "*";
  */
 export const isHostNetworkDisabledAgentError = (message: string): boolean =>
   /networkMode "host" is disabled on this node/i.test(message);
+
+/**
+ * Agent rejection text for a CPU pin the node cannot honour. The agent reads
+ * the live effective cpuset of the container's parent cgroup, so it is the
+ * authoritative check: a mask the panel accepted (because the node had not
+ * reported its CPU set) can still be refused at container creation. The
+ * prefixes come from `catalyst-agent/src/runtime_manager/helpers.rs`.
+ */
+export const isCpuAffinityUnavailableAgentError = (message: string): boolean =>
+  /cpu_affinity_unavailable:/i.test(message);
+
+/** Agent rejection text for a malformed mask (only reachable from a non-panel client). */
+export const isInvalidCpuAffinityAgentError = (message: string): boolean =>
+  /invalid_cpu_affinity:/i.test(message);
 
 export const collectUsedHostPortsByIp = (
   servers: Array<{
@@ -286,41 +296,6 @@ export const resolvePrimaryHostPort = (server: any) => {
  * This ensures that the server listens on the same port that is used for port forwarding.
  * Common port variable names: SERVER_PORT, PORT, GAME_PORT, QUERY_PORT (for secondary ports)
  */
-export const syncPortEnvironmentVariables = (
-  environment: Record<string, string>,
-  primaryPort: number,
-  portBindings?: Record<number, number>
-): Record<string, string> => {
-  const syncedEnv = { ...environment };
-
-  // List of common primary port environment variable names
-  const primaryPortVarNames = ["SERVER_PORT", "PORT", "GAME_PORT"];
-
-  // Sync primary port variables if they exist in the environment
-  for (const varName of primaryPortVarNames) {
-    if (syncedEnv[varName] !== undefined) {
-      syncedEnv[varName] = String(primaryPort);
-    }
-  }
-
-  // Handle QUERY_PORT specially - if it's the primary port + 1, update it accordingly
-  if (syncedEnv.QUERY_PORT !== undefined && portBindings) {
-    // Find if there's a secondary port binding that's primary + 1
-    const queryBinding = Object.entries(portBindings).find(
-      ([containerPort, hostPort]) => {
-        const cp = Number(containerPort);
-        const hp = Number(hostPort);
-        // Check if this is a query port (typically game port + 1)
-        return cp === primaryPort + 1 || hp === primaryPort + 1;
-      }
-    );
-    if (queryBinding) {
-      syncedEnv.QUERY_PORT = queryBinding[0]; // Use container port
-    }
-  }
-
-  return syncedEnv;
-};
 
 // Re-export from utils so existing route imports keep working.
 export {
@@ -366,12 +341,6 @@ export const buildConnectionInfo = (
   };
 };
 
-export const patchTemplateForRuntime = (template: any) => ({
-  ...template,
-  stopCommand: template.stopCommand ?? 'stop',
-  sendSignalTo: template.sendSignalTo ?? 'SIGTERM',
-  installImage: template.installImage ?? 'alpine:3.19',
-});
 
 export const withConnectionInfo = (server: any, fallbackNode?: { publicAddress?: string }) => ({
     ...server,
@@ -505,28 +474,6 @@ export const maxBufferErrorResponse = () => {
 
 
 
-export const resolveTemplateImage = (
-  template: { image: string; images?: any; defaultImage?: string | null },
-  environment: Record<string, string>
-) => {
-  const options = Array.isArray(template.images) ? template.images : [];
-  if (!options.length) return template.image;
-  const requested = environment.IMAGE_VARIANT;
-  if (requested) {
-    const match = options.find((option) => option?.name === requested);
-    if (match?.image) {
-      return match.image;
-    }
-  }
-  if (template.defaultImage) {
-    const defaultMatch = options.find((option) => option?.image === template.defaultImage);
-    if (defaultMatch?.image) {
-      return defaultMatch.image;
-    }
-    return template.defaultImage;
-  }
-  return template.image;
-};
 
 // Re-export pure access decision helper for unit tests / callers.
 export { decideServerAccess } from "../../lib/server-access";

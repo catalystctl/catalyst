@@ -368,6 +368,76 @@ describe('buildClonePlan', () => {
   });
 });
 
+describe('CPU pinning across nodes', () => {
+  // A pin is host CPU numbering, so a clone may only carry it to a node that
+  // actually has those CPUs. Same-node clones always keep it.
+  async function planTo(sourceServerId: string, targetNodeId: string) {
+    const loaded = await loadCloneSource(sourceServerId);
+    return buildClonePlan({
+      source: loaded,
+      raw: baseRequest({ targetNodeId }),
+      auth: adminAuth,
+    });
+  }
+
+  const droppedWarning = (warnings: Array<{ code: string }>) =>
+    warnings.find((warning) => warning.code === 'CLONE_CPU_AFFINITY_DROPPED');
+
+  it('keeps the pin on a same-node clone', async () => {
+    const source = await createServer(nodeAId, { cpuAffinity: '0-1' });
+    const plan = await planTo(source.id, nodeAId);
+
+    expect(plan.resolved.cpuAffinity).toBe('0-1');
+    expect(droppedWarning(plan.warnings)).toBeUndefined();
+  });
+
+  it('keeps the pin when the target node has those CPUs', async () => {
+    const target = await createNode(locationBId, { hostCpuSet: '0-7' });
+    try {
+      const source = await createServer(nodeAId, { cpuAffinity: '0-1' });
+      const plan = await planTo(source.id, target.id);
+
+      expect(plan.resolved.cpuAffinity).toBe('0-1');
+      expect(droppedWarning(plan.warnings)).toBeUndefined();
+    } finally {
+      await prisma.nodeAllocation.deleteMany({ where: { nodeId: target.id } });
+      await prisma.node.delete({ where: { id: target.id } });
+    }
+  });
+
+  it('drops the pin with a warning when the target node lacks those CPUs', async () => {
+    const target = await createNode(locationBId, { hostCpuSet: '0-3' });
+    try {
+      const source = await createServer(nodeAId, { cpuAffinity: '4-5' });
+      const plan = await planTo(source.id, target.id);
+
+      expect(plan.resolved.cpuAffinity).toBeNull();
+      const warning = droppedWarning(plan.warnings);
+      expect(warning).toMatchObject({ field: 'cpuAffinity' });
+      // A warning, not a blocker: the clone dialog has no affinity editor, and
+      // acknowledging it is the explicit "clone unpinned" decision.
+      expect(plan.blockers.find((b) => b.code === 'CLONE_CPU_AFFINITY_DROPPED')).toBeUndefined();
+    } finally {
+      await prisma.nodeAllocation.deleteMany({ where: { nodeId: target.id } });
+      await prisma.node.delete({ where: { id: target.id } });
+    }
+  });
+
+  it('keeps the pin when the target node has not reported its CPU set', async () => {
+    const target = await createNode(locationBId, { hostCpuSet: null });
+    try {
+      const source = await createServer(nodeAId, { cpuAffinity: '0-63' });
+      const plan = await planTo(source.id, target.id);
+
+      expect(plan.resolved.cpuAffinity).toBe('0-63');
+      expect(droppedWarning(plan.warnings)).toBeUndefined();
+    } finally {
+      await prisma.nodeAllocation.deleteMany({ where: { nodeId: target.id } });
+      await prisma.node.delete({ where: { id: target.id } });
+    }
+  });
+});
+
 describe('host-network port conflicts', () => {
   it('shifts the port block when the target node already runs a host-network server', async () => {
     const source = await createServer(nodeAId, {

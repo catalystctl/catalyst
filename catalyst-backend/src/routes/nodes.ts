@@ -7,6 +7,7 @@ import { serialize } from "../utils/serialize";
 import { verifyAgentApiKey } from "../lib/agent-auth";
 import { createApiKey, deleteApiKey } from "../services/api-key-service";
 import { captureSystemError } from "../services/error-logger";
+import { normalizeCpuAffinity } from "../lib/cpu-affinity.js";
 import { invalidateNodeAutoUpdateCache } from "../services/node-update-policy";
 import { getUpdateStatus } from "../services/auto-updater";
 import { getCurrentVersion } from "../lib/panel-version";
@@ -2234,6 +2235,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					networkMode: c.networkMode,
 					memoryLimitMb: c.memoryLimitMb,
 					cpuCores: c.cpuCores,
+					cpuCpus: c.cpuCpus,
 					startupCommand: c.startupCommand,
 					envVarNames: c.envVarNames,
 					discoveredAt: c.discoveredAt,
@@ -2516,6 +2518,20 @@ export async function nodeRoutes(app: FastifyInstance) {
 					?? 1,
 			));
 
+			// Carry the running container's CPU pin into the record: the container
+			// keeps it until something recreates it, and without this the pin
+			// silently disappears on the next start. Canonicalise and ignore an
+			// unparseable value rather than failing the import.
+			const resolvedCpuAffinity = (() => {
+				const rawCpus = typeof container.cpuCpus === "string" ? container.cpuCpus : null;
+				if (!rawCpus) return null;
+				try {
+					return normalizeCpuAffinity(rawCpus);
+				} catch {
+					return null;
+				}
+			})();
+
 			// Create server record — containerId IS the server.id (critical for agent sync)
 			const server = await prisma.server.create({
 				data: {
@@ -2530,6 +2546,7 @@ export async function nodeRoutes(app: FastifyInstance) {
 					allocatedMemoryMb: resolvedMemoryMb,
 					allocatedCpuCores: resolvedCpuCores,
 					allocatedDiskMb: allocatedDiskMb ?? 10240,
+					cpuAffinity: resolvedCpuAffinity,
 					containerId,
 					containerName: containerId,
 					networkMode: container.networkMode || "bridge",

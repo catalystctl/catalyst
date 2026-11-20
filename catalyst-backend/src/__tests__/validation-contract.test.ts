@@ -160,8 +160,44 @@ describe('panel form bounds match the schema bounds', () => {
       primaryIp: '10.0.0.5',
       allocationId: 'alloc-1',
       networkMode: 'mc-lan-static',
+      cpuAffinity: '0-1',
     };
     const parsed = serverUpdateSchema.safeParse(storedRow);
     expect(parsed.success, JSON.stringify(parsed.success ? null : parsed.error.issues)).toBe(true);
+  });
+});
+
+describe('CPU pinning payloads round-trip', () => {
+  // The forms send the whole resource family back, and an empty input means
+  // "no pinning". All three write paths must accept what the panel produces.
+  const accepted: Array<string | null> = [null, '', '0-3,6', ' 0 - 3 , 6 '];
+
+  it('accepts every shape the panel can send', () => {
+    for (const cpuAffinity of accepted) {
+      expect(serverUpdateSchema.safeParse({ cpuAffinity }).success, `update ${cpuAffinity}`).toBe(true);
+      expect(
+        serverCreateSchema.safeParse({ ...createInput, cpuAffinity }).success,
+        `create ${cpuAffinity}`,
+      ).toBe(true);
+      expect(
+        serverClonePreflightSchema.safeParse({
+          mode: 'configuration',
+          targetNodeId: 'node-2',
+          cpuAffinity,
+        }).success,
+        `clone ${cpuAffinity}`,
+      ).toBe(true);
+    }
+  });
+
+  it('bounds only the length at the schema level', () => {
+    expect(serverUpdateSchema.safeParse({ cpuAffinity: 'x'.repeat(512) }).success).toBe(true);
+    expect(serverUpdateSchema.safeParse({ cpuAffinity: 'x'.repeat(513) }).success).toBe(false);
+  });
+
+  it('leaves the grammar to the route, so a bad mask names the field and value', () => {
+    // Deliberate: the route answers CPU_AFFINITY_INVALID with the offending
+    // mask; a schema-level regex would produce an opaque "Invalid request body".
+    expect(serverUpdateSchema.safeParse({ cpuAffinity: '3-1' }).success).toBe(true);
   });
 });
