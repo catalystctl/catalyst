@@ -72,8 +72,16 @@ overrides:
 # advisories cover symlink entries in archives. packaging.ts rejects
 # non-regular entries before extraction writes them, and a .catpkg never
 # legitimately contains links. Drop these when upstream ships a fix.
+#
+# effect: ReDoS in Schema.TemplateLiteral (GHSA-7589-6fvf-x4pw), patched in
+# 3.22.1. @prisma/config pins effect 3.20.0 exactly and no Prisma 7 release
+# ships a newer one, so there is no override that stays inside Prisma's own
+# support matrix. It is a devDependency reached only when the Prisma CLI loads
+# its own static config schema — panel input never compiles an effect schema.
+# Drop this when Prisma bumps effect to >=3.22.1.
 auditConfig:
   ignoreGhsas:
     - GHSA-jmr9-qjv8-65gv
     - GHSA-7pqw-9j4j-h8q3
+    - GHSA-7589-6fvf-x4pw
 shamefullyHoist: true
