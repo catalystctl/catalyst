@@ -307,6 +307,34 @@ pub(crate) fn unified_cpu_weight(cpu_cores: u64) -> String {
     (cpu_cores.max(1).saturating_mul(100).min(10_000)).to_string()
 }
 
+/// Validate a panel-supplied CPU mask against the node's effective CPU set and
+/// return the canonical mask for OCI `linux.resources.cpu.cpus`.
+///
+/// The mask arrives already normalised from the start handler, and is
+/// normalised again here so the spec builder is safe for any caller. It is then
+/// checked against the node's live set: a pin this node cannot honour fails the
+/// start with a coded error instead of silently running unpinned (plan R3/R4 —
+/// a mask is never dropped or widened). The available set is injected rather
+/// than read from sysfs so both branches are testable without root, the same
+/// way `linux_cpu_resources_with` takes burst support.
+pub(crate) fn cpu_affinity_for_spec(
+    mask: Option<&str>,
+    available: Option<&str>,
+) -> AgentResult<Option<String>> {
+    let Some(mask) = mask else {
+        return Ok(None);
+    };
+    let cpus = helpers::parse_cpu_list(mask).ok_or_else(|| {
+        AgentError::InvalidRequest(format!(
+            "invalid_cpu_affinity: '{}' is not a valid CPU list",
+            mask
+        ))
+    })?;
+    let mask = helpers::format_cpu_list(&cpus);
+    helpers::cpu_mask_is_available(&mask, available).map_err(AgentError::InvalidRequest)?;
+    Ok(Some(mask))
+}
+
 /// OCI `linux.resources.memory` plus cgroup v2 `unified` map.
 /// `memory.high` is not a portable OCI field; runc applies it via unified.
 pub(crate) fn linux_memory_resources(
@@ -1373,7 +1401,16 @@ impl ContainerdRuntime {
                 serde_json::json!(unified_cpu_weight(config.cpu_cores)),
             );
         }
-        let cpu = linux_cpu_resources(config.cpu_cores);
+        let mut cpu = linux_cpu_resources(config.cpu_cores);
+        // Pin the container to the panel's CPUs. The effective set is read
+        // here, not in the pure helper: /catalyst/<id> is a direct child of the
+        // cgroup root, so the root's effective set is exactly what the
+        // container may use. An impossible pin fails the start with
+        // `cpu_affinity_unavailable:` (the panel turns that into a coded 400).
+        let available = helpers::effective_cpu_set();
+        if let Some(mask) = cpu_affinity_for_spec(config.cpu_affinity, available.as_deref())? {
+            cpu["cpus"] = serde_json::json!(mask);
+        }
         let cgroup_path = format!("/{}/{}", self.namespace, config.container_id);
         // Runtime containers run as non-root (1000:1000) and need minimal capabilities.
         let caps = ["CAP_NET_BIND_SERVICE"];
@@ -1706,6 +1743,48 @@ mod tests {
         // 0 cores floors to 1.
         let cpu = linux_cpu_resources_with(0, false);
         assert_eq!(cpu.get("quota"), Some(&serde_json::json!(100_000i64)));
+    }
+
+    #[test]
+    fn cpu_affinity_for_spec_normalises_and_checks() {
+        // No pin requested: nothing to emit.
+        assert_eq!(cpu_affinity_for_spec(None, Some("0-15")).unwrap(), None);
+        // Non-canonical input comes out canonical.
+        assert_eq!(
+            cpu_affinity_for_spec(Some("2,0-1"), Some("0-3")).unwrap(),
+            Some("0-2".to_string())
+        );
+        // Sparse node set: a pin inside the hole is legal.
+        assert_eq!(
+            cpu_affinity_for_spec(Some("32-33"), Some("0-15,32-47")).unwrap(),
+            Some("32-33".to_string())
+        );
+        // Unknown host set (old kernel, unreadable sysfs): unverifiable, so the
+        // pin is kept rather than dropped.
+        assert_eq!(
+            cpu_affinity_for_spec(Some("0-3"), None).unwrap(),
+            Some("0-3".to_string())
+        );
+    }
+
+    #[test]
+    fn cpu_affinity_for_spec_rejects_mask_outside_host_set() {
+        let err = cpu_affinity_for_spec(Some("16"), Some("0-15,32-47")).unwrap_err();
+        let message = err.to_string();
+        assert!(
+            message.contains("cpu_affinity_unavailable: "),
+            "{}",
+            message
+        );
+        assert!(!message.contains("invalid_cpu_affinity"), "{}", message);
+        assert!(message.contains("available: 0-15,32-47"), "{}", message);
+    }
+
+    #[test]
+    fn cpu_affinity_for_spec_rejects_malformed_mask() {
+        let err = cpu_affinity_for_spec(Some("3-1"), Some("0-3")).unwrap_err();
+        let message = err.to_string();
+        assert!(message.contains("invalid_cpu_affinity: "), "{}", message);
     }
 
     #[test]
@@ -2916,6 +2995,7 @@ mod tests {
             memory_reservation_mb: 0,
             swap_mb: 0,
             cpu_cores: 2,
+            cpu_affinity: None,
             io_weight: 500,
             data_dir: "/tmp",
             port: 25565,
@@ -2977,6 +3057,90 @@ mod tests {
         assert_eq!(
             spec.pointer("/linux/resources/blockIO/weight"),
             Some(&serde_json::json!(1000u64))
+        );
+    }
+
+    #[tokio::test]
+    async fn oci_spec_omits_cpu_cpus_without_affinity() {
+        // Unpinned server: no cpuset in the spec, so the container inherits the
+        // cgroup root's effective set exactly as it did before affinity existed.
+        let runtime = test_runtime();
+        let dir = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let bindings = HashMap::new();
+        let spec = runtime
+            .build_oci_spec(
+                &test_container_config(&env, &bindings),
+                dir.path(),
+                false,
+                &[],
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(spec.pointer("/linux/resources/cpu/cpus").is_none());
+        // The CFS bandwidth controls are unaffected by pinning.
+        assert!(spec.pointer("/linux/resources/cpu/quota").is_some());
+    }
+
+    #[tokio::test]
+    async fn oci_spec_pins_cpu_cpus_from_affinity() {
+        // build_oci_spec re-reads the node's effective set, so the mask has to
+        // come from it: a hard-coded id would fail on a node (or CI container)
+        // whose CPUs start above 0.
+        let Some(available) = helpers::effective_cpu_set() else {
+            return;
+        };
+        let first = *helpers::parse_cpu_list(&available)
+            .expect("effective set must parse")
+            .iter()
+            .next()
+            .expect("effective set cannot be empty");
+        let mask = first.to_string();
+        let runtime = test_runtime();
+        let dir = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let bindings = HashMap::new();
+        let mut cfg = test_container_config(&env, &bindings);
+        cfg.cpu_affinity = Some(mask.as_str());
+        let spec = runtime
+            .build_oci_spec(&cfg, dir.path(), false, &[], None, None)
+            .unwrap();
+        assert_eq!(
+            spec.pointer("/linux/resources/cpu/cpus"),
+            Some(&serde_json::json!(mask))
+        );
+        assert_eq!(
+            spec.pointer("/linux/resources/cpu/quota"),
+            Some(&serde_json::json!(200000i64))
+        );
+    }
+
+    #[tokio::test]
+    async fn oci_spec_rejects_unavailable_affinity() {
+        // A pin outside the node's set must fail the start, never widen to the
+        // whole machine (plan R4).
+        let Some(available) = helpers::effective_cpu_set() else {
+            return;
+        };
+        let cpus = helpers::parse_cpu_list(&available).expect("effective set must parse");
+        let Some(unavailable) = (0..=4095u16).find(|cpu| !cpus.contains(cpu)) else {
+            return; // every CPU id is on this host; nothing to test against
+        };
+        let mask = unavailable.to_string();
+        let runtime = test_runtime();
+        let dir = tempfile::tempdir().unwrap();
+        let env = HashMap::new();
+        let bindings = HashMap::new();
+        let mut cfg = test_container_config(&env, &bindings);
+        cfg.cpu_affinity = Some(mask.as_str());
+        let err = runtime
+            .build_oci_spec(&cfg, dir.path(), false, &[], None, None)
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("cpu_affinity_unavailable: "),
+            "{}",
+            err
         );
     }
 }

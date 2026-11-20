@@ -10,6 +10,9 @@ struct HostStats {
     disk_total_mb: u64,
     network_rx_bytes: u64,
     network_tx_bytes: u64,
+    /// Effective CPU set containers may use on this node, canonical form
+    /// (`"0-15"`). None when no source is readable.
+    cpu_set: Option<String>,
 }
 
 /// Reuse CPU baselines and interface storage. All proc/sysfs reads and statvfs
@@ -61,6 +64,9 @@ async fn collect_host_stats(data_dir: PathBuf) -> AgentResult<HostStats> {
             disk_total_mb,
             network_rx_bytes,
             network_tx_bytes,
+            // Read alongside the other host metrics, on the blocking pool: the
+            // panel needs the set to validate a CPU pin before it stores one.
+            cpu_set: crate::runtime_manager::helpers::effective_cpu_set(),
         })
     })
     .await;
@@ -149,6 +155,7 @@ impl WebSocketHandler {
             uptimeSeconds: get_uptime().await,
             networkRxBytes: stats.network_rx_bytes,
             networkTxBytes: stats.network_tx_bytes,
+            hostCpuSet: stats.cpu_set.as_deref(),
         };
         let health_text = serde_json::to_string(&health).unwrap_or_default();
 
@@ -285,6 +292,7 @@ impl WebSocketHandler {
                         None
                     }
                 }),
+                cpuCpus: inspect.as_ref().and_then(|i| i.cpu_cpus.clone()),
                 cpuCores: inspect.as_ref().and_then(|i| {
                     if i.cpu_quota > 0 && i.cpu_period > 0 {
                         Some((i.cpu_quota as u64) / (i.cpu_period as u64))

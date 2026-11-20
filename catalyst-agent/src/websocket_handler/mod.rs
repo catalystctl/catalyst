@@ -505,6 +505,11 @@ pub(crate) struct HealthReport<'a> {
     uptimeSeconds: u64,
     networkRxBytes: u64,
     networkTxBytes: u64,
+    /// Effective CPU set containers may use on this node (`"0-15"`,
+    /// `"0-15,32-47"`), for panel-side pin validation. Omitted when unknown —
+    /// older panels ignore the key, so this stays additive.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    hostCpuSet: Option<&'a str>,
 }
 
 #[derive(serde::Serialize)]
@@ -600,6 +605,9 @@ pub(crate) struct DiscoveredServer<'a> {
     memoryLimitMb: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cpuCores: Option<u64>,
+    /// CPU pin (cpuset) the container was created with, when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpuCpus: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     startupCommand: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -5370,5 +5378,43 @@ mod memory_parse_tests {
         };
         let text = serde_json::to_string(&none).unwrap();
         assert!(!text.contains("cpuThrottled"), "got {text}");
+    }
+
+    #[test]
+    fn health_report_wire_contract_host_cpu_set() {
+        use super::HealthReport;
+        // Wire contract: the optional `hostCpuSet` key carries the node's
+        // effective CPU set so the panel can validate a pin before storing it.
+        // It must be a JSON string when known and absent entirely when unknown,
+        // so an older panel (which ignores unknown keys) is unaffected.
+        let health = HealthReport {
+            ty: "health_report",
+            nodeId: "node-1",
+            timestamp: 1_700_000_000_000,
+            agentVersion: "1.0.0",
+            cpuPercent: 12.5,
+            memoryUsageMb: 512,
+            memoryTotalMb: 4096,
+            diskUsageMb: 1024,
+            diskTotalMb: 20480,
+            containerCount: 2,
+            uptimeSeconds: 3600,
+            networkRxBytes: 10,
+            networkTxBytes: 20,
+            hostCpuSet: Some("0-15,32-47"),
+        };
+        let value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&health).unwrap())
+                .expect("health report must serialise");
+        assert_eq!(value["type"], serde_json::json!("health_report"));
+        assert_eq!(value["hostCpuSet"], serde_json::json!("0-15,32-47"));
+
+        let unknown = HealthReport {
+            hostCpuSet: None,
+            ..health
+        };
+        let value: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&unknown).unwrap()).unwrap();
+        assert!(value.get("hostCpuSet").is_none(), "got {value}");
     }
 }

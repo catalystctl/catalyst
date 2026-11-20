@@ -1,6 +1,7 @@
 //! Low-level helper functions for containerd operations.
 
 use super::*;
+use std::collections::BTreeSet;
 
 /// Detect the actual cgroup interface once, without creating a scratch cgroup.
 /// ProtectControlGroups makes the agent's hierarchy read-only, and the v2 root
@@ -659,6 +660,157 @@ pub fn is_not_found(e: &tonic::Status) -> bool {
         || e.code() == tonic::Code::NotFound
 }
 
+/// Bounds for a CPU mask, shared by the parser and the formatter.
+///
+/// These are independent of `MAX_CPU_CORES` (128): that one bounds the quota
+/// math, this one bounds topology, and a 256-thread node legitimately has CPU
+/// ids above 128.
+const MAX_CPU_INDEX: u16 = 4095;
+const MAX_CPU_ENTRIES: usize = 4096;
+const MAX_CPU_LIST_LEN: usize = 512;
+
+/// Parse a Linux cpuset list (`"0-3,6,8-11"`) into the CPU ids it names.
+///
+/// Strict on purpose: only the spelling `format_cpu_list` emits is accepted, so
+/// a stored mask round-trips byte-for-byte and a typo (`"0-"`, `"3-1"`, `"01"`)
+/// fails here instead of reaching a cgroup write. Surrounding and interior
+/// spaces are tolerated because forms and hand-edited values carry them.
+pub fn parse_cpu_list(mask: &str) -> Option<BTreeSet<u16>> {
+    if mask.len() > MAX_CPU_LIST_LEN {
+        return None;
+    }
+    let mut cpus = BTreeSet::new();
+    let mut entries = 0usize;
+    for item in mask.split(',') {
+        let item = item.trim();
+        if item.is_empty() {
+            return None;
+        }
+        let (low, high) = match item.split_once('-') {
+            Some((low, high)) => (low, high),
+            None => (item, item),
+        };
+        let low = parse_cpu_index(low)?;
+        let high = parse_cpu_index(high)?;
+        if high < low {
+            return None;
+        }
+        for cpu in low..=high {
+            cpus.insert(cpu);
+            entries += 1;
+            if entries > MAX_CPU_ENTRIES {
+                return None;
+            }
+        }
+    }
+    Some(cpus)
+}
+
+/// One decimal CPU id from a cpuset item: digits only, no sign, no leading
+/// zero (so `"01"` and `"007"` are rejected), within the topology bound.
+fn parse_cpu_index(value: &str) -> Option<u16> {
+    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if value.len() > 1 && value.starts_with('0') {
+        return None;
+    }
+    let index: u32 = value.parse().ok()?;
+    u16::try_from(index).ok().filter(|i| *i <= MAX_CPU_INDEX)
+}
+
+/// Render a CPU set in canonical cpuset form: ascending, contiguous runs
+/// merged, no whitespace, a one-element run emitted as a bare id
+/// (`{0,1,2,3,6}` -> `"0-3,6"`).
+pub fn format_cpu_list(cpus: &BTreeSet<u16>) -> String {
+    let mut out = String::new();
+    let mut iter = cpus.iter().copied();
+    let Some(mut start) = iter.next() else {
+        return out;
+    };
+    let mut end = start;
+    for cpu in iter {
+        if cpu == end.saturating_add(1) {
+            end = cpu;
+            continue;
+        }
+        push_cpu_run(&mut out, start, end);
+        start = cpu;
+        end = cpu;
+    }
+    push_cpu_run(&mut out, start, end);
+    out
+}
+
+fn push_cpu_run(out: &mut String, start: u16, end: u16) {
+    if !out.is_empty() {
+        out.push(',');
+    }
+    if start == end {
+        out.push_str(&start.to_string());
+    } else {
+        out.push_str(&format!("{}-{}", start, end));
+    }
+}
+
+/// The CPU set game containers may use on this node, in canonical form.
+///
+/// Containers are created with an absolute `linux.cgroupsPath`
+/// (`"/catalyst/<id>"`, container_ops.rs:2500, image_and_spec.rs:1377), i.e. a
+/// direct child of the cgroup mount root — so the root's effective CPU set is
+/// exactly the set containers may use. On a nested LXC or a host with
+/// `AllowedCPUs` that root is narrower than the machine, and this read reports
+/// the narrowing rather than the CPU count.
+///
+/// Sources in order: cgroup v2, cgroup v1, the raw online mask (last resort on
+/// a host exposing neither cpuset file). None when nothing is readable or the
+/// content is empty/invalid — the caller then cannot verify a pin.
+pub fn effective_cpu_set() -> Option<String> {
+    const SOURCES: &[&str] = &[
+        "/sys/fs/cgroup/cpuset.cpus.effective",
+        "/sys/fs/cgroup/cpuset/cpuset.effective_cpus",
+        "/sys/devices/system/cpu/online",
+    ];
+    SOURCES.iter().find_map(|path| {
+        let raw = fs::read_to_string(path).ok()?;
+        parse_cpu_list(raw.trim()).map(|cpus| format_cpu_list(&cpus))
+    })
+}
+
+/// Reject a pin this node cannot honour: the mask must be a subset of the
+/// effective CPU set. `None` for the available set means "cannot verify" (old
+/// kernel, unreadable sysfs), not "invalid", so the start proceeds and runc's
+/// own cgroup write is the final word.
+///
+/// A mask is never dropped or widened (plan R4): an impossible pin fails the
+/// start loudly. The `cpu_affinity_unavailable:` prefix is matched by the panel
+/// (`/cpu_affinity_unavailable:/i`) to answer with its coded error, so it is
+/// part of the wire contract.
+pub fn cpu_mask_is_available(mask: &str, available: Option<&str>) -> Result<(), String> {
+    let Some(available) = available else {
+        return Ok(());
+    };
+    // An unparseable available set gives us nothing to check against: treat it
+    // like an unknown set rather than failing every start on that node.
+    let Some(available_cpus) = parse_cpu_list(available) else {
+        return Ok(());
+    };
+    let Some(mask_cpus) = parse_cpu_list(mask) else {
+        return Err(format!(
+            "invalid_cpu_affinity: '{}' is not a valid CPU list",
+            mask
+        ));
+    };
+    if mask_cpus.is_subset(&available_cpus) {
+        return Ok(());
+    }
+    Err(format!(
+        "cpu_affinity_unavailable: CPUs {} are not available on this node (available: {})",
+        format_cpu_list(&mask_cpus),
+        format_cpu_list(&available_cpus)
+    ))
+}
+
 pub async fn find_container_cgroup(container_id: &str) -> Option<String> {
     find_cgroup_recursive("/sys/fs/cgroup", container_id).await
 }
@@ -910,5 +1062,133 @@ mod cni_plugin_path_tests {
             reader.read(&mut byte).unwrap_err().kind(),
             std::io::ErrorKind::WouldBlock
         );
+    }
+}
+
+#[cfg(test)]
+mod cpu_affinity_tests {
+    use super::*;
+
+    fn set(ids: &[u16]) -> BTreeSet<u16> {
+        ids.iter().copied().collect()
+    }
+
+    #[test]
+    fn parses_cpuset_lists() {
+        let cases: &[(&str, &[u16])] = &[
+            ("0", &[0]),
+            ("0-3", &[0, 1, 2, 3]),
+            ("0-3,6", &[0, 1, 2, 3, 6]),
+            // Spaces around items are tolerated (forms, hand-edited values).
+            ("0-3, 6", &[0, 1, 2, 3, 6]),
+            (" 2,0-1 ", &[0, 1, 2]),
+            (
+                "0-15,32-47",
+                &[
+                    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 32, 33, 34, 35, 36, 37,
+                    38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+                ],
+            ),
+            ("4095", &[4095]),
+        ];
+        for (mask, expected) in cases {
+            assert_eq!(
+                parse_cpu_list(mask).as_ref(),
+                Some(&set(expected)),
+                "mask {:?}",
+                mask
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_malformed_cpuset_lists() {
+        for mask in [
+            "", " ", "0-", "-0", "3-1", "01", "0,,1", "0-1,", ",0", "a", "0-a", "0 - 1", "0-4096",
+            "99999", "+1", "--1", "0-1-2", "1e3",
+        ] {
+            assert!(
+                parse_cpu_list(mask).is_none(),
+                "mask {:?} must be rejected",
+                mask
+            );
+        }
+        // Length and entry bounds (a sub-512-byte mask is accepted, an
+        // over-512-byte one is not).
+        assert!(parse_cpu_list(&vec!["1"; 100].join(",")).is_some());
+        assert!(parse_cpu_list(&vec!["1"; 300].join(",")).is_none());
+        // 4096 ids is the cap; one more entry (a duplicate id) is not.
+        assert!(parse_cpu_list("0-4095").is_some());
+        assert!(parse_cpu_list("0-4095,0").is_none());
+    }
+
+    #[test]
+    fn formats_canonical_cpuset_lists() {
+        let cases: &[(&[u16], &str)] = &[
+            (&[0, 1, 2, 3, 6], "0-3,6"),
+            (&[0, 1, 2], "0-2"),
+            (&[5], "5"),
+            (&[0, 2, 4], "0,2,4"),
+            (&[0, 1, 2, 3], "0-3"),
+            (&[0, 15, 16, 47], "0,15-16,47"),
+            (&[], ""),
+        ];
+        for (cpus, expected) in cases {
+            assert_eq!(&format_cpu_list(&set(cpus)), expected, "cpus {:?}", cpus);
+        }
+    }
+
+    #[test]
+    fn normalisation_is_idempotent() {
+        for mask in ["2,0-1", "0-3, 6", "0-15,32-47", "3,1,2"] {
+            let canonical = format_cpu_list(&parse_cpu_list(mask).expect(mask));
+            assert_eq!(
+                format_cpu_list(&parse_cpu_list(&canonical).unwrap()),
+                canonical
+            );
+        }
+        assert_eq!(format_cpu_list(&parse_cpu_list("2,0-1").unwrap()), "0-2");
+        assert_eq!(format_cpu_list(&parse_cpu_list("0-3, 6").unwrap()), "0-3,6");
+    }
+
+    #[test]
+    fn effective_cpu_set_is_canonical_when_present() {
+        // Host-dependent by nature: when a source is readable the value must be
+        // canonical, and re-parsing it must yield the same string.
+        if let Some(available) = effective_cpu_set() {
+            assert!(!available.is_empty());
+            let parsed = parse_cpu_list(&available).expect("effective set must parse");
+            assert_eq!(format_cpu_list(&parsed), available);
+        }
+    }
+
+    #[test]
+    fn mask_availability_tables() {
+        // Unknown node set: cannot verify, so the pin is accepted.
+        assert_eq!(cpu_mask_is_available("0-3", None), Ok(()));
+        // Subset, exact match, and the sparse-set case.
+        assert_eq!(cpu_mask_is_available("0-3", Some("0-15")), Ok(()));
+        assert_eq!(cpu_mask_is_available("0-15", Some("0-15")), Ok(()));
+        assert_eq!(cpu_mask_is_available("32-33", Some("0-15,32-47")), Ok(()));
+        // Not a subset: loud failure naming both sets.
+        assert_eq!(
+            cpu_mask_is_available("16", Some("0-15,32-47")),
+            Err(
+                "cpu_affinity_unavailable: CPUs 16 are not available on this node (available: 0-15,32-47)"
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            cpu_mask_is_available("0-16", Some("0-15")),
+            Err(
+                "cpu_affinity_unavailable: CPUs 0-16 are not available on this node (available: 0-15)"
+                    .to_string()
+            )
+        );
+        // An unreadable available set degrades to "unknown", never to a failure.
+        assert_eq!(cpu_mask_is_available("0-3", Some("nonsense")), Ok(()));
+        // A malformed mask is still an error, with the invalid-request prefix.
+        let err = cpu_mask_is_available("3-1", Some("0-15")).unwrap_err();
+        assert!(err.starts_with("invalid_cpu_affinity: "), "{}", err);
     }
 }

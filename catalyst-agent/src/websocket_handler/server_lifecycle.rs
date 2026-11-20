@@ -74,6 +74,40 @@ const INSTALLER_PENDING_PREFIX: &str = "pending:";
 const INSTALLER_CONTAINER_PREFIX: &str = "container:";
 const INSTALL_CANCELLED: &str = "installation cancelled";
 
+/// Parse the optional `cpuAffinity` key of a `start_server`/`restart_server`
+/// message into a canonical CPU mask.
+///
+/// Absent, `null` and `""` all mean "no pinning" (a cleared field round-trips
+/// as one of the three). Anything else must be a valid cpuset list: a malformed
+/// mask fails the start with `invalid_cpu_affinity:` instead of being ignored,
+/// because silently starting unpinned would move a server the operator placed.
+/// Parsed here and carried on `ContainerConfig`, so every start path — start,
+/// restart, and the crash-replay of the stored message — gets the same mask.
+fn parse_cpu_affinity(msg: &Value) -> AgentResult<Option<String>> {
+    let Some(value) = msg.get("cpuAffinity") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let Some(raw) = value.as_str() else {
+        return Err(AgentError::InvalidRequest(
+            "invalid_cpu_affinity: cpuAffinity must be a string or null".to_string(),
+        ));
+    };
+    if raw.trim().is_empty() {
+        return Ok(None);
+    }
+    crate::runtime_manager::helpers::parse_cpu_list(raw)
+        .map(|cpus| Some(crate::runtime_manager::helpers::format_cpu_list(&cpus)))
+        .ok_or_else(|| {
+            AgentError::InvalidRequest(format!(
+                "invalid_cpu_affinity: '{}' is not a valid CPU list",
+                raw
+            ))
+        })
+}
+
 /// A per-attempt value in `active_installs`. Pending registrations close the
 /// pre-spawn cancellation window; container registrations carry both ownership
 /// and the exact ID that cancellation is allowed to remove.
@@ -1586,6 +1620,10 @@ impl WebSocketHandler {
                 .unwrap_or(0)
                 .min(crate::runtime_manager::MAX_MEMORY_MB);
             let io_weight = msg["ioWeight"].as_u64().unwrap_or(500).clamp(10, 1000);
+            // Optional CPU pin: absent/null/"" means no pinning. Kept as the
+            // canonical mask so the OCI spec, the log line and the message
+            // stored for crash-replay all agree on one spelling.
+            let cpu_affinity = parse_cpu_affinity(msg)?;
             let disk_mb = msg["allocatedDiskMb"].as_u64().unwrap_or(10240).clamp(1, 1_048_576);
 
             // Validated 1..=65535 before the narrowing cast: a bare `as u16`
@@ -1967,6 +2005,7 @@ impl WebSocketHandler {
                     },
                     swap_mb,
                     cpu_cores,
+                    cpu_affinity: cpu_affinity.as_deref(),
                     io_weight,
                     data_dir: &host_server_dir,
                     port: primary_port,
@@ -2450,6 +2489,56 @@ mod server_lifecycle_security_tests {
         };
         clamp_auto_restart_config(&mut config);
         assert_eq!(config.max_restarts, 0);
+    }
+
+    #[test]
+    fn cpu_affinity_key_is_optional_and_canonical() {
+        // Absent, null and "" all mean "no pinning" — a cleared field may
+        // round-trip as any of the three.
+        assert_eq!(parse_cpu_affinity(&json!({})).unwrap(), None);
+        assert_eq!(
+            parse_cpu_affinity(&json!({"cpuAffinity": null})).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_cpu_affinity(&json!({"cpuAffinity": ""})).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_cpu_affinity(&json!({"cpuAffinity": "   "})).unwrap(),
+            None
+        );
+        // A mask is normalised once, here, so every later step sees one spelling.
+        assert_eq!(
+            parse_cpu_affinity(&json!({"cpuAffinity": "2,0-1"})).unwrap(),
+            Some("0-2".to_string())
+        );
+        assert_eq!(
+            parse_cpu_affinity(&json!({"cpuAffinity": "0-3, 6"})).unwrap(),
+            Some("0-3,6".to_string())
+        );
+    }
+
+    #[test]
+    fn malformed_cpu_affinity_fails_the_start_with_a_coded_prefix() {
+        // Never start unpinned because a mask was unreadable: the panel matches
+        // the `invalid_cpu_affinity:` prefix to return a coded 400.
+        for bad in [
+            json!("3-1"),
+            json!("0-"),
+            json!("01"),
+            json!("0-4096"),
+            json!(4),
+        ] {
+            let error = parse_cpu_affinity(&json!({ "cpuAffinity": bad })).unwrap_err();
+            let message = error.to_string();
+            assert!(
+                message.contains("invalid_cpu_affinity: "),
+                "{:?} -> {}",
+                bad,
+                message
+            );
+        }
     }
 
     #[test]

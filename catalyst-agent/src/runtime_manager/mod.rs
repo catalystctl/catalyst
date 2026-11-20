@@ -240,6 +240,10 @@ pub struct ContainerConfig<'a> {
     pub memory_reservation_mb: u64,
     pub swap_mb: u64,
     pub cpu_cores: u64,
+    /// Canonical CPU set the container is pinned to (`"0-3,6"`), written to
+    /// OCI `linux.resources.cpu.cpus` and enforced by the cpuset controller.
+    /// None = no pinning. Additive: an older panel never sends it.
+    pub cpu_affinity: Option<&'a str>,
     pub io_weight: u64,
     pub data_dir: &'a str,
     pub port: u16,
@@ -273,6 +277,9 @@ pub struct ContainerInspectInfo {
     pub memory_limit_bytes: i64,
     pub cpu_quota: i64,
     pub cpu_period: i64,
+    /// CPU pin (cpuset) the container was created with, canonical form.
+    /// Read back from the spec so an imported container keeps its pin.
+    pub cpu_cpus: Option<String>,
     pub startup_command: String,    // process.args joined as string
     pub env_var_names: Vec<String>, // env var NAMES only (not values, for security)
 }

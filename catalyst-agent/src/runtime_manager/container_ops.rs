@@ -1690,6 +1690,19 @@ impl ContainerdRuntime {
                         info.cpu_period = period;
                     }
 
+                    // CPU pinning (cpuset), read back so a container imported
+                    // from the node keeps its pin on the next start.
+                    if let Some(cpus) = spec_value
+                        .get("linux")
+                        .and_then(|l| l.get("resources"))
+                        .and_then(|r| r.get("cpu"))
+                        .and_then(|c| c.get("cpus"))
+                        .and_then(|c| c.as_str())
+                    {
+                        info.cpu_cpus = super::helpers::parse_cpu_list(cpus)
+                            .map(|set| super::helpers::format_cpu_list(&set));
+                    }
+
                     // Startup command (process.args)
                     if let Some(args) = spec_value
                         .get("process")
