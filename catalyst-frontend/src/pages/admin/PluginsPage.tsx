@@ -252,7 +252,7 @@ function PluginRow({
 
 // ── Plugin Settings Modal ────────────────────────────────────────────────────
 
-function PluginSettingsModal({
+export function PluginSettingsModal({
   pluginName,
   open,
   onOpenChange,
@@ -262,6 +262,8 @@ function PluginSettingsModal({
   onOpenChange: (open: boolean) => void;
 }) {
  const { t } = useTranslation('admin-system');
+ // Holds only the fields the admin changed. Untouched fields stay out, so Save
+ // never re-sends them and never overwrites a stored value with the default.
  const [localConfig, setLocalConfig] = useState<PluginConfig | null>(null);
 
   const { data: pluginDetails, isLoading } = useQuery({
@@ -274,10 +276,13 @@ function PluginSettingsModal({
 
   const manifestSchema = pluginDetails?.configSchema ?? {};
   const runtimeValues = pluginDetails?.config ?? {};
-  const config = localConfig ?? (Object.keys(manifestSchema).length > 0 ? manifestSchema : runtimeValues);
+  const config = {
+    ...(Object.keys(manifestSchema).length > 0 ? manifestSchema : runtimeValues),
+    ...(localConfig ?? {}),
+  };
 
   const handleConfigChange = (key: string, value: any) => {
-    setLocalConfig((prev) => ({ ...(prev ?? config), [key]: value }));
+    setLocalConfig((prev) => ({ ...(prev ?? {}), [key]: value }));
   };
 
   const [prevOpen, setPrevOpen] = useState(open);
@@ -333,7 +338,9 @@ function PluginSettingsModal({
 
   const buildSaveConfig = (): PluginConfig => {
     const result: PluginConfig = {};
-    for (const [key, value] of Object.entries(config)) {
+    // Send only the edited fields. Untouched keys keep their stored values, and
+    // secrets are not re-sent on every Save.
+    for (const [key, value] of Object.entries(localConfig ?? {})) {
       if (isConfigSchema(value)) {
         result[key] = value.default;
       } else {
@@ -371,9 +378,11 @@ function PluginSettingsModal({
                 const label = schema ? (schema.label || key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())) : key;
                 const selectOptions = normalizeSelectOptions(schema?.options);
 
+                const isEdited = localConfig !== null && Object.prototype.hasOwnProperty.call(localConfig, key);
                 const runtimeOverride = runtimeValues[key];
                 const isRuntimeObject = runtimeOverride !== undefined && !isConfigSchema(runtimeOverride);
-                const effectiveValue = isRuntimeObject ? runtimeOverride : currentValue;
+                // Show the stored value until the admin edits the field, then the edit.
+                const effectiveValue = isRuntimeObject && !isEdited ? runtimeOverride : currentValue;
 
                 return (
                   <div key={key} className="space-y-1.5">
