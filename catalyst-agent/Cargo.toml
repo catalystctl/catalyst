@@ -28,7 +28,7 @@ aes-gcm = "0.11"
 rand = "0.10"
 base64 = "0.23"
 sysinfo = "0.40"
-nix = { version = "0.31", features = ["fs", "process", "signal"] }
+nix = { version = "0.32", features = ["fs", "process", "signal"] }
 num_cpus = "1"
 libc = "0.2"
 zeroize = { version = "1", features = ["derive"] }
