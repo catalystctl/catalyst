@@ -49,4 +49,11 @@ export const tasksApi = {
     );
     return data;
   },
+  /** Runs a scheduled task once, now (backend: POST .../tasks/:taskId/execute). */
+  execute: async (serverId: string, taskId: string) => {
+    const data = await apiClient.post<{ success?: boolean; message?: string }>(
+      `/api/servers/${serverId}/tasks/${taskId}/execute`,
+    );
+    return data;
+  },
 };

@@ -34,6 +34,9 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
   const mutation = useMutation({
     mutationFn: () => serversApi.delete(serverId),
     onMutate: async () => {
+      // The freed allocation and the released memory/CPU live on the node the
+      // server is being deleted from; its pool page has no poll (audit C6).
+      const nodeId = queryClient.getQueryData<{ nodeId?: string }>(qk.server(serverId))?.nodeId;
       await queryClient.cancelQueries({
         predicate: (q: Query<unknown, unknown>) => isServerListQueryKey(q.queryKey),
       });
@@ -48,7 +51,7 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
             : (servers as unknown),
       );
       queryClient.removeQueries({ queryKey: qk.server(serverId) });
-      return { prev };
+      return { prev, nodeId };
     },
     onSuccess: () => {
       notifySuccess(t('deleteServer.deleted'));
@@ -63,9 +66,15 @@ function DeleteServerDialog({ serverId, serverName, disabled = false, open: cont
       }
       notifyError(err);
     },
-    onSettled: () => {
+    onSettled: (_data, _error, _vars, context) => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
       queryClient.invalidateQueries({ queryKey: qk.adminServers() });
+      queryClient.invalidateQueries({ queryKey: qk.dashboardStats() });
+      queryClient.invalidateQueries({ queryKey: qk.adminStats() });
+      const freedNodeId = (context as { nodeId?: string } | undefined)?.nodeId;
+      if (freedNodeId) {
+        queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(freedNodeId) });
+      }
     },
   });
 

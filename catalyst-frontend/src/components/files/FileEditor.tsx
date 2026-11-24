@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import ConfirmDialog from '../shared/ConfirmDialog';
 
 const Editor = lazy(() => import('@monaco-editor/react'));
-import { Download, RotateCcw, Save, X, FileCode, Circle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, RotateCcw, Save, X, FileCode, Circle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useThemeStore } from '../../stores/themeStore';
 import { getFileTypeInfo } from './fileTypes';
@@ -26,6 +26,11 @@ type Props = {
  onDownload?: () => void;
  onReset: () => void;
  onClose: () => void;
+ /** Adjacent file in the current listing, for side-by-side comparison. */
+ previousName?: string;
+ nextName?: string;
+ onPrevious?: () => void;
+ onNext?: () => void;
 };
 
 const resolveLanguage = (fileName: string) => {
@@ -87,6 +92,10 @@ function FileEditor({
  onDownload,
  onReset,
  onClose,
+ previousName,
+ nextName,
+ onPrevious,
+ onNext,
 }: Props) {
  const { t } = useTranslation('server-tabs');
  const language = useMemo(() => (file ? resolveLanguage(file.name) : 'plaintext'), [file]);
@@ -120,23 +129,24 @@ function FileEditor({
  return () => window.removeEventListener('beforeunload', handleBeforeUnload);
  }, [isDirty]);
 
- // Handle close with unsaved changes confirmation
- const handleClose = () => {
+ // Close and file-to-file navigation share one guard: a dirty buffer must be
+ // discarded (or the user must cancel) before it is swapped underneath them.
+ const pendingNavigation = useRef<(() => void) | null>(null);
+ const navigateTo = (target: () => void) => {
  if (isDirty) {
+ pendingNavigation.current = target;
  setConfirmCloseOpen(true);
  return;
  }
- onClose();
+ target();
  };
 
- const confirmClose = () => {
- setConfirmCloseOpen(false);
- onClose();
- };
+ // Handle close with unsaved changes confirmation
+ const handleClose = () => navigateTo(onClose);
 
  if (!file) return null;
 
- const closeConfirmDialog = (
+const closeConfirmDialog = (
  <ConfirmDialog
  open={confirmCloseOpen}
  title={t('files.editor.unsavedTitle')}
@@ -144,8 +154,18 @@ function FileEditor({
  confirmText={t('files.editor.discard')}
  cancelText={t('files.editor.keepEditing')}
  variant="warning"
- onConfirm={confirmClose}
- onCancel={() => setConfirmCloseOpen(false)}
+ onConfirm={() => {
+ // A pending Prev/Next must not also close the editor.
+ const target = pendingNavigation.current;
+ pendingNavigation.current = null;
+ setConfirmCloseOpen(false);
+ if (target) target();
+ else onClose();
+ }}
+ onCancel={() => {
+ pendingNavigation.current = null;
+ setConfirmCloseOpen(false);
+ }}
  />
  );
 
@@ -189,6 +209,30 @@ function FileEditor({
  </p>
  </div>
  <div className="flex items-center gap-1 sm:gap-2">
+ {/* File-to-file navigation, so two configs can be compared without
+     closing (and re-finding) the first one. */}
+ <div className="flex items-center rounded-sm border border-border/60">
+ <button
+ type="button"
+ className="flex h-7 w-7 items-center justify-center rounded-l-sm text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40"
+ onClick={() => navigateTo(onPrevious!)}
+ disabled={!onPrevious || isLoading}
+ aria-label={t('files.editor.previousFile')}
+ title={previousName ? t('files.editor.previousFileNamed', { name: previousName }) : t('files.editor.previousFile')}
+ >
+ <ChevronLeft className="h-4 w-4" />
+ </button>
+ <button
+ type="button"
+ className="flex h-7 w-7 items-center justify-center rounded-r-sm border-l border-border/60 text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-40"
+ onClick={() => navigateTo(onNext!)}
+ disabled={!onNext || isLoading}
+ aria-label={t('files.editor.nextFile')}
+ title={nextName ? t('files.editor.nextFileNamed', { name: nextName }) : t('files.editor.nextFile')}
+ >
+ <ChevronRight className="h-4 w-4" />
+ </button>
+ </div>
  <button
  type="button"
  className={btnSecondary}

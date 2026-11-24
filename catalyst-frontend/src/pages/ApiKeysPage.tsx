@@ -6,6 +6,7 @@ import {
   Trash2,
   Pencil,
   Copy,
+  Check,
   Server,
   Activity,
   Clock,
@@ -156,7 +157,19 @@ function ApiKeyRow({
   const expired = isExpired(apiKey.expiresAt);
   const nodeId = getNodeId(apiKey);
   const [permsExpanded, setPermsExpanded] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const nodeName = nodeId ? getNodeName(nodeId) : undefined;
+
+  const copyKeyId = async () => {
+    try {
+      await navigator.clipboard.writeText(apiKey.id);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch {
+      // Clipboard denied (insecure context) — the id stays visible in the
+      // detail view, so no failure toast is raised here.
+    }
+  };
 
   return (
     <div
@@ -202,16 +215,20 @@ function ApiKeyRow({
 
         {apiKey.prefix && apiKey.start && (
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
+            {/* The secret is only ever shown once, at creation. The masked
+                prefix is display-only, so the copy button hands over the key
+                id instead — that is what support logs ask for. */}
             <code className="min-w-0 truncate font-mono text-micro tabular-nums text-muted-foreground">
               {apiKey.start}{'*'.repeat(16)}
             </code>
             <button
-              onClick={() => navigator.clipboard.writeText(apiKey.start || '')}
-              title={t('common:actions.copy')}
-              aria-label={t('common:actions.copy')}
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+              type="button"
+              onClick={() => copyKeyId()}
+              title={t('apiKeys.row.copyId')}
+              aria-label={t('apiKeys.row.copyId')}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
             >
-              <Copy className="h-3 w-3" />
+              {copiedId ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             </button>
           </div>
         )}

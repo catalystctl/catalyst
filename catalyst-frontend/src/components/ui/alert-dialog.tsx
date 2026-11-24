@@ -111,10 +111,23 @@ const AlertDialogHeader = ({
 };
 AlertDialogHeader.displayName = 'AlertDialogHeader';
 
+/**
+ * Scrollable content region between header and footer.
+ *
+ * `AlertDialogContent` is capped at `max-h-[92dvh]` with `overflow-hidden`, so
+ * any body that is taller than the remaining space was simply clipped with no
+ * way to reach it (audit: EnvRestartNotice's key list). Mirror `DialogBody`:
+ * the header and footer stay fixed and only this region scrolls.
+ */
+const AlertDialogBody = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn('min-h-0 flex-1 overflow-y-auto px-5 pb-4', className)} {...props} />
+);
+AlertDialogBody.displayName = 'AlertDialogBody';
+
 const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'flex flex-col gap-2 px-5 py-4 sm:flex-row sm:justify-end',
+      'flex shrink-0 flex-col gap-2 px-5 py-4 sm:flex-row sm:justify-end',
       className,
     )}
     {...props}
@@ -172,6 +185,7 @@ export {
   AlertDialogOverlay,
   AlertDialogTrigger,
   AlertDialogContent,
+  AlertDialogBody,
   AlertDialogHeader,
   AlertDialogFooter,
   AlertDialogTitle,

@@ -430,6 +430,8 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
   onSettled: () => {
    queryClient.invalidateQueries({ queryKey: qk.templates() });
    queryClient.invalidateQueries({ queryKey: qk.template(template.id) });
+   // A template can move between nests, so nest grouping/counts go stale too.
+   queryClient.invalidateQueries({ queryKey: qk.nests() });
   },
  });
 
@@ -1126,7 +1128,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
          </SummaryRow>
 
          <SummaryRow label={t('details.runtime')}>
-          <span className="truncate text-micro text-foreground">
+          <span
+           className="truncate text-micro text-foreground"
+           title={image.trim() || undefined}
+          >
            {image.trim() || '—'}
           </span>
          </SummaryRow>
@@ -1144,7 +1149,10 @@ function TemplateEditModal({ template, open: controlledOpen, onOpenChange, creat
          </SummaryRow>
 
          <SummaryRow label={t('details.ports')}>
-          <span className="truncate text-micro text-foreground">
+          <span
+           className="truncate text-micro text-foreground"
+           title={parsedPorts.length ? parsedPorts.join(', ') : undefined}
+          >
            {parsedPorts.length ? parsedPorts.join(', ') : '—'}
           </span>
          </SummaryRow>

@@ -1,9 +1,10 @@
-import { useState, useMemo, useCallback, useId } from 'react';
+import { useState, useMemo, useCallback, useId, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import LastUpdated from '@/components/shared/LastUpdated';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 import { queryClient } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { useThemeSettings, useOidcConfig } from '../../hooks/useAdmin';
@@ -61,6 +62,51 @@ const DEFAULTS = {
 } as const;
 
 type TabId = 'presets' | 'brand' | 'palette' | 'colors' | 'surfaces' | 'layout' | 'manage' | 'advanced';
+
+/**
+ * Stable section anchors for deep links (`/admin/theme-settings#<id>`).
+ *
+ * These ids are a cross-page contract — `SearchPalette` links to them and the
+ * docs reference them — so they must not be renamed or reordered casually.
+ */
+const THEME_SECTION_IDS = {
+  branding: 'branding',
+  paletteGenerator: 'palette-generator',
+  brandColors: 'brand-colors',
+  semanticColors: 'semantic-colors',
+  darkSurfaces: 'dark-surfaces',
+  lightSurfaces: 'light-surfaces',
+  themeMode: 'theme-mode',
+  layoutRadius: 'layout-radius',
+  customCss: 'custom-css',
+  sso: 'sso',
+} as const;
+
+type ThemeSectionId = (typeof THEME_SECTION_IDS)[keyof typeof THEME_SECTION_IDS];
+
+/** Which tab owns each anchored section — a hash has to open its tab first. */
+const SECTION_TAB: Record<ThemeSectionId, TabId> = {
+  [THEME_SECTION_IDS.branding]: 'brand',
+  [THEME_SECTION_IDS.themeMode]: 'brand',
+  [THEME_SECTION_IDS.paletteGenerator]: 'palette',
+  [THEME_SECTION_IDS.brandColors]: 'colors',
+  [THEME_SECTION_IDS.semanticColors]: 'colors',
+  [THEME_SECTION_IDS.darkSurfaces]: 'surfaces',
+  [THEME_SECTION_IDS.lightSurfaces]: 'surfaces',
+  [THEME_SECTION_IDS.layoutRadius]: 'layout',
+  [THEME_SECTION_IDS.customCss]: 'advanced',
+  [THEME_SECTION_IDS.sso]: 'advanced',
+};
+
+const isSectionId = (value: string): value is ThemeSectionId =>
+  Object.prototype.hasOwnProperty.call(SECTION_TAB, value);
+
+/** The section named by `location.hash`, without the `#`. */
+const hashSection = (): ThemeSectionId | null => {
+  if (typeof window === 'undefined') return null;
+  const id = window.location.hash.replace(/^#/, '');
+  return id && isSectionId(id) ? id : null;
+};
 
 interface Tab {
  id: TabId;
@@ -505,6 +551,17 @@ function ThemeSettingsPage() {
  // ── Tab state ──
  const [activeTab, setActiveTab] = useState<TabId>('presets');
 
+ // ── Unsaved-changes guard ──
+ // Every colour edit also pushes a live preview into the DOM, but the form
+ // values themselves only live in component state until Save. Leaving the page
+ // (or resetting everything) therefore has to be confirmed, or the admin walks
+ // away believing the preview they saw was saved.
+ const [pendingReset, setPendingReset] = useState(false);
+ const [pendingHref, setPendingHref] = useState<string | null>(null);
+ // Set once the admin has confirmed a discard, so the leaving navigation is not
+ // stopped a second time by the browser's own beforeunload prompt.
+ const allowLeaveRef = useRef(false);
+
  // ── Branding ──
  const [panelName, setPanelName] = useState('Catalyst');
  const [logoUrl, setLogoUrl] = useState('');
@@ -657,6 +714,128 @@ function ThemeSettingsPage() {
  }, [themeColors.darkBackground, themeColors.darkForeground, themeColors.lightBackground, themeColors.lightForeground]);
 
  const hasPersonalOverride = Boolean(personalColors) || (themePreference && themePreference !== 'panel');
+
+ // ── Dirty tracking ──
+ // `dirty` is "the form differs from what the server last returned", which is
+ // exactly what Save would flush. `seedColor` is excluded on purpose: it only
+ // drives the palette generator.
+ const savedForm = useMemo(() => ({
+ name: settings?.panelName || 'Catalyst',
+ logo: settings?.logoUrl || '',
+ favicon: settings?.faviconUrl || '',
+ defaultTheme: settings?.defaultTheme || 'dark',
+ enabledThemes: settings?.enabledThemes || ['light', 'dark'],
+ cpuFormat: settings?.cpuDisplayFormat || DEFAULT_CPU_DISPLAY_FORMAT,
+ primary: settings?.primaryColor || DEFAULTS.primaryColor,
+ secondary: settings?.secondaryColor || DEFAULTS.secondaryColor,
+ accent: settings?.accentColor || DEFAULTS.accentColor,
+ css: settings?.customCss || '',
+ colors: (settings?.metadata as any)?.themeColors
+ ? { ...DEFAULTS.themeColors, ...((settings?.metadata as any)?.themeColors as ThemeColors) }
+ : { ...DEFAULTS.themeColors },
+ }), [settings]);
+
+ const dirty = useMemo(() => {
+ if (!settings) return false;
+ if (panelName !== savedForm.name) return true;
+ if (logoUrl !== savedForm.logo || faviconUrl !== savedForm.favicon) return true;
+ if (defaultTheme !== savedForm.defaultTheme) return true;
+ if (cpuDisplayFormat !== savedForm.cpuFormat) return true;
+ if (primaryColor !== savedForm.primary || secondaryColor !== savedForm.secondary) return true;
+ if (accentColor !== savedForm.accent) return true;
+ if (customCss !== savedForm.css) return true;
+ if (enabledThemes.length !== savedForm.enabledThemes.length) return true;
+ if (enabledThemes.some((mode) => !savedForm.enabledThemes.includes(mode))) return true;
+ return (Object.keys(savedForm.colors) as (keyof ThemeColors)[]).some(
+ (key) => themeColors[key] !== savedForm.colors[key],
+ );
+ }, [
+ settings, savedForm, panelName, logoUrl, faviconUrl, defaultTheme, cpuDisplayFormat,
+ primaryColor, secondaryColor, accentColor, customCss, enabledThemes, themeColors,
+ ]);
+
+ // The URL hash is a cross-page deep link (`/admin/theme-settings#custom-css`).
+ // A hash names a section, and a section lives on exactly one tab, so the tab
+ // has to follow the hash before the scroll can land. The scroll is a separate
+ // effect keyed on the pending id: scrolling in the same tick as the tab change
+ // ran before React had committed the new tab's DOM, so the target was missing.
+ const [pendingSection, setPendingSection] = useState<ThemeSectionId | null>(null);
+
+ useEffect(() => {
+ const readHash = () => {
+ const section = hashSection();
+ if (!section) return;
+ setActiveTab(SECTION_TAB[section]);
+ setPendingSection(section);
+ };
+ // Defer the first pass so a hash in the initial URL is honoured after mount
+ // (and after the settings query settles).
+ const timer = setTimeout(readHash, 0);
+ window.addEventListener('hashchange', readHash);
+ return () => {
+ clearTimeout(timer);
+ window.removeEventListener('hashchange', readHash);
+ };
+ }, []);
+
+ useEffect(() => {
+ if (!pendingSection) return;
+ const el = document.getElementById(pendingSection);
+ if (!el) return; // the owning tab has not committed yet
+ if (typeof el.scrollIntoView === 'function') {
+ el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+ }
+ setPendingSection(null);
+ }, [pendingSection, activeTab]);
+
+ // Browser-level guard for a reload / tab close with unsaved edits. In-app link
+ // navigation is caught by the click guard below, Reset all by its own confirm.
+ useEffect(() => {
+ if (!dirty) return;
+ const onBeforeUnload = (event: BeforeUnloadEvent) => {
+ if (allowLeaveRef.current) return;
+ event.preventDefault();
+ event.returnValue = '';
+ };
+ window.addEventListener('beforeunload', onBeforeUnload);
+ return () => window.removeEventListener('beforeunload', onBeforeUnload);
+ }, [dirty]);
+
+ /**
+  * In-app leave guard.
+  *
+  * The page runs under a plain `BrowserRouter`, so there is no data-router
+  * blocker to subscribe to. Clicks on in-app links are captured at the document
+  * instead: with unsaved edits, a navigation (sidebar, breadcrumb, anywhere) is
+  * cancelled and becomes a confirm, and confirming leaves the SPA — a hard
+  * navigation is exactly what "discard and go" means here. Every other click —
+  * new-tab, download, external, modified-click — is left alone, and switching
+  * tabs needs no guard because all sections share one form state.
+  */
+ useEffect(() => {
+ if (!dirty) return;
+ const onClick = (event: MouseEvent) => {
+ if (event.defaultPrevented || event.button !== 0) return;
+ if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+ const anchor = (event.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+ if (!anchor || anchor.target || anchor.hasAttribute('download')) return;
+ let url: URL;
+ try {
+ url = new URL(anchor.getAttribute('href') || '', window.location.origin);
+ } catch {
+ return;
+ }
+ if (url.origin !== window.location.origin) return;
+ const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+ const there = `${url.pathname}${url.search}${url.hash}`;
+ if (there === here) return;
+ event.preventDefault();
+ event.stopPropagation();
+ setPendingHref(there);
+ };
+ document.addEventListener('click', onClick, true);
+ return () => document.removeEventListener('click', onClick, true);
+ }, [dirty]);
 
  // ── Initialize form from server ──
  // prev must start as undefined — NOT as `settings`. When the query cache
@@ -924,6 +1103,7 @@ function ThemeSettingsPage() {
  // ── Branding panel ──
  const renderBrandPanel = () => (
  <div className="space-y-6">
+ <section id={THEME_SECTION_IDS.branding} className="scroll-mt-20 space-y-6">
  <PanelSectionHeader
  title={t('theme.panelIdentity')}
  description={t('theme.panelIdentityDescription')}
@@ -971,6 +1151,9 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
+ </section>
+
+ <section id={THEME_SECTION_IDS.themeMode} className="scroll-mt-20 space-y-6">
  <PanelSectionHeader title={t('theme.themeMode')} description={t('theme.themeModeDescription')} />
  <div className="grid gap-4 sm:grid-cols-2">
  <div>
@@ -1053,6 +1236,7 @@ function ThemeSettingsPage() {
  </div>
  </div>
  </div>
+ </section>
  </div>
  );
 
@@ -1060,7 +1244,7 @@ function ThemeSettingsPage() {
  const renderPalettePanel = () => {
  const hsl = isSeedValid ? hexToHSL(seedColor) : null;
  return (
- <div className="space-y-6">
+ <div id={THEME_SECTION_IDS.paletteGenerator} className="scroll-mt-20 space-y-6">
  <PanelSectionHeader
  title={t('theme.paletteTitle')}
  description={t('theme.paletteDescription')}
@@ -1336,7 +1520,7 @@ function ThemeSettingsPage() {
  2,
  );
  return (
- <div className="space-y-8">
+ <div className="space-y-6">
  <div>
  <PanelSectionHeader title={t('theme.exportTheme')} description={t('theme.exportThemeDescription')} />
  <div className="flex flex-wrap gap-2">
@@ -1418,7 +1602,8 @@ function ThemeSettingsPage() {
 
  // ── Colors panel ──
  const renderColorsPanel = () => (
- <div className="space-y-8">
+ <div className="space-y-6">
+ <section id={THEME_SECTION_IDS.brandColors} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.brandColors')}
@@ -1457,6 +1642,9 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
+ </section>
+
+ <section id={THEME_SECTION_IDS.semanticColors} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.semanticColors')}
@@ -1512,6 +1700,8 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
+ </section>
+
  <div>
  <PanelSectionHeader
  title={t('theme.focusRing')}
@@ -1532,7 +1722,8 @@ function ThemeSettingsPage() {
 
  // ── Surfaces panel ──
  const renderSurfacesPanel = () => (
- <div className="space-y-8">
+ <div className="space-y-6">
+ <section id={THEME_SECTION_IDS.darkSurfaces} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.darkModeSurfaces')}
@@ -1561,6 +1752,9 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
+ </section>
+
+ <section id={THEME_SECTION_IDS.lightSurfaces} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.lightModeSurfaces')}
@@ -1588,12 +1782,13 @@ function ThemeSettingsPage() {
  ))}
  </div>
  </div>
+ </section>
  </div>
  );
 
  // ── Layout panel ──
  const renderLayoutPanel = () => (
- <div className="space-y-6">
+ <div id={THEME_SECTION_IDS.layoutRadius} className="scroll-mt-20 space-y-6">
  <PanelSectionHeader
  title={t('theme.borderRadius')}
  description={t('theme.borderRadiusDescription')}
@@ -1644,7 +1839,8 @@ function ThemeSettingsPage() {
 
  // ── Advanced panel ──
  const renderAdvancedPanel = () => (
- <div className="space-y-8">
+ <div className="space-y-6">
+ <section id={THEME_SECTION_IDS.customCss} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.customCss')}
@@ -1682,6 +1878,9 @@ function ThemeSettingsPage() {
  </div>
  </div>
 
+ </section>
+
+ <section id={THEME_SECTION_IDS.sso} className="scroll-mt-20">
  <div>
  <PanelSectionHeader
  title={t('theme.oauthProviders')}
@@ -1689,6 +1888,7 @@ function ThemeSettingsPage() {
  />
  <OidcProviderSection />
  </div>
+ </section>
  </div>
  );
 
@@ -1787,7 +1987,7 @@ function ThemeSettingsPage() {
  };
 
  return (
- <div className="space-y-5">
+ <div className="space-y-6">
  {hasPersonalOverride && (
  <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-warning/30 bg-warning/5 p-3">
  <div className="flex items-start gap-2.5">
@@ -1820,7 +2020,7 @@ function ThemeSettingsPage() {
  <LastUpdated queryKey={qk.adminThemeSettings()} />
  <button
  type="button"
- onClick={handleResetAll}
+ onClick={() => setPendingReset(true)}
  className="inline-flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-sm border border-border/30 bg-card px-3 text-mini font-medium text-foreground transition-colors hover:bg-surface-2"
  >
  <RotateCcw className="h-3.5 w-3.5" />
@@ -1918,6 +2118,36 @@ function ThemeSettingsPage() {
  <div className="deck-panel p-3">
  {activeTabContent[activeTab]}
  </div>
+
+ {/* Unsaved edits are only in component state — every way out asks first. */}
+ <ConfirmDialog
+ open={pendingReset}
+ variant="warning"
+ title={t('theme.resetConfirmTitle')}
+ message={t('theme.resetConfirmMessage')}
+ confirmText={t('theme.resetConfirmConfirm')}
+ onCancel={() => setPendingReset(false)}
+ onConfirm={() => {
+ setPendingReset(false);
+ handleResetAll();
+ }}
+ />
+ <ConfirmDialog
+ open={pendingHref !== null}
+ variant="warning"
+ title={t('theme.discardConfirmTitle')}
+ message={t('theme.discardConfirmMessage')}
+ confirmText={t('theme.discardConfirmConfirm')}
+ onCancel={() => setPendingHref(null)}
+ onConfirm={() => {
+ const href = pendingHref;
+ setPendingHref(null);
+ // Hard navigation on purpose: leaving the SPA drops the unsaved form. The
+ // discard is already confirmed, so the beforeunload guard stands down.
+ allowLeaveRef.current = true;
+ if (href) window.location.assign(href);
+ }}
+ />
  </div>
  );
 }

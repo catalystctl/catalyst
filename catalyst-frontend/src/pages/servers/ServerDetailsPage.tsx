@@ -37,7 +37,6 @@ import { useServerDatabases, useAvailableDatabaseHosts } from '../../hooks/useSe
 import { useAuthStore } from '../../stores/authStore';
 import { useServerPermissionOptions } from '../../lib/serverPermissions';
 import { useConsole } from '../../hooks/useConsole';
-import { useEulaPrompt } from '../../hooks/useEulaPrompt';
 import { useMutation, useQuery, useQueryClient } from '@/csync';
 import { qk } from '../../lib/queryKeys';
 import { serversApi } from '../../services/api/servers';
@@ -67,7 +66,10 @@ import { usePluginTabs } from '../../plugins/hooks';
 import { matchesTemplateFilter } from '../../plugins/templateFilter';
 import PluginErrorBoundary from '../../plugins/PluginErrorBoundary';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
-import EulaModal from '../../components/servers/EulaModal';
+import {
+ restoreServerTab,
+ writeLastServerTab,
+} from '../../components/servers/serverTabPreference';
 import InviteLinkModal from '../../components/servers/InviteLinkModal';
 import ServerTabCard from '../../components/servers/tabs/ServerTabCard';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
@@ -186,10 +188,6 @@ function ServerDetailsPage() {
  // Initial logs load is owned by useConsole/useQuery — do NOT refetch on every
  // render via an effect on refetchConsole (unstable deps caused /logs spam).
 
- // ── EULA ──
- const { eulaPrompt, isLoading: eulaLoading, respond: respondEula } =
- useEulaPrompt(serverId);
-
  // ── Auth / permissions ──
  const isAdmin = useMemo(
  () =>
@@ -248,6 +246,21 @@ function ServerDetailsPage() {
  // ── Derived state ──
  const isSuspended = server?.status === 'suspended';
  const isPluginTab = Boolean(tab?.startsWith('plugin:'));
+
+ // Returning to a server always landed on Console, so operators who work in
+ // Files/Backups/Tasks re-clicked their tab on every visit. The last built-in
+ // tab is remembered per server and restored only when the URL names no tab —
+ // an explicit link always wins (audit D7).
+ useEffect(() => {
+ if (!serverId || isPluginTab) return;
+ if (tab) {
+ writeLastServerTab(serverId, tab, TAB_KEYS);
+ return;
+ }
+ const remembered = restoreServerTab(serverId, tab, TAB_KEYS);
+ if (remembered) navigate(`/servers/${serverId}/${remembered}`, { replace: true });
+ }, [serverId, tab, isPluginTab, navigate]);
+
  const activePluginTabId = isPluginTab ? tab!.slice('plugin:'.length) : null;
  const activeTab = useMemo(() => {
  const key = tab ?? 'console';
@@ -948,7 +961,11 @@ function ServerDetailsPage() {
  if (key === 'alerts')
  return hasServerPerm('alert.read') || hasServerPerm('server.read');
  if (key === 'users')
- return hasServerPerm('server.delete') || isAdmin || canAdminWrite;
+ // The Users tab manages invites and direct access; those routes require
+ // `server.update` on the backend (routes/servers/invites.ts), so gating the
+ // tab on server.delete hid it from exactly the people who may manage it and
+ // showed it to people who may not (audit D14).
+ return hasServerPerm('server.update') || hasServerPerm('server.delete') || isAdmin || canAdminWrite;
  if (key === 'settings')
  return (
  hasServerPerm('server.install') ||
@@ -1221,7 +1238,7 @@ function ServerDetailsPage() {
               ))}
             </div>
           ) : (
-            <ServerTabBar tabs={navTabs} />
+            <ServerTabBar tabs={navTabs} serverId={serverId} />
           )
         }
       />
@@ -1512,15 +1529,6 @@ function ServerDetailsPage() {
  </Suspense>
  </div>
  </ErrorBoundary>
-
- {eulaPrompt && (
- <EulaModal
- eulaText={eulaPrompt.eulaText}
- isLoading={eulaLoading}
- onAccept={() => respondEula(true)}
- onDecline={() => respondEula(false)}
- />
- )}
 
  {inviteLinkModal && (
  <InviteLinkModal

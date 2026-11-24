@@ -19,7 +19,7 @@ import ServerStartupVariablesSection from './ServerStartupVariablesSection';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import { BracketLabel } from '../../deck/primitives';
-import { Wrench, Terminal } from 'lucide-react';
+import { Wrench, Terminal, X } from 'lucide-react';
 
 /**
  * Internal title for the section holding top-level keys. It doubles as the
@@ -869,7 +869,7 @@ export default function ServerConfigurationTab({
  }
  aria-label={t('common:actions.remove')}
  >
- ✕
+ <X className="h-3.5 w-3.5" />
  </button>
  </div>
  </div>
@@ -914,7 +914,7 @@ export default function ServerConfigurationTab({
  }
  aria-label={t('common:actions.remove')}
  >
- ✕
+ <X className="h-3.5 w-3.5" />
  </button>
  </div>
  </div>

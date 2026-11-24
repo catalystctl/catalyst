@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -19,6 +19,8 @@ import {
  HardDrive,
  RefreshCw,
  ExternalLink,
+ Copy,
+ Check,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
@@ -54,8 +56,65 @@ import {
 import { Link } from 'react-router-dom';
 import { formatDateTime } from '../../i18n/format';
 import { auditActionLabel, auditDetailLabel, auditResourceLabel } from '../../utils/logLabels';
+import { useDebounce } from '../../hooks/useDebounce';
 
 const pageSize = 50;
+
+/** Clipboard helper: async API with a document.execCommand fallback. */
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    textarea.remove();
+  }
+}
+
+/**
+ * Copy button for a raw id/IP in the detail dialog. Ids are the only way to
+ * act on an event afterwards, so every one of them is one click from the
+ * clipboard rather than a drag-select (audit D19).
+ */
+function CopyChip({
+  value,
+  label,
+  icon,
+}: {
+  value: string;
+  /** Already-translated label describing the value, used for the a11y name. */
+  label: string;
+  icon?: React.ReactNode;
+}) {
+  const { t } = useTranslation('admin-access');
+  const [copied, setCopied] = useState(false);
+  const onCopy = useCallback(async () => {
+    await copyText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [value]);
+
+  return (
+    <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 pl-2 pr-1 py-1 text-mini text-muted-foreground">
+      {icon}
+      <span className="font-mono">{value}</span>
+      <button
+        type="button"
+        onClick={onCopy}
+        className="flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+        title={copied ? t('audit.copiedValue') : t('audit.copyValue', { label })}
+        aria-label={copied ? t('audit.copiedValue') : t('audit.copyValue', { label })}
+      >
+        {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+      </button>
+    </div>
+  );
+}
 
 const buildDefaultRange = () => {
  const now = new Date();
@@ -282,11 +341,26 @@ return (
  </div>
 
  <div className="flex flex-wrap items-center gap-2">
+ {log.resourceId && (
+   <CopyChip
+     value={log.resourceId}
+     label={t('audit.detailLabels.targetId')}
+     icon={<Hash className="h-3 w-3" />}
+   />
+ )}
  {requestIp && (
- <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
- <Globe className="h-3 w-3" />
- <span className="font-mono">{requestIp}</span>
- </div>
+   <CopyChip
+     value={requestIp}
+     label={t('audit.detailLabels.ip')}
+     icon={<Globe className="h-3 w-3" />}
+   />
+ )}
+ {log.userId && (
+   <CopyChip
+     value={log.userId}
+     label={t('audit.detailLabels.userId')}
+     icon={<User className="h-3 w-3" />}
+   />
  )}
  {requestUa && (
  <div className="flex max-w-full items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
@@ -296,12 +370,6 @@ return (
  {requestMethod && requestPath && (
  <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
  <code className="font-mono">{requestMethod} {requestPath}</code>
- </div>
- )}
- {log.userId && (
- <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-surface-1/40 px-2 py-1 text-mini text-muted-foreground">
- <Hash className="h-3 w-3" />
- <code>{log.userId.slice(0, 12)}…</code>
  </div>
  )}
  </div>
@@ -358,7 +426,10 @@ function AuditLogsPage() {
  const [action, setAction] = useState('');
  const [resource, setResource] = useState('');
  const [userId, setUserId] = useState('');
- const [searchQuery, setSearchQuery] = useState('');
+ const [searchInput, setSearchInput] = useState('');
+ // D19: the search box filters server-side (debounced) instead of over the 50
+ // rows already on screen, so a match on page 4 is found from page 1.
+ const searchQuery = useDebounce(searchInput, 300);
  const [defaultRange] = useState(buildDefaultRange);
  const [from, setFrom] = useState(defaultRange.from);
  const [to, setTo] = useState(defaultRange.to);
@@ -387,6 +458,7 @@ function AuditLogsPage() {
  action: action || undefined,
  resource: resource || undefined,
  userId: userId || undefined,
+ q: searchQuery.trim() || undefined,
  ...(autoEnd
  ? { window: range }
  : { from: from || undefined, to: to || undefined }),
@@ -399,6 +471,7 @@ function AuditLogsPage() {
  action: action || undefined,
  resource: resource || undefined,
  userId: userId || undefined,
+ q: searchQuery.trim() || undefined,
  from: autoEnd
  ? new Date(end! - windowMs).toISOString()
  : from
@@ -430,37 +503,24 @@ function AuditLogsPage() {
 
  const logs = useMemo(() => data?.logs ?? [], [data?.logs]);
  const pagination = data?.pagination;
- const hasFilters = action || resource || userId || from || to;
- const searchedPage = Boolean(searchQuery.trim());
-
- const filteredLogs = useMemo(() => {
- if (!searchQuery.trim()) return logs;
- const q = searchQuery.toLowerCase();
- return logs.filter((log) =>
- log.action.toLowerCase().includes(q) ||
- log.resource.toLowerCase().includes(q) ||
- log.user?.username?.toLowerCase().includes(q) ||
- log.user?.email?.toLowerCase().includes(q) ||
- log.resourceId?.toLowerCase().includes(q) ||
- log.ipAddress?.toLowerCase().includes(q),
- );
- }, [logs, searchQuery]);
+ const hasFilters = Boolean(action || resource || userId || searchQuery.trim() || from || to);
+ const searching = Boolean(searchQuery.trim());
 
  const grouped = useMemo(() => {
  const groups = new Map<string, AuditLogEntry[]>();
- for (const log of filteredLogs) {
+ for (const log of logs) {
  const label = getDateLabel(t, log.timestamp);
  if (!groups.has(label)) groups.set(label, []);
  groups.get(label)!.push(log);
  }
  return groups;
- }, [filteredLogs, t]);
+ }, [logs, t]);
 
  const clearFilters = () => {
  setAction('');
  setResource('');
  setUserId('');
- setSearchQuery('');
+ setSearchInput('');
  const fresh = buildDefaultRange();
  setFrom(fresh.from);
  setTo(fresh.to);
@@ -544,9 +604,10 @@ function AuditLogsPage() {
  <div className="relative">
  <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
  <Input
- value={searchQuery}
- onChange={(e) => setSearchQuery(e.target.value)}
+ value={searchInput}
+ onChange={(e) => { setSearchInput(e.target.value); setPage(1); }}
  placeholder={t('audit.searchPlaceholder')}
+ aria-label={t('audit.searchPlaceholder')}
  className="h-7 rounded-sm border-border/40 bg-card pl-9 text-mini"
  />
  </div>
@@ -569,7 +630,6 @@ function AuditLogsPage() {
  className="h-7 rounded-sm border-border/40 bg-card font-mono text-mini"
  />
  </div>
- <p className="mt-2 text-micro text-muted-foreground">{t('audit.pageSearchHint')}</p>
  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
  <Input
  type="datetime-local"
@@ -615,6 +675,7 @@ function AuditLogsPage() {
  {action && <Badge variant="outline" className="text-micro">{t('audit.chipAction', { value: action })}</Badge>}
  {resource && <Badge variant="outline" className="text-micro">{t('audit.chipResource', { value: resource })}</Badge>}
  {userId && <Badge variant="outline" className="text-micro">{t('audit.chipUser', { value: userId })}</Badge>}
+ {searchQuery.trim() && <Badge variant="outline" className="text-micro">{t('audit.chipSearch', { value: searchQuery.trim() })}</Badge>}
  {range && <Badge variant="outline" className="text-micro">{t('audit.chipRange', { value: range })}</Badge>}
  </div>
  )}
@@ -626,13 +687,13 @@ function AuditLogsPage() {
  <TabLoadingState rows={6} rowHeight="h-16" />
  ) : isError && !data ? (
  <TabErrorState message={t('audit.loadFailed')} onRetry={() => refetch()} />
- ) : filteredLogs.length > 0 ? (
+ ) : logs.length > 0 ? (
  <div className="deck-panel max-h-[min(32rem,45dvh)] overflow-y-auto">
  {/* Sticky header strip */}
  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/50 bg-surface-1 px-3 py-1.5">
  <BracketLabel>{t('audit.title')}</BracketLabel>
  <span className="font-mono text-micro tabular-nums text-muted-foreground">
- {t('audit.pageEventCount', { count: filteredLogs.length, page })}
+ {t('audit.pageEventCount', { count: logs.length, page })}
  </span>
  </div>
  {Array.from(grouped.entries()).map(([dateLabel, entries]) => (
@@ -700,7 +761,7 @@ function AuditLogsPage() {
  ) : (
  <TabEmptyState
  title={t('audit.emptyTitle')}
- description={searchedPage ? t('audit.emptyPageSearchDescription') : hasFilters ? t('audit.emptyFilteredDescription') : t('audit.emptyDescription')}
+ description={searching ? t('audit.emptySearchDescription') : hasFilters ? t('audit.emptyFilteredDescription') : t('audit.emptyDescription')}
  />
  )}
 

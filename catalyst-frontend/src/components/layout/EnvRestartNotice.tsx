@@ -1,15 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { RotateCw, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { StatusLed } from '@/components/deck/primitives';
 import { useAuth } from '../../hooks/useAuth';
 import { useEnvRestartStatus, useRestartPanel } from '../../hooks/useAdmin';
 import type { PanelRestartStrategy } from '../../types/admin';
@@ -130,41 +123,59 @@ export default function EnvRestartNotice() {
   };
 
   return (
-    // TODO: convert this blocking AlertDialog into a non-modal banner so it
-    // never traps focus. Kept as a modal for now; at minimum the key list
-    // below must not overflow narrow viewports.
-    <AlertDialog open onOpenChange={(next) => !next && dismiss()}>
-      <AlertDialogContent size="sm">
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t('restart.title')}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {restarting
-              ? timedOut
-                ? t('restart.timedOut')
-                : t('restart.restartingDescription')
-              : strategy === 'standalone'
-                ? t('restart.standaloneHint')
-                : t('restart.description')}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {!restarting && (
-          <p className="line-clamp-3 break-all font-mono text-micro text-muted-foreground">{pendingLabel}</p>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={restarting} onClick={dismiss}>
-            {t('restart.later')}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            disabled={restarting || restartMutation.isPending}
-            onClick={(event) => {
-              event.preventDefault();
-              confirm();
-            }}
+    // Non-blocking banner (was a focus-trapping AlertDialog): an environment
+    // change waiting for a restart must never hold the panel hostage. "Later"
+    // is remembered for the exact pending set, so it returns only for a new
+    // change; the restart itself still polls /api/health until the panel is back.
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed bottom-3 left-3 right-3 z-40 sm:bottom-6 sm:left-6 sm:right-auto sm:w-[24rem]"
+    >
+      <div className="deck-panel overflow-hidden border-warning/40 shadow-elevated">
+        <div className="flex items-start gap-2.5 border-b border-border/50 bg-warning/10 px-3 py-2.5">
+          <StatusLed tone="hazard" className="mt-1" pulse={!restarting} />
+          <div className="min-w-0 flex-1">
+            <p className="font-display text-mini font-semibold text-foreground">{t('restart.title')}</p>
+            <p className="type-meta mt-1">
+              {restarting
+                ? timedOut
+                  ? t('restart.timedOut')
+                  : t('restart.restartingDescription')
+                : strategy === 'standalone'
+                  ? t('restart.standaloneHint')
+                  : t('restart.description')}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label={t('common:actions.close')}
+            className="relative -mr-1 -mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors after:absolute after:-inset-1 after:content-[''] hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           >
-            {restarting ? t('restart.restarting') : t('restart.button')}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+        </div>
+        <div className="px-3 py-2.5">
+          {!restarting && (
+            <p className="mb-2 line-clamp-3 break-all font-mono text-micro text-muted-foreground">{pendingLabel}</p>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="ghost" size="sm" disabled={restarting} onClick={dismiss}>
+              {t('restart.later')}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={restarting || restartMutation.isPending}
+              onClick={confirm}
+            >
+              {restarting ? <RotateCw className="h-3.5 w-3.5 animate-spin" /> : <RotateCw className="h-3.5 w-3.5" />}
+              {restarting ? t('restart.restarting') : t('restart.button')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

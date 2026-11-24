@@ -16,14 +16,29 @@ type ActiveFile = {
   originalContent: string;
 };
 
-export function useFileManager(serverId?: string, initialPath = '/') {
-  const [path, setPathState] = useState(() => normalizePath(initialPath));
+/**
+ * Files-tab state. `path` can be controlled (the URL owns it in the panel, so
+ * switching tabs and coming back restores the folder); it falls back to local
+ * state where no URL is available (tests, embedded explorers).
+ */
+export function useFileManager(
+  serverId?: string,
+  options: { path?: string; onPathChange?: (next: string) => void } = {},
+) {
+  const { path: controlledPath, onPathChange } = options;
+  const [localPath, setLocalPath] = useState('/');
+  const path = normalizePath(controlledPath ?? localPath);
   const [activeFile, setActiveFile] = useState<ActiveFile | null>(null);
   const [isFileLoading, setIsFileLoading] = useState(false);
 
-  const setPath = useCallback((nextPath: string) => {
-    setPathState(normalizePath(nextPath));
-  }, []);
+  const setPath = useCallback(
+    (nextPath: string) => {
+      const normalized = normalizePath(nextPath);
+      if (onPathChange) onPathChange(normalized);
+      else setLocalPath(normalized);
+    },
+    [onPathChange],
+  );
 
   const listQuery = useQuery({
     queryKey: qk.files(serverId!, path),

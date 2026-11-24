@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusLed } from '../deck/primitives';
+import ConfirmDialog from '../shared/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { consoleStreamLabel } from '../../utils/constants';
 
@@ -106,6 +107,8 @@ export default function ServerConsoleTab({
   const [commandHistory, setCommandHistory] = useState<string[]>(() => storage.get<string[]>('console.history') ?? []);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [copied, setCopied] = useState(false);
+  // Clearing the buffer destroys up to 2000 lines of output; ask once.
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
 
 
   const [scrollback, setScrollback] = useState(() => {
@@ -446,11 +449,7 @@ export default function ServerConsoleTab({
               variant="ghost"
               size="icon-sm"
               aria-label={t('console.tab.clearConsole')}
-              onClick={() => {
-                clearConsole();
-                setAutoScroll(true);
-                storage.set('console.follow', true);
-              }}
+              onClick={() => setConfirmClearOpen(true)}
             >
               <Trash2 />
             </Button>
@@ -517,11 +516,7 @@ export default function ServerConsoleTab({
                 {t('console.tab.downloadOutput')}
               </DropdownMenuItem>
               <DropdownMenuItem
-                onSelect={() => {
-                  clearConsole();
-                  setAutoScroll(true);
-                  storage.set('console.follow', true);
-                }}
+                onSelect={() => setConfirmClearOpen(true)}
               >
                 <Trash2 className="mr-2 h-3.5 w-3.5" />
                 {t('console.tab.clearConsole')}
@@ -607,6 +602,22 @@ export default function ServerConsoleTab({
           </Button>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={confirmClearOpen}
+        title={t('console.tab.clearConfirmTitle')}
+        message={t('console.tab.clearConfirmMessage', { count: visibleEntries.length })}
+        confirmText={t('console.tab.clearConsole')}
+        cancelText={t('common:actions.cancel')}
+        variant="danger"
+        onConfirm={() => {
+          clearConsole();
+          setAutoScroll(true);
+          storage.set('console.follow', true);
+          setConfirmClearOpen(false);
+        }}
+        onCancel={() => setConfirmClearOpen(false)}
+      />
     </div>
   );
 }

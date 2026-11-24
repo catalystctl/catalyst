@@ -17,6 +17,7 @@ import {
  LifeBuoy,
 } from 'lucide-react';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import DiagnosticsExportModal from '../../components/admin/DiagnosticsExportModal';
 import { Input } from '../../components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -417,33 +418,39 @@ function ErrorRow({
  <span className="flex items-center justify-end gap-1">
  {!error.resolved && (
  <Button
- variant="ghost"
+ variant="outline"
  size="sm"
- className="h-7 gap-1 rounded-sm px-2 text-micro text-success hover:text-success"
+ className="h-7 gap-1 rounded-sm border-success/40 px-2 text-micro text-success hover:border-success/60 hover:bg-success/10 hover:text-success"
  onClick={(e) => {
  e.stopPropagation();
  onResolve();
  }}
  disabled={isResolving}
  >
- <CheckCircle2 className="h-3.5 w-3.5" />
+ {isResolving ? (
+   <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : (
+   <CheckCircle2 className="h-3.5 w-3.5" />
+ )}
  {t('systemErrors.resolve')}
  </Button>
  )}
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => {
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
  }}
  title={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
+ aria-label={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
  >
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={onView}
  title={t('systemErrors.viewDetails')}
+ aria-label={t('systemErrors.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -467,19 +474,21 @@ function ErrorRow({
  </div>
  <div className="flex items-center gap-1">
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={(e) => {
  e.stopPropagation();
  copy(formatErrorForCopy(error), error.id);
  }}
  title={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
+ aria-label={isCopied ? t('systemErrors.copied') : t('systemErrors.copyForAi')}
  >
  {isCopied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
  </button>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ className="flex h-8 w-8 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
  onClick={onView}
  title={t('systemErrors.viewDetails')}
+ aria-label={t('systemErrors.viewDetails')}
  >
  <Eye className="h-3.5 w-3.5" />
  </button>
@@ -488,9 +497,9 @@ function ErrorRow({
  {!error.resolved && (
  <div className="mt-1 flex">
  <Button
- variant="ghost"
+ variant="outline"
  size="sm"
- className="h-7 gap-1 rounded-sm px-2 text-micro text-success hover:text-success"
+ className="h-8 gap-1 rounded-sm border-success/40 px-2.5 text-micro text-success hover:border-success/60 hover:bg-success/10 hover:text-success"
  onClick={(e) => {
  e.stopPropagation();
  onResolve();
@@ -738,6 +747,7 @@ function SystemErrorsPage() {
  const [showExport, setShowExport] = useState(false);
  const [showDiagnostics, setShowDiagnostics] = useState(false);
  const [showResolveAll, setShowResolveAll] = useState(false);
+ const [confirmResolveId, setConfirmResolveId] = useState<string | null>(null);
  const [resolveAllError, setResolveAllError] = useState<string | null>(null);
 
  const sseStatus = useSseStatus();
@@ -823,10 +833,19 @@ function SystemErrorsPage() {
 
  const handleResolve = useCallback(
  (id: string) => {
- resolveMutation.mutate(id);
+ setConfirmResolveId(id);
  },
- [resolveMutation],
+ [],
  );
+
+ // Resolving is not undoable (no un-resolve endpoint), so the single-row
+ // action asks for a confirmation like "Resolve all" does.
+ const confirmSingleResolve = () => {
+ if (!confirmResolveId) return;
+ resolveMutation.mutate(confirmResolveId, {
+ onSuccess: () => setConfirmResolveId(null),
+ });
+ };
 
  const resolveAllFiltersSummary = [
  level ? t('systemErrors.chipLevel', { value: level }) : null,
@@ -1147,6 +1166,18 @@ function SystemErrorsPage() {
  onClose={() => { if (!resolveAllMutation.isPending) setShowResolveAll(false); }}
  />
  )}
+
+ {/* ── Single Resolve Confirmation ── */}
+ <ConfirmDialog
+ open={!!confirmResolveId}
+ title={t('systemErrors.resolveTitle')}
+ message={t('systemErrors.resolveConfirm')}
+ confirmText={t('systemErrors.resolve')}
+ cancelText={t('common:actions.cancel')}
+ loading={resolveMutation.isPending}
+ onConfirm={confirmSingleResolve}
+ onCancel={() => { if (!resolveMutation.isPending) setConfirmResolveId(null); }}
+ />
  </div>
  );
 }

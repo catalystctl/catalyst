@@ -32,6 +32,36 @@ const openDialog = async () => {
   return within(await screen.findByRole('dialog'));
 };
 
+describe('CreateBackupModal split "Backup now" button', () => {
+  afterEach(cleanup);
+
+  it('creates a default backup in one click, without opening the dialog', async () => {
+    h.create.mockReset().mockResolvedValue({});
+    render(<CreateBackupModal serverId="server-1" variant="split" />);
+    const quick = screen.getByRole('button', { name: 'backups.create.now' });
+    fireEvent.click(quick);
+    expect(h.create).toHaveBeenCalledWith('server-1', { name: undefined, compressed: true });
+    // No dialog: the whole point is one click.
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps the dialog behind the caret for name / pin / secondary options', async () => {
+    h.create.mockReset().mockResolvedValue({});
+    render(<CreateBackupModal serverId="server-1" variant="split" canPin />);
+    fireEvent.click(screen.getByRole('button', { name: 'backups.create.moreOptions' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    // Pin + compression, i.e. the full form, not the one-click path.
+    expect(dialog.getAllByRole('checkbox')).toHaveLength(2);
+    expect(h.create).not.toHaveBeenCalled();
+  });
+
+  it('disables both halves when backups are unavailable', () => {
+    render(<CreateBackupModal serverId="server-1" variant="split" disabled />);
+    expect(screen.getByRole('button', { name: 'backups.create.now' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'backups.create.moreOptions' })).toBeDisabled();
+  });
+});
+
 describe('CreateBackupModal compression toggle', () => {
   afterEach(cleanup);
 

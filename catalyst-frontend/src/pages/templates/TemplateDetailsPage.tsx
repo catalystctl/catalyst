@@ -11,6 +11,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
+import { useMutation } from '@/csync';
+import { qk } from '../../lib/queryKeys';
+import { queryClient } from '../../lib/queryClient';
+import { templatesApi } from '../../services/api/templates';
+import type { TemplateVariable } from '../../types/template';
+import { notifyError, notifySuccess } from '../../utils/notify';
+import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 import { useTemplate } from '../../hooks/useTemplates';
 import TemplateVariablesList from '../../components/templates/TemplateVariablesList';
 import { useAuthStore } from '../../stores/authStore';
@@ -48,6 +55,38 @@ function TemplateDetailsPage() {
     () => user?.permissions?.includes('admin.write') || user?.permissions?.includes('*'),
     [user?.permissions],
   );
+  // The pencil on a variable row is gated by `template.update`, the permission
+  // the PUT /api/templates/:id route actually enforces.
+  const canUpdateVariables = useMemo(
+    () => hasAnyPermission(user?.permissions, ['template.update', 'admin.write']),
+    [user?.permissions],
+  );
+
+  /**
+   * D18: edit one variable's value without loading the whole edit form. Only
+   * the changed entry differs — every other variable is sent back as stored so
+   * the PUT cannot drop definitions the user never opened.
+   */
+  const variableMutation = useMutation({
+    mutationFn: (variable: TemplateVariable) => {
+      if (!template) return Promise.reject(new Error('missing template'));
+      const variables = (template.variables ?? []).map((existing) =>
+        existing.name === variable.name ? variable : existing,
+      );
+      return templatesApi.update(template.id, { variables });
+    },
+    onSuccess: (updated) => {
+      notifySuccess(t('variables.saved'));
+      if (updated) queryClient.setQueryData(qk.template(updated.id), updated);
+    },
+    onError: (error: unknown) => {
+      notifyError(error, 'templates:variables.saveError');
+    },
+    onSettled: () => {
+      if (template) queryClient.invalidateQueries({ queryKey: qk.template(template.id) });
+      queryClient.invalidateQueries({ queryKey: qk.templates() });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -224,7 +263,11 @@ function TemplateDetailsPage() {
           <SectionHeader icon={List} title={t('details.variables')} />
           <Segmented muted>{template.variables?.length ?? 0}</Segmented>
         </div>
-        <TemplateVariablesList variables={template.variables ?? []} />
+        <TemplateVariablesList
+          variables={template.variables ?? []}
+          onSave={canUpdateVariables ? (variable) => variableMutation.mutateAsync(variable) : undefined}
+          savingName={variableMutation.isPending ? variableMutation.variables?.name ?? null : null}
+        />
       </ServerTabCard>
 
       {/* ── Controlled Edit & Delete Modals ── */}

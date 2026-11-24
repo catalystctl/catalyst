@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { MapPin, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { MapPin, Plus, Pencil, Trash2, X, Loader2 } from 'lucide-react';
 import { locationsApi, type Location } from '../../services/api/locations';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
@@ -46,8 +46,23 @@ function LocationForm({
 
  const disableSubmit = !name.trim() || isPending;
 
+ const submit = () => {
+ if (disableSubmit) return;
+ onSave({
+ name: name.trim(),
+ description: description.trim() || undefined,
+ });
+ };
+
+ // A real <form> so Enter submits instead of doing nothing.
  return (
- <div className="space-y-3">
+ <form
+ className="space-y-3"
+ onSubmit={(event) => {
+ event.preventDefault();
+ submit();
+ }}
+ >
  <label className="block space-y-1">
  <span className="type-overline">
  {t('locations.name')} <span className="text-danger">*</span>
@@ -70,27 +85,16 @@ function LocationForm({
  placeholder={t('locations.descriptionPlaceholder')}
  />
  </label>
- <div className="flex justify-end gap-2 pt-1">
- <button
- className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
- onClick={onCancel}
- >
+ <div className="flex justify-end gap-2 border-t border-border/50 pt-3">
+ <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={onCancel}>
  {t('common:actions.cancel')}
- </button>
- <button
- className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
- onClick={() =>
- onSave({
- name: name.trim(),
- description: description.trim() || undefined,
- })
- }
- disabled={disableSubmit}
- >
+ </Button>
+ <Button type="submit" size="sm" className="h-8 gap-1.5 px-3 text-mini" disabled={disableSubmit}>
+ {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
  {isPending ? t('locations.saving') : initial ? t('locations.update') : t('common:actions.create')}
- </button>
+ </Button>
  </div>
- </div>
+ </form>
  );
 }
 

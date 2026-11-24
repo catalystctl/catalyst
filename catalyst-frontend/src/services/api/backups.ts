@@ -55,6 +55,30 @@ export const backupsApi = {
     );
     return response;
   },
+  /**
+   * Same as `download`, but cancellable: the caller owns an AbortController so
+   * the UI can offer Cancel on a multi-GB archive instead of freezing the row.
+   */
+  downloadWithSignal: async (
+    serverId: string,
+    backupId: string,
+    signal?: AbortSignal,
+    onProgress?: (progress: { loaded: number; total?: number }) => void,
+  ) => {
+    const response = await apiClient.get<Blob>(
+      `/api/servers/${serverId}/backups/${backupId}/download`,
+      {
+        responseType: 'blob',
+        signal,
+        onDownloadProgress: (event) => {
+          if (!onProgress) return;
+          const total = Number.isFinite(event.total) && event.total && event.total > 0 ? event.total : undefined;
+          onProgress({ loaded: event.loaded, total });
+        },
+      },
+    );
+    return response;
+  },
   get: async (serverId: string, backupId: string) => {
     const data = await apiClient.get<Backup>(`/api/servers/${serverId}/backups/${backupId}`);
     return data;

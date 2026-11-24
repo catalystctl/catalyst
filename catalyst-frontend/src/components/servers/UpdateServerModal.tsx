@@ -211,6 +211,13 @@ function UpdateServerModal({ serverId, disabled = false, open: controlledOpen, o
     mutationFn: async (retentionCount: number) =>
       serversApi.updateBackupSettings(serverId, { retentionCount }),
     onSuccess: () => notifySuccess(t('updateServer.backupRetentionUpdated')),
+    // Retention is read from the server object by the backups panel and this
+    // form, so a toast alone left both showing the old value (audit C6).
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
+      queryClient.invalidateQueries({ queryKey: qk.servers() });
+      queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+    },
     onError: (error) => notifyError(error),
   });
 

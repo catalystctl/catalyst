@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQueryClient, useMutation, useQuery } from '@/csync';
 import { qk } from '../../../lib/queryKeys';
 import {
@@ -542,9 +542,12 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  }, [serverId, queryClient, t]);
 
  const handleTransferOwnership = useCallback(async () => {
+ // Capture before the state reset: the new owner's node reach changes too.
+ const previousOwnerId = server?.ownerId;
+ const nextOwnerId = newOwnerId.trim();
  try {
  setTransferOwnerPending(true);
- await serversApi.transferOwnership(serverId, { newOwnerId: newOwnerId.trim() });
+ await serversApi.transferOwnership(serverId, { newOwnerId: nextOwnerId });
  notifySuccess(t('tabs.admin.transferred'));
  setNewOwnerId('');
  setNewOwnerLabel('');
@@ -564,8 +567,19 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.serverPermissions(serverId) });
+ // Ownership moves the invite list, the admin user list's server counts and
+ // the reachable-node set of both parties; leaving those cached showed the
+ // old owner's access until a manual reload.
+ queryClient.invalidateQueries({ queryKey: qk.serverInvites(serverId) });
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ if (nextOwnerId) {
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(nextOwnerId) });
  }
- }, [serverId, newOwnerId, queryClient, t]);
+ if (previousOwnerId && previousOwnerId !== nextOwnerId) {
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(previousOwnerId) });
+ }
+ }
+ }, [server?.ownerId, serverId, newOwnerId, queryClient, t]);
 
  // ── Hot-remove allocation handler ──
  const handleRemoveAllocation = useCallback((containerPort: number) => {
@@ -909,14 +923,14 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  {server.nodeId ? (
  <>
  {' '}
- <a
- href={`/admin/nodes/${server.nodeId}/allocations`}
- target="_blank"
- rel="noopener noreferrer"
+ {/* In-app navigation: a raw <a href> tore the SPA down and reloaded
+ the whole panel just to add an allocation. */}
+ <Link
+ to={`/admin/nodes/${server.nodeId}/allocations`}
  className="font-medium text-primary hover:underline"
  >
  {t('tabs.admin.createOne')}
- </a>
+ </Link>
  </>
  ) : null}
  </p>

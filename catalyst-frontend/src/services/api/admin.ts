@@ -133,6 +133,8 @@ export const adminApi = {
     resource?: string;
     from?: string;
     to?: string;
+    /** Server-side free-text search across action/resource/ids/actor/details. */
+    q?: string;
   }) => {
     const data = await apiClient.get<AuditLogsResponse>('/api/admin/audit-logs', { params });
     return data;

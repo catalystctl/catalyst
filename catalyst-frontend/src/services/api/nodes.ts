@@ -310,4 +310,21 @@ export const nodesApi = {
     );
     return data.data;
   },
+
+  /**
+   * Change one assignment's expiry in place (`expiresAt: null` clears it).
+   * In-place so `assignedAt`/`assignedBy` survive — delete + re-add lost them
+   * and raced with readers.
+   */
+  updateAssignmentExpiry: async (
+    nodeId: string,
+    assignmentId: string,
+    expiresAt: string | null,
+  ) => {
+    const data = await apiClient.patch<ApiResponse<NodeAssignment>>(
+      `/api/nodes/${nodeId}/assignments/${assignmentId}`,
+      { expiresAt },
+    );
+    return data.data;
+  },
 };

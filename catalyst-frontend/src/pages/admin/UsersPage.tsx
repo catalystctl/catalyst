@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useMemo, useRef, useState, useCallback, type FormEvent } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useMutation, useVirtualizer } from '@/csync';
@@ -31,6 +31,8 @@ import {
  Eye,
  User,
  MailCheck,
+ Copy,
+ EyeOff,
 } from 'lucide-react';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
@@ -62,6 +64,7 @@ import { roleLabel } from '../../utils/constants';
 import { formatDate, formatDateTime, formatTime } from '../../i18n/format';
 import { NodeAssignmentsSelector } from '../../components/admin/NodeAssignmentsSelector';
 import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
+import { flushNodeAssignments } from './nodeAssignmentFlush';
 import type { AdminUser } from '../../types/admin';
 import {
   Dialog,
@@ -75,6 +78,37 @@ import {
 import { FormSection } from '@/components/ui/form-section';
 
 const pageSize = 20;
+
+/**
+ * Password alphabet for the generator. Excludes `l`, `I`, `O`, `0`, `1` — an
+ * admin reads this value out loud or pastes it into a chat, and those glyphs
+ * are the ones that get mistyped.
+ */
+const PASSWORD_ALPHABET = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#%^*-_=+';
+
+/** Cryptographically random password of `length` characters. */
+function generatePassword(length = 16): string {
+  const values = new Uint32Array(length);
+  crypto.getRandomValues(values);
+  return Array.from(
+    values,
+    (value) => PASSWORD_ALPHABET[value % PASSWORD_ALPHABET.length],
+  ).join('');
+}
+
+/** Copy `value` to the clipboard and toast the outcome. */
+async function copyToClipboard(
+  value: string,
+  successMessage: string,
+  report: (error: unknown) => void,
+): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(value);
+    notifySuccess(successMessage);
+  } catch (error: unknown) {
+    report(error);
+  }
+}
 
 // ── Role Chip ──
 function RoleChip({ role, selected, onToggle }: { role: { id: string; name: string }; selected: boolean; onToggle: () => void }) {
@@ -340,6 +374,12 @@ function UsersPage() {
  const [editRoleSearch, setEditRoleSearch] = useState('');
  const [editServerSearch, setEditServerSearch] = useState('');
  const [selectedNodeIds, setSelectedNodeIds] = useState<NodeAssignmentWithExpiration[]>([]);
+ const [showPassword, setShowPassword] = useState(false);
+
+ // Quick role editor (row "…" → Roles): roles only, no full edit dialog
+ const [quickRolesUser, setQuickRolesUser] = useState<AdminUser | null>(null);
+ const [quickRoleIds, setQuickRoleIds] = useState<string[]>([]);
+ const [quickRoleSearch, setQuickRoleSearch] = useState('');
 
  // Delete/ban confirmation state
  const [deletingUser, setDeletingUser] = useState<{ id: string; username: string } | null>(null);
@@ -432,14 +472,15 @@ function UsersPage() {
  });
 
  const currentUserIds = useMemo(() => new Set(users.map((u) => u.id)), [users]);
- const validSelectedIds = useMemo(
- () => selectedIds.filter((id) => currentUserIds.has(id)),
- [selectedIds, currentUserIds],
+ // Selection deliberately survives page changes (audit D23): bulk ban/delete must
+ // reach users the admin ticked on an earlier page. Those ids are no longer
+ // resolvable from `users`, so the bulk bar reports the true count and says how
+ // many are off-screen instead of silently pruning them away.
+ const selectedOnPageIds = useMemo(
+   () => selectedIds.filter((id) => currentUserIds.has(id)),
+   [selectedIds, currentUserIds],
  );
-
- if (validSelectedIds.length !== selectedIds.length) {
- setSelectedIds(validSelectedIds);
- }
+ const selectedOffPageCount = selectedIds.length - selectedOnPageIds.length;
 
  // ── Derived filter lists ──
  const roleCounts = useMemo(() => {
@@ -501,21 +542,69 @@ function UsersPage() {
 
  // ── Mutations ──
  const createMutation = useMutation({
- mutationFn: () =>
- adminApi.createUser({
+ mutationFn: async () => {
+ const created = await adminApi.createUser({
  email: createEmail.trim(),
  username: createUsername.trim(),
  password: createPassword.trim(),
  roleIds: createRoleIds,
  serverIds: createServerIds,
+ });
+ // The node selector is local-only until its target exists, so the picks used
+ // to be dropped silently (audit A2). Flush them now and report what stuck.
+ const pickedNodes = selectedNodeIds;
+ const nodeFlush = pickedNodes.length > 0
+ ? await flushNodeAssignments({ targetType: 'user', targetId: created.id }, pickedNodes)
+ : null;
+ return { created, nodeFlush };
+ },
+ onSuccess: ({ created, nodeFlush }) => {
+ const failedNodes = [
+ ...(nodeFlush?.failed ?? []),
+ ...(nodeFlush?.wildcardFailed ? [t('admin:nodeAssignments.allNodes')] : []),
+ ];
+ if (failedNodes.length > 0) {
+ // The account exists; only the access picks are incomplete.
+ notifyError(
+ t('users.toasts.nodeAccessPartial', {
+ count: failedNodes.length,
+ names: failedNodes.join(', '),
  }),
- onSuccess: () => {
+ );
+ } else {
  notifySuccess(t('users.toasts.created'));
+ }
+ if (nodeFlush) {
+ queryClient.invalidateQueries({ queryKey: qk.userNodes(created.id) });
+ queryClient.invalidateQueries({ queryKey: qk.nodes() });
+ }
  resetCreateForm();
  setIsCreateOpen(false);
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ },
+ onError: (error: any) => {
+ notifyError(error);
+ },
+ });
+
+ /**
+ * Row "…" → Roles: change a user's role set without opening the full editor.
+ * Only `roleIds` is sent — every other field of PUT /api/admin/users is
+ * optional, so the rest of the account is left untouched.
+ */
+ const quickRolesMutation = useMutation({
+ mutationFn: (payload: { userId: string; roleIds: string[] }) =>
+ adminApi.updateUser(payload.userId, { roleIds: payload.roleIds }),
+ onSuccess: (_data, variables) => {
+ notifySuccess(t('users.toasts.rolesUpdated'));
+ setQuickRolesUser(null);
+ queryClient.invalidateQueries({ queryKey: qk.userRoles(variables.userId) });
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+ queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
  },
  onError: (error: any) => {
  notifyError(error);
@@ -729,6 +818,10 @@ function UsersPage() {
  setCreateServerIds([]);
  setRoleSearch('');
  setServerSearch('');
+ setShowPassword(false);
+ // Create-mode node picks belong to the account that was just created; they
+ // must not leak into the next one.
+ setSelectedNodeIds([]);
  }, []);
 
  const resetEditForm = useCallback(() => {
@@ -743,6 +836,25 @@ function UsersPage() {
  setEditingUserId(null);
  setIsCreateOpen(false);
  };
+
+ /**
+ * Open the compact role editor for one row with the user's current roles
+ * preselected. Saves with `{roleIds}` only, so nothing else on the account
+ * (email, username, password, server access) is touched.
+ */
+ const startQuickRoles = (user: AdminUser) => {
+ setQuickRolesUser(user);
+ setQuickRoleIds(user.roles.map((role) => role.id));
+ setQuickRoleSearch('');
+ };
+
+ const quickRolesFiltered = useMemo(
+ () =>
+ sortedRoles.filter((role) =>
+ role.name.toLowerCase().includes(quickRoleSearch.trim().toLowerCase()),
+ ),
+ [sortedRoles, quickRoleSearch],
+ );
 
  const handleEditUser = async (user: AdminUser) => {
  const nextId = user.id;
@@ -1024,6 +1136,11 @@ function UsersPage() {
  <span className="text-mini text-foreground">
  {t('users.selectedCount', { count: selectedIds.length })}
  </span>
+ {selectedOffPageCount > 0 && (
+ <span className="text-micro text-muted-foreground">
+ {t('users.selectedOffPage', { count: selectedOffPageCount })}
+ </span>
+ )}
  <button
  type="button"
  onClick={() => setSelectedIds([])}
@@ -1039,7 +1156,7 @@ function UsersPage() {
  <Button variant="outline" size="sm" onClick={() => handleBulkUnban(selectedIds, t('users.userCount', { count: selectedIds.length }))} disabled={banMutation.isPending || unbanMutation.isPending || bulkDeleteMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground">
  <CheckCircle className="h-3 w-3" /> {t('users.unban')}
  </Button>
- {selectedIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
+ {selectedOnPageIds.some((id) => !users.find((u) => u.id === id)?.emailVerified) && (
  <Button variant="outline" size="sm" onClick={() => handleBulkVerifyEmails(selectedIds)} disabled={verifyEmailMutation.isPending} className="h-7 gap-1.5 rounded-sm px-2.5 text-mini text-muted-foreground">
  <MailCheck className="h-3 w-3" /> {t('users.verifyEmails')}
  </Button>
@@ -1255,6 +1372,15 @@ function UsersPage() {
  <Eye className="h-3.5 w-3.5" />
  {t('users.view')}
  </DropdownMenuItem>
+ <DropdownMenuSeparator />
+ <DropdownMenuItem
+ onClick={() => startQuickRoles(user)}
+ disabled={quickRolesMutation.isPending}
+ className="gap-2 text-mini"
+ >
+ <Shield className="h-3.5 w-3.5" />
+ {t('users.changeRoles')}
+ </DropdownMenuItem>
  <DropdownMenuItem
  onClick={() => handleEditUser(user)}
  disabled={updateMutation.isPending}
@@ -1373,6 +1499,105 @@ function UsersPage() {
  </div>}
  </div>
 
+ {/* ── Quick roles dialog (row "…" → Roles) ── */}
+ <Dialog
+ open={!!quickRolesUser}
+ onOpenChange={(open) => {
+ if (!open) {
+ setQuickRolesUser(null);
+ setQuickRoleSearch('');
+ }
+ }}
+ >
+ <DialogContent size="md">
+ <form
+ onSubmit={(event: FormEvent<HTMLFormElement>) => {
+ event.preventDefault();
+ if (!quickRolesUser || quickRolesMutation.isPending) return;
+ quickRolesMutation.mutate({
+ userId: quickRolesUser.id,
+ roleIds: quickRoleIds,
+ });
+ }}
+ >
+ <DialogHeader>
+ <DialogTitle>{t('users.quickRolesTitle')}</DialogTitle>
+ <DialogDescription>
+ {quickRolesUser
+ ? t('users.quickRolesDescription', { username: quickRolesUser.username })
+ : t('users.quickRolesDescriptionFallback')}
+ </DialogDescription>
+ </DialogHeader>
+ <DialogBody className="space-y-2">
+ <div className="relative">
+ <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+ <Input
+ value={quickRoleSearch}
+ onChange={(event) => setQuickRoleSearch(event.target.value)}
+ placeholder={t('users.searchRoles')}
+ className="h-8 pl-8 text-mini"
+ />
+ </div>
+ <div className="max-h-72 space-y-1 overflow-y-auto">
+ {quickRolesFiltered.length === 0 ? (
+ <p className="px-1 py-3 text-mini italic text-muted-foreground">{t('users.noRolesMatch')}</p>
+ ) : (
+ quickRolesFiltered.map((role) => {
+ const checked = quickRoleIds.includes(role.id);
+ return (
+ <label
+ key={role.id}
+ className={cn(
+ 'flex cursor-pointer items-center gap-2 rounded-sm border px-2.5 py-1.5 text-mini transition-colors',
+ checked
+ ? 'border-primary/30 bg-primary/5 text-foreground'
+ : 'border-border/40 bg-card text-muted-foreground hover:border-primary/20',
+ )}
+ >
+ <input
+ type="checkbox"
+ checked={checked}
+ onChange={() => setQuickRoleIds((prev) => toggleItem(prev, role.id))}
+ className="h-3.5 w-3.5 rounded-sm border-border bg-card text-primary"
+ />
+ <Shield className="h-3.5 w-3.5 shrink-0 text-primary" />
+ <span className="min-w-0 flex-1 truncate">{roleLabel(t, role.name)}</span>
+ {typeof role.userCount === 'number' && (
+ <span className="shrink-0 font-mono text-micro tabular-nums text-muted-foreground">
+ {role.userCount}
+ </span>
+ )}
+ </label>
+ );
+ })
+ )}
+ </div>
+ </DialogBody>
+ <DialogFooter className="sm:justify-between">
+ <span className="text-micro text-muted-foreground">
+ {t('users.quickRolesCount', { count: quickRoleIds.length })}
+ </span>
+ <div className="flex items-center gap-2">
+ <Button
+ type="button"
+ variant="outline"
+ size="sm"
+ onClick={() => {
+ setQuickRolesUser(null);
+ setQuickRoleSearch('');
+ }}
+ >
+ {t('common:actions.cancel')}
+ </Button>
+ <Button type="submit" size="sm" disabled={quickRolesMutation.isPending}>
+ {quickRolesMutation.isPending ? t('saving') : t('saveChanges')}
+ </Button>
+ </div>
+ </DialogFooter>
+ </form>
+ </DialogContent>
+ </Dialog>
+
  {/* ── Create/Edit User Dialog ── */}
 <Dialog
  open={isModalOpen}
@@ -1385,6 +1610,21 @@ function UsersPage() {
  }}
 >
  <DialogContent size="full" className="sm:h-[min(90dvh,54rem)]">
+ {/* A real form so Enter submits (audit item 8). Footer buttons that are not
+ the submit stay type="button". */}
+ <form
+ className="flex min-h-0 flex-1 flex-col overflow-hidden"
+ onSubmit={(event: FormEvent<HTMLFormElement>) => {
+ event.preventDefault();
+ if (editingUserId) {
+ if (!canSubmitEdit || updateMutation.isPending) return;
+ updateMutation.mutate(editingUserId);
+ return;
+ }
+ if (!canSubmitCreate || createMutation.isPending) return;
+ createMutation.mutate();
+ }}
+ >
  <DialogHeader>
  <DialogTitle>{editingUserId ? t('users.editTitle') : t('users.createTitle')}</DialogTitle>
  <DialogDescription>
@@ -1428,13 +1668,61 @@ function UsersPage() {
  {editingUserId ? t('users.newPasswordLabel') : t('users.passwordLabel')}
  {!editingUserId && <span className="text-destructive"> *</span>}
  </span>
+ <div className="flex items-center gap-1">
+ <div className="relative min-w-0 flex-1">
  <Input
- type="password"
+ type={showPassword ? 'text' : 'password'}
  autoComplete={editingUserId ? 'current-password' : 'new-password'}
  value={editingUserId ? editPassword : createPassword}
  onChange={(e) => editingUserId ? setEditPassword(e.target.value) : setCreatePassword(e.target.value)}
  placeholder={editingUserId ? t('users.leaveBlankPlaceholder') : '********'}
+ className="pr-8"
  />
+ <button
+ type="button"
+ onClick={() => setShowPassword((prev) => !prev)}
+ title={showPassword ? t('users.hidePassword') : t('users.showPassword')}
+ aria-label={showPassword ? t('users.hidePassword') : t('users.showPassword')}
+ className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ >
+ {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+ </button>
+ </div>
+ {/* Generating is only offered while creating an account — on edit, a blank
+ field means "keep the current password". */}
+ {!editingUserId && (
+ <>
+ <Button
+ type="button"
+ variant="outline"
+ size="sm"
+ className="h-9 shrink-0 gap-1 px-2 text-micro"
+ onClick={() => {
+ const generated = generatePassword(16);
+ setCreatePassword(generated);
+ setShowPassword(true);
+ }}
+ >
+ <KeyRound className="h-3 w-3" />
+ {t('users.generatePassword')}
+ </Button>
+ <Button
+ type="button"
+ variant="outline"
+ size="sm"
+ className="h-9 shrink-0 gap-1 px-2 text-micro"
+ disabled={!createPassword.trim()}
+ onClick={() => {
+ copyToClipboard(createPassword.trim(), t('users.toasts.passwordCopied'), notifyError);
+ }}
+ title={t('users.copyPassword')}
+ aria-label={t('users.copyPassword')}
+ >
+ <Copy className="h-3 w-3" />
+ </Button>
+ </>
+ )}
+ </div>
  </label>
  </div>
 
@@ -1602,7 +1890,7 @@ function UsersPage() {
  </DialogBody>
 
  <DialogFooter className="gap-3 sm:justify-between">
- <Button variant="ghost" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
+ <Button type="button" variant="outline" size="sm" onClick={() => { resetCreateForm(); setIsCreateOpen(false); resetEditForm(); }}>
  {t('common:actions.cancel')}
  </Button>
  <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -1621,15 +1909,9 @@ function UsersPage() {
  ))}
  </div>
  <Button
+ type="submit"
  size="sm"
  disabled={editingUserId ? !canSubmitEdit || updateMutation.isPending : !canSubmitCreate || createMutation.isPending}
- onClick={() => {
- if (editingUserId) {
- updateMutation.mutate(editingUserId);
- } else {
- createMutation.mutate();
- }
- }}
  className="gap-1"
  >
  {createMutation.isPending || updateMutation.isPending
@@ -1640,6 +1922,7 @@ function UsersPage() {
  </Button>
  </div>
  </DialogFooter>
+ </form>
  </DialogContent>
  </Dialog>
 

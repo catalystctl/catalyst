@@ -84,7 +84,7 @@ export const qk = {
   dashboardResources: () => ['dashboard-resources'] as const,
 
   // ── Alerts ──────────────────────────────────────────────────────────
-  alerts: (params?: { filterResolved?: 'true' | 'all' | 'false'; serverId?: string; scope?: string }) =>
+  alerts: (params?: { filterResolved?: 'true' | 'all' | 'false'; serverId?: string; scope?: string; severity?: string }) =>
     params ? ['alerts', params] as const : ['alerts'] as const,
   alertRules: (params?: Record<string, unknown>) =>
     params ? ['alert-rules', params] as const : ['alert-rules'] as const,
@@ -220,6 +220,27 @@ export const qk = {
   // ── Roles / Node Assignments ─────────────────────────────────────────
   roleNodes: (roleId: string) => ['roles', roleId, 'nodes'] as const,
   userNodes: (userId: string) => ['users', userId, 'nodes'] as const,
+  /** Role detail with its member list (`GET /api/roles/:id`). */
+  roleMembers: (roleId: string) => ['roles', roleId, 'members'] as const,
+  /** Roles + aggregated permissions of one user (`GET /api/roles/users/:userId/roles`). */
+  userRoles: (userId: string) => ['users', userId, 'roles'] as const,
+
+  // ── Mod updates summary (per-server, cross-tab badge) ────────────────
+  /**
+   * Shared contract: the mods tab writes it, ServerTabBar reads it with
+   * `enabled: false` for the "N updates" badge. The key literal is fixed —
+   * `['mod-updates-summary', serverId]` — so the reader does not import this.
+   */
+  modUpdatesSummary: (serverId: string) => ['mod-updates-summary', serverId] as const,
+
+  // ── Secondary backup drive (admin setting + per-server availability) ──
+  /**
+   * Prefix for every per-server secondary-drive availability query. The admin
+   * setting write invalidates this prefix so CreateBackupModal (which keys on
+   * `backupSecondaryDrive(serverId)`) stops offering a drive that was just
+   * turned off, without knowing any server id.
+   */
+  allBackupSecondaryDrives: () => ['backup-secondary-drive'] as const,
 
   // ── Files / SFTP ────────────────────────────────────────────────────
   sftpTokens: (serverId: string) => ['servers', serverId, 'sftp-tokens'] as const,

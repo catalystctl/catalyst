@@ -15,11 +15,18 @@ import {
 type EulaModalProps = {
   eulaText: string;
   onAccept: () => void;
+  /** Explicit "Decline" button only — closing the dialog must not decline. */
   onDecline: () => void;
+  /**
+   * Esc / overlay / close-button dismissal. Neutral by contract (audit D10):
+   * closing the prompt is not a decision, so it leaves the server waiting for
+   * an answer instead of posting a decline nobody meant to send.
+   */
+  onDismiss?: () => void;
   isLoading?: boolean;
 };
 
-export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: EulaModalProps) {
+export default function EulaModal({ eulaText, onAccept, onDecline, onDismiss, isLoading }: EulaModalProps) {
   const { t } = useTranslation('servers');
   const [canAccept, setCanAccept] = useState(false);
 
@@ -40,7 +47,10 @@ export default function EulaModal({ eulaText, onAccept, onDecline, isLoading }: 
     <Dialog
       open
       onOpenChange={(next) => {
-        if (!next && !isLoading) onDecline();
+        // Neutral dismissal: Esc, the overlay and the close button all land
+        // here and none of them is a decision (audit D10). Without an onDismiss
+        // handler the dialog simply closes; only the Decline button declines.
+        if (!next && !isLoading) onDismiss?.();
       }}
     >
       <DialogContent size="lg">

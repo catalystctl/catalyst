@@ -8,6 +8,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useInRouterContext, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 
@@ -62,7 +63,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { reportSystemError } from '../../services/api/systemErrors';
 
 type CreatePayload = {
@@ -102,6 +102,29 @@ const itemVariants: Variants = {
   visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 350, damping: 26 } },
 };
 
+/**
+ * Files-tab state that must survive a tab switch lives in the URL: the folder
+ * (`?path=`), the filter (`?q=`) and the sort (`?sort=field:dir`). Returning to
+ * the Files tab therefore resumes where the user left off instead of at root.
+ * Selection is deliberately not persisted — it is a transient clipboard.
+ */
+type UrlState = {
+  path?: string;
+  onPathChange?: (next: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (next: string) => void;
+  sortField?: SortField;
+  sortDirection?: SortDirection;
+  onSortChange?: (field: SortField, direction: SortDirection) => void;
+};
+
+const parseSort = (raw: string | null): { field: SortField; direction: SortDirection } | null => {
+  if (!raw) return null;
+  const [field, direction] = raw.split(':');
+  if (field !== 'name' && field !== 'size' && field !== 'modified' && field !== 'mode') return null;
+  return { field, direction: direction === 'desc' ? 'desc' : 'asc' };
+};
+
 function FileManager({
   serverId,
   isSuspended = false,
@@ -111,10 +134,82 @@ function FileManager({
   isSuspended?: boolean;
   canWrite?: boolean;
 }) {
+  // useSearchParams throws outside a router; the manager also renders in tests
+  // and embedded explorers, so the URL-backed branch is a separate component.
+  const inRouter = useInRouterContext();
+  return inRouter ? (
+    <RoutedFileManager serverId={serverId} isSuspended={isSuspended} canWrite={canWrite} />
+  ) : (
+    <FileManagerImpl serverId={serverId} isSuspended={isSuspended} canWrite={canWrite} />
+  );
+}
+
+function RoutedFileManager({
+  serverId,
+  isSuspended = false,
+  canWrite = false,
+}: {
+  serverId: string;
+  isSuspended?: boolean;
+  canWrite?: boolean;
+}) {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const urlSort = parseSort(searchParams.get('sort'));
+  const urlPath = searchParams.get('path') ?? undefined;
+  const urlQuery = searchParams.get('q') ?? undefined;
+
+  const setUrlParam = useCallback(
+    (key: string, value: string | null) => {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          if (!value) next.delete(key);
+          else next.set(key, value);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  return (
+    <FileManagerImpl
+      serverId={serverId}
+      isSuspended={isSuspended}
+      canWrite={canWrite}
+      urlState={{
+        path: urlPath,
+        onPathChange: (next) => setUrlParam('path', next === '/' ? null : next),
+        searchQuery: urlQuery,
+        onSearchQueryChange: (next) => setUrlParam('q', next.trim() ? next : null),
+        sortField: urlSort?.field,
+        sortDirection: urlSort?.direction,
+        onSortChange: (field, direction) => setUrlParam('sort', `${field}:${direction}`),
+      }}
+    />
+  );
+}
+
+function FileManagerImpl({
+  serverId,
+  isSuspended = false,
+  canWrite = false,
+  urlState,
+}: {
+  serverId: string;
+  isSuspended?: boolean;
+  canWrite?: boolean;
+  urlState?: UrlState;
+}) {
   const { t } = useTranslation('server-tabs');
+  const fileManager = useFileManager(serverId, {
+    path: urlState?.path,
+    onPathChange: urlState?.onPathChange,
+  });
   const {
     path,
-    setPath,
     files,
     message,
     isLoading,
@@ -127,14 +222,15 @@ function FileManager({
     updateActiveContent,
     markActiveSaved,
     closeActiveFile,
-  } = useFileManager(serverId);
+  } = fileManager;
+  // Controlled by the URL when a router is present, local state otherwise.
+  const setPath = fileManager.setPath;
   const queryClient = useQueryClient();
 
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
   const [showUpload, setShowUpload] = useState(false);
   const [createMode, setCreateMode] = useState<'file' | 'directory' | null>(null);
   const [createName, setCreateName] = useState('');
-  const [createContent, setCreateContent] = useState('');
   const [showCompress, setShowCompress] = useState(false);
   const [showDecompress, setShowDecompress] = useState(false);
   const [archiveName, setArchiveName] = useState('archive.tar.gz');
@@ -144,8 +240,10 @@ function FileManager({
   const [permissionsValue, setPermissionsValue] = useState('');
   const [permissionsError, setPermissionsError] = useState<string | null>(null);
   const [renamingEntry, setRenamingEntry] = useState<FileEntry | null>(null);
-  const [sortField, setSortField] = useState<SortField>('name');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+  const [localSortField, setLocalSortField] = useState<SortField>('name');
+  const [localSortDirection, setLocalSortDirection] = useState<SortDirection>('asc');
+  const sortField = urlState?.sortField ?? localSortField;
+  const sortDirection = urlState?.sortDirection ?? localSortDirection;
   const [archiveBrowsePath, setArchiveBrowsePath] = useState<string | null>(null);
   const [archiveBrowseDir, setArchiveBrowseDir] = useState('/');
   const [archiveEntries, setArchiveEntries] = useState<
@@ -157,7 +255,12 @@ function FileManager({
     recommendedMaxBufferMb: number;
   } | null>(null);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
+  const searchQuery = urlState?.searchQuery ?? localSearchQuery;
+  const setSearchQuery = (next: string) => {
+    if (urlState?.onSearchQueryChange) urlState.onSearchQueryChange(next);
+    else setLocalSearchQuery(next);
+  };
   const [isFileDropActive, setIsFileDropActive] = useState(false);
   const fileDropDepthRef = useRef(0);
 
@@ -248,15 +351,16 @@ function FileManager({
   }, [filteredFiles, sortField, sortDirection]);
 
   const handleSort = useCallback((field: SortField) => {
-    setSortField((prev) => {
-      if (prev === field) {
-        setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
-        return prev;
+    const apply = (nextField: SortField, nextDirection: SortDirection) => {
+      if (urlState?.onSortChange) urlState.onSortChange(nextField, nextDirection);
+      else {
+        setLocalSortField(nextField);
+        setLocalSortDirection(nextDirection);
       }
-      setSortDirection('asc');
-      return field;
-    });
-  }, []);
+    };
+    const sameField = sortField === field;
+    apply(field, sameField ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'asc');
+  }, [sortField, sortDirection, urlState]);
 
   const breadcrumbs = useMemo(() => buildBreadcrumbs(path), [path]);
   const selectedEntries = useMemo(
@@ -271,6 +375,19 @@ function FileManager({
       : undefined;
 
   const allSelected = sortedFiles.length > 0 && selectedPaths.size === sortedFiles.length;
+
+  // Editor Prev/Next walks the files in this listing (folders are skipped):
+  // comparing two configs no longer needs close → reopen.
+  const editorNeighbours = useMemo(() => {
+    const openable = sortedFiles.filter((entry) => !entry.isDirectory);
+    const index = activeFile
+      ? openable.findIndex((entry) => entry.path === activeFile.path)
+      : -1;
+    return {
+      previous: index > 0 ? openable[index - 1] : undefined,
+      next: index >= 0 && index < openable.length - 1 ? openable[index + 1] : undefined,
+    };
+  }, [sortedFiles, activeFile]);
 
   const invalidateFiles = () => {
     queryClient.invalidateQueries({ queryKey: qk.files(serverId, path) });
@@ -292,7 +409,6 @@ function FileManager({
     },
     onSuccess: (entry) => {
       setCreateName('');
-      setCreateContent('');
       setCreateMode(null);
       notifySuccess(
         entry.isDirectory ? t('files.manager.folderCreated') : t('files.manager.fileCreated'),
@@ -730,15 +846,15 @@ function FileManager({
     renameMutation.mutate({ from: entry.path, to: newPath });
   };
 
-  const handleCreateSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  /** Inline "New file / New folder" row: Enter creates, Esc cancels. */
+  const handleCreateSubmit = (rawName?: string) => {
     if (!createMode) return;
-    const name = createName.trim();
+    const name = (rawName ?? createName).trim();
     if (!name) return;
     createMutation.mutate({
       name,
       isDirectory: createMode === 'directory',
-      content: createContent,
+      content: '',
     });
   };
 
@@ -1136,6 +1252,16 @@ function FileManager({
             sortField={sortField}
             sortDirection={sortDirection}
             renamingEntry={renamingEntry}
+            renamePending={renameMutation.isPending}
+            createMode={createMode}
+            createName={createName}
+            createPending={createMutation.isPending}
+            onCreateNameChange={setCreateName}
+            onCreateSubmit={handleCreateSubmit}
+            onCreateCancel={() => {
+              setCreateMode(null);
+              setCreateName('');
+            }}
             onSort={handleSort}
             onSelectAll={handleSelectAll}
             onOpen={handleOpen}
@@ -1244,6 +1370,18 @@ function FileManager({
                 }}
                 onClose={closeActiveFile}
                 isSuspended={isSuspended || !canWrite}
+                previousName={editorNeighbours.previous?.name}
+                nextName={editorNeighbours.next?.name}
+                onPrevious={
+                  editorNeighbours.previous
+                    ? () => void openFile(editorNeighbours.previous as FileEntry)
+                    : undefined
+                }
+                onNext={
+                  editorNeighbours.next
+                    ? () => void openFile(editorNeighbours.next as FileEntry)
+                    : undefined
+                }
               />
             )}
           </DialogBody>
@@ -1453,71 +1591,8 @@ function FileManager({
         </DialogContent>
       </Dialog>
 
-      {/* Create file/folder modal */}
-      <Dialog
-        open={!!createMode}
-        onOpenChange={(open) => {
-          if (!open) setCreateMode(null);
-        }}
-      >
-        <DialogContent size={createMode === 'file' ? 'md' : 'sm'}>
-          <form onSubmit={handleCreateSubmit} className="flex min-h-0 flex-1 flex-col">
-            <DialogHeader>
-              <DialogTitle>
-                {createMode === 'directory'
-                  ? t('files.manager.createFolder')
-                  : t('files.manager.createFile')}
-              </DialogTitle>
-              <DialogDescription>
-                {createMode === 'directory'
-                  ? t('files.manager.createFolderDescription')
-                  : t('files.manager.createFileDescription')}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogBody className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="create-entry-name">{t('files.manager.name')}</Label>
-                <Input
-                  id="create-entry-name"
-                  value={createName}
-                  onChange={(e) => setCreateName(e.target.value)}
-                  placeholder={createMode === 'directory' ? 'configs' : 'server.properties'}
-                  autoFocus
-                />
-              </div>
-              {createMode === 'file' && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="create-file-content">{t('files.manager.initialContent')}</Label>
-                  <Textarea
-                    id="create-file-content"
-                    className="h-24 font-mono"
-                    value={createContent}
-                    onChange={(e) => setCreateContent(e.target.value)}
-                    placeholder="# New file"
-                  />
-                </div>
-              )}
-            </DialogBody>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setCreateMode(null)}>
-                {t('common:actions.cancel')}
-              </Button>
-              <Button
-                type="submit"
-                disabled={!createName.trim() || createMutation.isPending || writeDisabled}
-              >
-                {createMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : createMode === 'directory' ? (
-                  t('files.manager.createFolder')
-                ) : (
-                  t('files.manager.createFile')
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {/* Create file/folder is an inline row in the list (see FileList), so a
+          new entry costs two clicks and never blocks the listing. */}
 
       {/* Compress modal */}
       <Dialog open={showCompress} onOpenChange={setShowCompress}>

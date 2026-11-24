@@ -57,6 +57,12 @@ import { useServers } from '../../hooks/useServers';
 import { useNodes, useAccessibleNodes } from '../../hooks/useNodes';
 import { useTemplates } from '../../hooks/useTemplates';
 import { useAvailableDatabaseHosts } from '../../hooks/useServerDatabases';
+import { usePluginTabs } from '../../plugins/hooks';
+import { queryClient } from '@/lib/queryClient';
+import { qk } from '@/lib/queryKeys';
+import type { AdminUser, Role } from '../../types/admin';
+import type { Alert } from '../../types/alert';
+import type { ApiKey } from '../../services/apiKeys';
 import { canShowServerDatabasesTab } from '../../utils/serverTabs';
 import { cn } from '../../lib/utils';
 
@@ -86,7 +92,9 @@ type SearchCategory =
  | 'Templates'
  | 'Profile'
  | 'Actions'
- | 'Server Tabs';
+ | 'Server Tabs'
+ | 'Users & Roles'
+ | 'Plugins';
 
 const buildCategoryMeta = (t: TFunction): Record<SearchCategory, { label: string; icon: LucideIcon; color: string }> => ({
  Navigation: { label: t('layout:search.categories.pages'), icon: LayoutDashboard, color: 'text-muted-foreground' },
@@ -96,20 +104,24 @@ const buildCategoryMeta = (t: TFunction): Record<SearchCategory, { label: string
  Nodes: { label: t('layout:search.categories.nodes'), icon: MonitorDot, color: 'text-muted-foreground' },
  Templates: { label: t('layout:search.categories.templates'), icon: FileText, color: 'text-muted-foreground' },
  Profile: { label: t('layout:search.categories.account'), icon: Users, color: 'text-muted-foreground' },
+ 'Users & Roles': { label: t('layout:search.categories.usersRoles'), icon: Users, color: 'text-muted-foreground' },
  Actions: { label: t('layout:search.categories.actions'), icon: Zap, color: 'text-muted-foreground' },
  'Server Tabs': { label: t('layout:search.categories.serverTabs'), icon: Terminal, color: 'text-muted-foreground' },
+ Plugins: { label: t('layout:search.categories.plugins'), icon: Plug, color: 'text-muted-foreground' },
 });
 
 const CATEGORY_ORDER: SearchCategory[] = [
  'Navigation',
+ 'Actions',
  'Admin',
  'Settings',
  'Servers',
  'Server Tabs',
  'Nodes',
  'Templates',
+ 'Users & Roles',
+ 'Plugins',
  'Profile',
- 'Actions',
 ];
 
 // ══════════════════════════════════════════════════════════════
@@ -359,6 +371,9 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  },
 
  // ── Theme Settings Deep Links ───────────────────────────
+ // One entry per section on the page, each carrying the section's anchor id
+ // (keys-theme-profile contract). They used to be ~11 rows that all landed at
+ // the top of /admin/theme-settings.
  {
  id: 'settings-theme-overview',
  label: t('layout:search.items.settingsThemeOverview.label'),
@@ -375,7 +390,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsBranding.label'),
  description: t('layout:search.items.settingsBranding.description'),
  icon: Layers,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#branding',
  category: 'Settings',
  keywords: [
  'branding', 'logo', 'panel name', 'favicon', 'identity', 'brand',
@@ -389,7 +404,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsPaletteGenerator.label'),
  description: t('layout:search.items.settingsPaletteGenerator.description'),
  icon: Wand2,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#palette-generator',
  category: 'Settings',
  keywords: [
  'palette', 'color palette', 'palette generator', 'theme palette',
@@ -404,7 +419,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsBrandColors.label'),
  description: t('layout:search.items.settingsBrandColors.description'),
  icon: SwatchBook,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#brand-colors',
  category: 'Settings',
  keywords: [
  'primary color', 'secondary color', 'accent color', 'brand color',
@@ -418,7 +433,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsSemanticColors.label'),
  description: t('layout:search.items.settingsSemanticColors.description'),
  icon: Palette,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#semantic-colors',
  category: 'Settings',
  keywords: [
  'success color', 'warning color', 'danger color', 'info color',
@@ -432,7 +447,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsDarkSurfaces.label'),
  description: t('layout:search.items.settingsDarkSurfaces.description'),
  icon: Moon,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#dark-surfaces',
  category: 'Settings',
  keywords: [
  'dark mode', 'dark theme', 'dark surfaces', 'dark background',
@@ -446,7 +461,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsLightSurfaces.label'),
  description: t('layout:search.items.settingsLightSurfaces.description'),
  icon: Sun,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#light-surfaces',
  category: 'Settings',
  keywords: [
  'light mode', 'light theme', 'light surfaces', 'light background',
@@ -460,7 +475,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsThemeMode.label'),
  description: t('layout:search.items.settingsThemeMode.description'),
  icon: Layers,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#theme-mode',
  category: 'Settings',
  keywords: [
  'theme mode', 'default theme', 'light', 'dark', 'system theme',
@@ -474,7 +489,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsLayout.label'),
  description: t('layout:search.items.settingsLayout.description'),
  icon: Layout,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#layout-radius',
  category: 'Settings',
  keywords: [
  'layout', 'border radius', 'roundness', 'spacing', 'corners',
@@ -488,7 +503,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsCustomCss.label'),
  description: t('layout:search.items.settingsCustomCss.description'),
  icon: Globe,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#custom-css',
  category: 'Settings',
  keywords: [
  'custom css', 'css', 'custom styling', 'stylesheet', 'injection',
@@ -502,7 +517,7 @@ const buildStaticItems = (t: TFunction): StaticItemDef[] => [
  label: t('layout:search.items.settingsSso.label'),
  description: t('layout:search.items.settingsSso.description'),
  icon: ShieldCheck,
- to: '/admin/theme-settings',
+ to: '/admin/theme-settings#sso',
  category: 'Settings',
  keywords: [
  'sso', 'oauth', 'oidc', 'single sign-on', 'whmcs', 'paymenter',
@@ -749,8 +764,17 @@ const buildServerTabs = (t: TFunction): { key: string; label: string; descriptio
 ];
 
 // ── Quick Actions ─────────────────────────────────────────
+//
+// Every action is gated by the permission its destination requires; the gate
+// lives in the component (which reads the caller's permissions) so the list can
+// stay a pure function here.
 
-const buildQuickActions = (t: TFunction): Omit<SearchItem, 'category'>[] => [
+interface QuickActionDef extends Omit<SearchItem, 'category'> {
+ /** Any one of these grants is enough to offer the action. */
+ permissions: string[];
+}
+
+const buildQuickActions = (t: TFunction): QuickActionDef[] => [
  {
  id: 'action-create-server',
  label: t('layout:search.quickActions.createServer.label'),
@@ -758,6 +782,34 @@ const buildQuickActions = (t: TFunction): Omit<SearchItem, 'category'>[] => [
  icon: Plus,
  to: '/servers?action=create',
  keywords: ['create', 'new', 'deploy', 'provision', 'add server'],
+ permissions: ['server.create'],
+ },
+ {
+ id: 'action-create-backup',
+ label: t('layout:search.quickActions.createBackup.label'),
+ description: t('layout:search.quickActions.createBackup.description'),
+ icon: HardDrive,
+ to: '/servers',
+ keywords: ['backup', 'snapshot', 'archive', 'save', 'new backup', 'create backup'],
+ permissions: ['backup.create'],
+ },
+ {
+ id: 'action-restart-server',
+ label: t('layout:search.quickActions.restartServer.label'),
+ description: t('layout:search.quickActions.restartServer.description'),
+ icon: Zap,
+ to: '/servers',
+ keywords: ['restart', 'reboot', 'power cycle', 'bounce'],
+ permissions: ['server.start', 'server.stop'],
+ },
+ {
+ id: 'action-create-user',
+ label: t('layout:search.quickActions.createUser.label'),
+ description: t('layout:search.quickActions.createUser.description'),
+ icon: Users,
+ to: '/admin/users',
+ keywords: ['user', 'account', 'invite', 'new user', 'create user', 'member'],
+ permissions: ['user.create'],
  },
 ];
 
@@ -781,6 +833,30 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const { data: accessibleNodes } = useAccessibleNodes();
  const { data: templates, isLoading: templatesLoading } = useTemplates();
  const { data: databaseHosts = [] } = useAvailableDatabaseHosts();
+ const pluginTabs = usePluginTabs('admin');
+
+ // ── Entity index from data already in the cache (no new requests) ──
+ //
+ // Users, roles, API keys and alerts are only in the cache when the caller has
+ // visited (or already loaded) those pages. Read what exists; never trigger a
+ // fetch from the palette. Recomputed each time it opens, so a page visited
+ // between two openings is picked up.
+ const cachedEntities = useMemo(() => {
+   const firstList = <T,>(key: readonly unknown[]): T[] => {
+     const data = queryClient.getQueryData<{ users?: T[]; roles?: T[]; alerts?: T[] } | T[]>(key as never);
+     if (!data) return [];
+     if (Array.isArray(data)) return data;
+     return (data.users ?? data.roles ?? data.alerts ?? []) as T[];
+   };
+   const roleData = queryClient.getQueryData<Role[]>(qk.adminRoles() as never);
+   return {
+     users: firstList<AdminUser>(qk.adminUsers() as unknown as readonly unknown[]),
+     roles: Array.isArray(roleData) ? roleData : [],
+     apiKeys: queryClient.getQueryData<ApiKey[]>(qk.apiKeys() as never) ?? [],
+     alerts: firstList<Alert>(qk.alerts() as unknown as readonly unknown[]),
+   };
+   // eslint-disable-next-line react-hooks/exhaustive-deps -- cache reads keyed on open
+ }, [isOpen]);
 
  const [query, setQuery] = useState('');
  const [selectedIndex, setSelectedIndex] = useState(0);
@@ -903,15 +979,101 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  }
  }
 
- // Only advertise an action when the destination can perform it.
- if (hasAnyPermission(user?.permissions, ['server.create']) || accessibleNodes?.hasWildcard || accessibleNodes?.nodes.length) {
-   for (const action of buildQuickActions(t)) {
-     items.push({ ...action, category: 'Actions' as SearchCategory });
+ // Users, roles, API keys and alerts — cached entities only.
+ const permissions = user?.permissions ?? [];
+ if (hasAnyPermission(permissions, ['user.read', 'user.update', 'admin.read', 'admin.write'])) {
+   for (const account of cachedEntities.users) {
+     items.push({
+       id: `user-${account.id}`,
+       label: account.username,
+       description: account.email,
+       icon: Users,
+       to: '/admin/users',
+       category: 'Users & Roles',
+       keywords: [account.email, 'user', 'account', 'member'],
+       badge: t('layout:nav.users'),
+       path: `/admin/users#${account.id}`,
+     });
+   }
+ }
+ if (hasAnyPermission(permissions, ['role.read', 'role.update', 'admin.read', 'admin.write'])) {
+   for (const role of cachedEntities.roles) {
+     items.push({
+       id: `role-${role.id}`,
+       label: role.name,
+       description: role.description || t('search.roleDescription'),
+       icon: Shield,
+       to: '/admin/roles',
+       category: 'Users & Roles',
+       keywords: ['role', 'permission', 'group', ...role.permissions.slice(0, 5)],
+       badge: t('layout:nav.roles'),
+       path: `/admin/roles#${role.id}`,
+     });
+   }
+ }
+ if (hasAnyPermission(permissions, ['apikey.read', 'apikey.write', 'admin.read', 'admin.write'])) {
+   for (const apiKey of cachedEntities.apiKeys) {
+     const name = apiKey.name || apiKey.start || apiKey.prefix || apiKey.id.slice(0, 8);
+     items.push({
+       id: `api-key-${apiKey.id}`,
+       label: name,
+       description: apiKey.enabled ? t('search.apiKeyEnabled') : t('search.apiKeyDisabled'),
+       icon: Key,
+       to: '/admin/api-keys',
+       category: 'Admin',
+       keywords: ['api key', 'token', apiKey.start || '', apiKey.prefix || ''],
+       badge: t('layout:nav.apiKeys'),
+       path: `/admin/api-keys#${apiKey.id}`,
+     });
+   }
+ }
+ if (hasAnyPermission(permissions, ['alert.read', 'alert.update', 'admin.read', 'admin.write']) || cachedEntities.alerts.length > 0) {
+   for (const alert of cachedEntities.alerts) {
+     items.push({
+       id: `alert-${alert.id}`,
+       label: alert.title,
+       description: alert.server?.name || alert.node?.name || alert.message,
+       icon: Bell,
+       to: '/admin/alerts',
+       category: 'Admin',
+       keywords: ['alert', alert.severity, alert.type, alert.server?.name || ''],
+       badge: t('layout:nav.alerts'),
+       path: '/admin/alerts',
+     });
    }
  }
 
+ // Plugin tabs — the same source NavSectionsMenu lists, so a tab that exists
+ // in the rail cannot be missing from the palette.
+ if (hasAnyPermission(permissions, ['admin.read', 'admin.write'])) {
+   for (const tab of pluginTabs) {
+     if (tab.requiredPermissions?.length && !hasAnyPermission(permissions, tab.requiredPermissions)) continue;
+     items.push({
+       id: `plugin-tab-${tab.id}`,
+       label: tab.label,
+       description: t('search.pluginTab'),
+       icon: Plug,
+       to: `/admin/plugin/${tab.id}`,
+       category: 'Plugins',
+       keywords: ['plugin', 'extension', 'tab'],
+       badge: t('layout:sections.plugins'),
+       path: `/admin/plugin/${tab.id}`,
+     });
+   }
+ }
+
+ // Only advertise an action when the caller can perform it.
+ for (const action of buildQuickActions(t)) {
+   const allowed =
+     hasAnyPermission(permissions, action.permissions) ||
+     (action.id === 'action-create-server' && Boolean(accessibleNodes?.hasWildcard || accessibleNodes?.nodes.length));
+   if (!allowed) continue;
+   const { permissions: _permissions, ...item } = action;
+   items.push({ ...item, category: 'Actions' as SearchCategory });
+ }
+
  return items;
- }, [servers, nodes, templates, databaseHosts.length, user?.permissions, accessibleNodes, t]);
+ }, [servers, nodes, templates, databaseHosts.length, user?.permissions, accessibleNodes, t, cachedEntities, pluginTabs]);
 
  // ── Combined ──
 
@@ -1013,6 +1175,17 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  return () => window.removeEventListener('keydown', handleWindowKeyDown);
  }, [isOpen, closeAndRestoreFocus]);
 
+ // Lock the page scroll while the palette is open: the dialog itself scrolls on
+ // short viewports, and letting the page behind move loses the opener context.
+ useEffect(() => {
+ if (!isOpen) return;
+ const previousOverflow = document.body.style.overflow;
+ document.body.style.overflow = 'hidden';
+ return () => {
+ document.body.style.overflow = previousOverflow;
+ };
+ }, [isOpen]);
+
  // Reset selection when query/category changes
  useEffect(() => {
  setSelectedIndex(0);
@@ -1066,6 +1239,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  if (item.id === 'action-create-server' && onCreateServer) {
  onCreateServer();
  } else {
+ // A `#section` target (theme settings deep links) is honoured by the
+ // destination page's own hash handling; pushing it is all the palette owes.
  navigate(item.to);
  }
  onClose();
@@ -1120,7 +1295,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  aria-label={t('search.placeholder')}
  role="combobox"
  aria-autocomplete="list"
- aria-expanded={true}
+ aria-expanded={flatItems.length > 0}
  aria-controls={listId}
  aria-activedescendant={flatItems[selectedIndex] ? `${listId}-option-${selectedIndex}` : undefined}
  className="flex-1 border-none bg-transparent px-3 py-4 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
@@ -1140,7 +1315,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
 
  {/* ── Category Pills (visible when no query) ── */}
  {!query.trim() && availableCategories.length > 1 && (
- <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-border bg-card px-4 py-2 scrollbar-none">
+ <div className="sticky top-0 z-10 flex gap-1.5 overflow-x-auto border-b border-border bg-card px-4 py-2 scrollbar-hide">
  <button
  type="button"
  onClick={() => handleCategoryClick('All')}
@@ -1180,9 +1355,9 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  <div ref={listRef} id={listId} role="listbox" aria-label={t('search.placeholder')} className="max-h-[55vh] overflow-y-auto py-2">
  {flatItems.length === 0 ? (
  <div className="py-12 text-center">
- <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
+ <Search className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" aria-hidden="true" />
  <p className="text-sm font-medium text-muted-foreground">{t('search.noResults')}</p>
- <p className="mt-1 text-xs text-muted-foreground/60">
+ <p className="mt-1 text-xs text-muted-foreground/70">
  {t('search.noResultsHint')}
  </p>
  </div>
@@ -1193,14 +1368,17 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  const CatIcon = meta.icon;
 
  return (
- <div key={category}>
- {/* Group header */}
- <div className="sticky top-0 z-10 flex items-center gap-2 bg-card px-2 py-1.5">
- <CatIcon className={cn('h-3 w-3', meta.color)} />
+ <div key={category} role="group" aria-label={meta.label}>
+ {/*
+ Header is the group's accessible name; the listbox owns the options, so
+ it is presentational and must not add its own row semantics.
+ */}
+ <div role="presentation" className="sticky top-0 z-10 flex items-center gap-2 bg-card px-2 py-1.5">
+ <CatIcon className={cn('h-3 w-3', meta.color)} aria-hidden="true" />
  <span className="type-overline">
  {meta.label}
  </span>
- <span className="type-numeric text-micro text-muted-foreground/40">
+ <span className="type-numeric text-micro text-muted-foreground/70">
  {items.length}
  </span>
  </div>
@@ -1268,8 +1446,8 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  </div>
 
  {/* ── Footer ── */}
- <div className="flex items-center justify-between border-t border-border px-4 py-2.5">
- <div className="flex items-center gap-3 text-mini text-muted-foreground/60">
+ <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-border px-4 py-2.5">
+ <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-mini text-muted-foreground/70">
  <span className="flex items-center gap-1">
  <kbd className="rounded-sm bg-surface-2 px-1.5 py-0.5 font-mono text-micro">
  {typeof navigator !== 'undefined' && /Mac/.test(navigator.platform) ? '⌘K' : 'Ctrl+K'}
@@ -1289,7 +1467,7 @@ function SearchPalette({ isOpen, onClose, onCreateServer }: SearchPaletteProps) 
  {t('search.hints.close')}
  </span>
  </div>
- <div className="type-numeric text-mini text-muted-foreground/40">
+ <div className="type-numeric text-mini text-muted-foreground/70">
  {t('search.resultCount', { count: flatItems.length })}
  </div>
  </div>

@@ -14,6 +14,7 @@ import { Menu, X, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import UpdateNotification from '../shared/UpdateNotification';
 import EnvRestartNotice from './EnvRestartNotice';
+import EulaPrompt from '../servers/EulaPrompt';
 import UploadProgressIndicator from '../files/UploadProgressIndicator';
 import DownloadProgressIndicator from '../files/DownloadProgressIndicator';
 import { showsDemoChrome } from '../../demo/isDemo';
@@ -90,7 +91,9 @@ function AppLayout() {
     if (pathname === initialPath.current) return;
     initialPath.current = pathname;
     const frame = requestAnimationFrame(() => {
-      const heading = document.querySelector<HTMLElement>('#main-content h1');
+      // Admin pages render their title as `h2` (TabHeader), so a h1-only
+      // selector left focus on <body> there — the announcement never happened.
+      const heading = document.querySelector<HTMLElement>('#main-content h1, #main-content h2');
       if (heading) {
         heading.tabIndex = -1;
         heading.focus({ preventScroll: true });
@@ -251,6 +254,7 @@ function AppLayout() {
         </Suspense>
       )}
       <EnvRestartNotice />
+      <EulaPrompt />
       <div className="pointer-events-none fixed bottom-4 right-4 z-40 flex flex-col gap-2 lg:bottom-6 lg:right-6">
         <UploadProgressIndicator />
         <DownloadProgressIndicator />

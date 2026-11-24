@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, ArrowRight, Info, Loader2, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { qk } from '@/lib/queryKeys';
@@ -301,6 +301,16 @@ function CloneServerDialog({ server, disabled = false }: Props) {
     onSettled: (newServer) => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
       queryClient.invalidateQueries({ queryKey: qk.server(server.id) });
+      queryClient.invalidateQueries({ queryKey: qk.dashboardStats() });
+      queryClient.invalidateQueries({ queryKey: qk.adminStats() });
+      // A clone claims an allocation (and a cross-node clone claims one on the
+      // target node); that pool has no poll, so it must be told (audit C6).
+      if (server.nodeId) {
+        queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(server.nodeId) });
+      }
+      if (nodeId && nodeId !== server.nodeId) {
+        queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
+      }
       if (newServer?.id) {
         queryClient.invalidateQueries({ queryKey: qk.server(newServer.id) });
       }
@@ -564,14 +574,12 @@ function CloneServerDialog({ server, disabled = false }: Props) {
                       {!allocLoadError && availableAllocations.length === 0 && nodeId ? (
                         <p className="type-meta">
                           {t('fields.noAllocations')}{' '}
-                          <a
-                            href={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            to={`/admin/nodes/${encodeURIComponent(nodeId)}/allocations`}
                             className="font-medium text-primary hover:underline"
                           >
                             {t('fields.createOne')}
-                          </a>
+                          </Link>
                         </p>
                       ) : null}
                     </div>

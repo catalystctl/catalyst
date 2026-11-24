@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState, type ComponentType } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState, type ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
+import { useQuery } from '@/csync';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +18,33 @@ export type ServerNavTab = {
   onSelect: () => void;
 };
 
+/**
+ * Pages an operator uses while working on a server. They stay on the bar at any
+ * width — dropping to their icon first, and only ever moving to "More" as a last
+ * resort — because Backups and Tasks behind a menu cost a click every visit
+ * (audit D-13/overflow). Everything else (Sftp, Databases, Metrics, Admin, …)
+ * overflows in order.
+ */
+const PINNED_TAB_KEYS = ['console', 'files', 'backups', 'tasks'] as const;
+const PINNED = new Set<string>(PINNED_TAB_KEYS);
+
+/** Query key written by `hooks/useModUpdates.ts` (mods-config workstream). */
+const modUpdatesSummaryKey = (serverId: string) => ['mod-updates-summary', serverId] as const;
+
 const TAB_CLASS =
   'relative flex h-7 min-h-7 shrink-0 items-center gap-1.5 rounded-sm px-2.5 text-mini font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 [@media(pointer:coarse)]:h-8 [@media(pointer:coarse)]:min-h-8';
 
-function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
+function TabButton({
+  tab,
+  hidden,
+  iconOnly,
+  badge,
+}: {
+  tab: ServerNavTab;
+  hidden?: boolean;
+  iconOnly?: boolean;
+  badge?: number;
+}) {
   const Icon = tab.icon;
   return (
     <button
@@ -29,6 +53,8 @@ function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
       tabIndex={hidden ? -1 : undefined}
       aria-hidden={hidden || undefined}
       aria-current={!hidden && tab.active ? 'page' : undefined}
+      // An icon-only pin keeps its name for screen readers and tooltips.
+      aria-label={iconOnly ? badge ? `${tab.label} (${badge})` : tab.label : undefined}
       className={cn(
         TAB_CLASS,
         tab.active
@@ -41,7 +67,15 @@ function TabButton({ tab, hidden }: { tab: ServerNavTab; hidden?: boolean }) {
         <span className="absolute inset-x-1.5 bottom-0 h-[2px] bg-primary" aria-hidden />
       )}
       <Icon className="h-3.5 w-3.5" />
-      <span className="text-mini">{tab.label}</span>
+      {iconOnly ? null : <span className="text-mini">{tab.label}</span>}
+      {badge ? (
+        <span
+          className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] leading-none text-primary-foreground tabular-nums"
+          aria-hidden
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -50,25 +84,51 @@ function measureKey(tabs: ServerNavTab[]) {
   return tabs.map((tab) => `${tab.key}:${tab.label}`).join('|');
 }
 
-export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
+type Fit = { pinIconOnly: boolean; extraVisible: number };
+
+export default function ServerTabBar({
+  tabs,
+  serverId,
+}: {
+  tabs: ServerNavTab[];
+  /** Server whose mod-update badge to show; the summary query is read-only. */
+  serverId?: string;
+}) {
   const { t } = useTranslation('servers');
   const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const moreMeasureRef = useRef<HTMLButtonElement>(null);
-  const [visibleCount, setVisibleCount] = useState(tabs.length);
+  const [fit, setFit] = useState<Fit>({ pinIconOnly: false, extraVisible: tabs.length });
   const tabsKey = measureKey(tabs);
+
+  // Badge only: the summary is owned by the Mods tab (mods-config workstream),
+  // so this query never fetches — it just reads whatever that key already holds.
+  const { data: modSummary } = useQuery<{ updates?: number }>({
+    queryKey: modUpdatesSummaryKey(serverId ?? ''),
+    enabled: false,
+  });
+  const modUpdateCount = useMemo(() => {
+    const value = Number(modSummary?.updates ?? 0);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  }, [modSummary]);
 
   useLayoutEffect(() => {
     const container = containerRef.current;
     const measure = measureRef.current;
     if (!container || !measure) return;
 
-    const fit = () => {
-      const items = Array.from(measure.querySelectorAll<HTMLElement>('[data-measure-tab]'));
-      if (items.length === 0) {
-        setVisibleCount(0);
-        return;
-      }
+    const fitInto = () => {
+      const pinnedLabel = new Map<string, number>();
+      const pinnedIcon = new Map<string, number>();
+      const others = new Map<string, number>();
+      measure.querySelectorAll<HTMLElement>('[data-measure]').forEach((el) => {
+        const kind = el.dataset.measure ?? '';
+        const key = el.dataset.measureKey ?? '';
+        const width = el.offsetWidth;
+        if (kind === 'pin-label') pinnedLabel.set(key, width);
+        else if (kind === 'pin-icon') pinnedIcon.set(key, width);
+        else if (kind === 'other') others.set(key, width);
+      });
 
       const moreWidth = moreMeasureRef.current?.offsetWidth ?? 68;
       const measureStyles = getComputedStyle(measure);
@@ -78,38 +138,79 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
         container.clientWidth -
         (Number.parseFloat(box.paddingLeft) || 0) -
         (Number.parseFloat(box.paddingRight) || 0);
+      if (available <= 0) return;
 
-      let used = 0;
-      let count = items.length;
-      for (let i = 0; i < items.length; i++) {
-        const next = used + items[i].offsetWidth + (i > 0 ? gap : 0);
-        const remaining = items.length - (i + 1);
-        if (remaining === 0) {
-          count = next <= available ? items.length : i;
-          break;
-        }
-        if (next + gap + moreWidth > available) {
-          count = i;
-          break;
-        }
-        used = next;
+      const pinnedTabs = tabs.filter((tab) => PINNED.has(tab.key));
+      const otherTabs = tabs.filter((tab) => !PINNED.has(tab.key));
+      const total = pinnedTabs.length + otherTabs.length;
+      if (total === 0) {
+        setFit({ pinIconOnly: false, extraVisible: 0 });
+        return;
       }
 
-      setVisibleCount(Math.max(1, Math.min(items.length, count)));
+      const pinnedTotal = (iconOnly: boolean) =>
+        pinnedTabs.reduce((sum, tab) => sum + (iconOnly ? pinnedIcon.get(tab.key) ?? 40 : pinnedLabel.get(tab.key) ?? 90), 0) +
+        (pinnedTabs.length > 0 ? gap * (pinnedTabs.length - 1) : 0);
+
+      // Count how many non-pinned tabs still fit, keeping room for "More" when
+      // anything is left over.
+      const extrasFor = (pinnedWidth: number) => {
+        let used = pinnedWidth;
+        let count = 0;
+        for (let i = 0; i < otherTabs.length; i += 1) {
+          const width = others.get(otherTabs[i].key) ?? 80;
+          const remainingAfter = otherTabs.length - (i + 1);
+          const reserve = remainingAfter > 0 || pinnedWidth > 0 ? gap + moreWidth : 0;
+          const needed = (pinnedWidth > 0 || count > 0 ? gap : 0) + width;
+          if (used + needed + reserve > available) break;
+          used += needed;
+          count += 1;
+        }
+        return count;
+      };
+
+      // Labels for the pins first. Icon-only is the fallback that keeps them on
+      // the bar when labels no longer fit — it is never used to squeeze in a
+      // lesser tab while the pins would have shown their names.
+      const labelPinnedWidth = pinnedTotal(false);
+      const iconPinnedWidth = pinnedTotal(true);
+      const labelFits = labelPinnedWidth + (otherTabs.length > 0 ? gap + moreWidth : 0) <= available;
+      if (labelFits) {
+        setFit({ pinIconOnly: false, extraVisible: extrasFor(labelPinnedWidth) });
+        return;
+      }
+      setFit({ pinIconOnly: true, extraVisible: extrasFor(iconPinnedWidth) });
     };
 
-
-    const ro = new ResizeObserver(fit);
+    const ro = new ResizeObserver(fitInto);
     ro.observe(container);
     ro.observe(measure);
-    fit();
+    fitInto();
     return () => ro.disconnect();
-  }, [tabsKey]);
+  }, [tabsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- keyed re-measure
 
-  const visible = tabs.slice(0, visibleCount);
-  const overflow = tabs.slice(visibleCount);
+  const { visible, overflow } = useMemo(() => {
+    const shown: ServerNavTab[] = [];
+    const hidden: ServerNavTab[] = [];
+    let extras = 0;
+    for (const tab of tabs) {
+      if (PINNED.has(tab.key)) {
+        shown.push(tab);
+        continue;
+      }
+      if (extras < fit.extraVisible) {
+        shown.push(tab);
+        extras += 1;
+      } else {
+        hidden.push(tab);
+      }
+    }
+    return { visible: shown, overflow: hidden };
+  }, [tabs, fit.extraVisible]);
+
   const overflowActiveTab = overflow.find((tab) => tab.active);
   const overflowActive = Boolean(overflowActiveTab);
+  const badgeFor = (key: string) => (key === 'modManager' ? modUpdateCount : 0);
 
   return (
     <div ref={containerRef} className="relative min-w-0 w-full overflow-hidden border-t border-border/50 px-1.5 py-1">
@@ -118,11 +219,24 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
         className="pointer-events-none invisible absolute left-1.5 top-1 flex w-max flex-nowrap items-center gap-0.5"
         aria-hidden
       >
-        {tabs.map((tab) => (
-          <div key={tab.key} data-measure-tab>
-            <TabButton tab={tab} hidden />
-          </div>
-        ))}
+        {tabs.map((tab) =>
+          PINNED.has(tab.key) ? (
+            <div key={`label-${tab.key}`} data-measure="pin-label" data-measure-key={tab.key}>
+              <TabButton tab={tab} hidden />
+            </div>
+          ) : (
+            <div key={`other-${tab.key}`} data-measure="other" data-measure-key={tab.key}>
+              <TabButton tab={tab} hidden />
+            </div>
+          ),
+        )}
+        {tabs
+          .filter((tab) => PINNED.has(tab.key))
+          .map((tab) => (
+            <div key={`icon-${tab.key}`} data-measure="pin-icon" data-measure-key={tab.key}>
+              <TabButton tab={tab} hidden iconOnly />
+            </div>
+          ))}
         <button ref={moreMeasureRef} type="button" className={TAB_CLASS} tabIndex={-1}>
           <MoreHorizontal className="h-3.5 w-3.5" />
           {t('common:actions.more')}
@@ -131,7 +245,14 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
 
       <div className="flex min-w-0 w-full flex-nowrap items-center gap-0.5 overflow-hidden">
         {visible.map((tab) => (
-          <TabButton key={tab.key} tab={tab} />
+          <TabButton
+            key={tab.key}
+            tab={tab}
+            // Pins drop to their icon first; the pages that still fit keep
+            // their label (audit D-13 overflow).
+            iconOnly={fit.pinIconOnly && PINNED.has(tab.key)}
+            badge={badgeFor(tab.key)}
+          />
         ))}
         {overflow.length > 0 && (
           <DropdownMenu>
@@ -160,6 +281,7 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
             <DropdownMenuContent align="end" className="min-w-44">
               {overflow.map((tab) => {
                 const Icon = tab.icon;
+                const badge = badgeFor(tab.key);
                 return (
                   <DropdownMenuItem
                     key={tab.key}
@@ -168,6 +290,11 @@ export default function ServerTabBar({ tabs }: { tabs: ServerNavTab[] }) {
                   >
                     <Icon className="h-3.5 w-3.5" />
                     {tab.label}
+                    {badge ? (
+                      <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 font-mono text-[10px] leading-none text-primary-foreground tabular-nums">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    ) : null}
                   </DropdownMenuItem>
                 );
               })}

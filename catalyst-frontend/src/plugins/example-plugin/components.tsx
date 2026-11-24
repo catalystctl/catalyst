@@ -68,13 +68,13 @@ export function AdminTab() {
  <div className="space-y-4">
  <button
  onClick={handleTestClick}
- className="w-full px-4 py-2 bg-primary-600 hover:bg-primary-700 rounded-sm transition-colors"
+ className="w-full px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-sm transition-colors"
  >
  Test Hello Endpoint
  </button>
  {counter > 0 && (
- <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-sm">
- <p className="text-green-400 text-sm">
+ <div className="p-3 bg-success/10 border border-success/20 rounded-sm">
+ <p className="text-success text-sm">
  Response received! Request count: <strong>{counter}</strong>
  </p>
  </div>
@@ -83,8 +83,10 @@ export function AdminTab() {
  </div>
  </div>
 
- <div className="bg-blue-500/10 border border-blue-500/20 rounded-sm p-4">
- <h3 className="text-lg font-semibold mb-2 text-blue-400">💡 Developer Note</h3>
+ {/* Theme tokens only: this file is the reference plugin authors copy, so a
+ palette color here gets copied into their plugins. */}
+ <div className="bg-info/10 border border-info/20 rounded-sm p-4">
+ <h3 className="text-lg font-semibold mb-2 text-info">💡 Developer Note</h3>
  <p className="text-sm text-foreground/80">
  This admin tab demonstrates how plugins can extend the admin interface with custom functionality.
  Plugins can add multiple tabs, each with their own components and logic.
@@ -147,12 +149,12 @@ export function ServerTab({ serverId }: { serverId: string }) {
  onChange={(e) => setMessage(e.target.value)}
  onKeyPress={(e) => e.key === 'Enter' && handleEcho()}
  placeholder="Type a message..."
- className="flex-1 px-4 py-2 bg-surface-2 border border-border rounded-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500"
+ className="flex-1 px-4 py-2 bg-surface-2 border border-border rounded-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
  />
  <button
  onClick={handleEcho}
  disabled={!message}
- className="px-6 py-2 bg-primary-600 hover:bg-primary-700 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+ className="px-6 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
  >
  Send
  </button>

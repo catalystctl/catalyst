@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { useQueryClient } from '@/csync';
@@ -142,12 +142,23 @@ function BackupSection({
  // Settings / create use create; list actions split restore vs delete
  const canWrite = canCreate;
 
+  const downloadControllers = useRef(new Map<string, AbortController>());
+
   const handleDownload = async (backupId: string, name: string, compressed?: boolean) => {
+    if (downloadControllers.current.has(backupId)) return;
+    const controller = new AbortController();
+    downloadControllers.current.set(backupId, controller);
+    const progressKey = `${progressKeyPrefix}${backupId}`;
     try {
-      setProgress(`${progressKeyPrefix}${backupId}`, { loaded: 0 });
-      const blob = await backupsApi.download(serverId, backupId, (progress) => {
-        setProgress(`${progressKeyPrefix}${backupId}`, progress);
-      });
+      setProgress(progressKey, { loaded: 0 });
+      const blob = await backupsApi.downloadWithSignal(
+        serverId,
+        backupId,
+        controller.signal,
+        (progress) => {
+          setProgress(progressKey, progress);
+        },
+      );
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -156,9 +167,15 @@ function BackupSection({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      clearProgress(`${progressKeyPrefix}${backupId}`);
+      clearProgress(progressKey);
       notifyInfo(t('backups.download.started'));
     } catch (error: unknown) {
+      clearProgress(progressKey);
+      // A user abort is not a failure: no system error, no error toast.
+      if (controller.signal.aborted) {
+        notifyInfo(t('backups.download.cancelled'));
+        return;
+      }
       reportSystemError({
         level: 'error',
         component: 'BackupSection',
@@ -166,9 +183,14 @@ function BackupSection({
         stack: error instanceof Error ? error.stack : undefined,
         metadata: { context: 'download backup' },
       });
-      clearProgress(`${progressKeyPrefix}${backupId}`);
       notifyError(getErrorMessage(error, t('backups.download.failed')));
+    } finally {
+      downloadControllers.current.delete(backupId);
     }
+  };
+
+  const handleCancelDownload = (backupId: string) => {
+    downloadControllers.current.get(backupId)?.abort();
   };
 
  const backups = data?.backups ?? [];
@@ -185,7 +207,7 @@ function BackupSection({
  actions={
  <div className="flex flex-wrap items-center justify-end gap-2">
  <LastUpdated queryKey={qk.backups(serverId)} />
- <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} canPin={canPin} />
+ <CreateBackupModal serverId={serverId} disabled={isSuspended || backupBlocked || !canWrite} canPin={canPin} variant="split" />
  </div>
  }
  />
@@ -574,6 +596,7 @@ function BackupSection({
  canRestore={canRestore}
  canDelete={canDelete}
  canPin={canPin}
+ onCancelDownload={handleCancelDownload}
  />
  </div>
  ) : (

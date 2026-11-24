@@ -70,6 +70,7 @@ export function RoleCreatorDialog({
   open,
   onOpenChange,
   role,
+  prefillFrom,
   presets = [],
   onSubmit,
   isPending,
@@ -78,9 +79,20 @@ export function RoleCreatorDialog({
   onOpenChange: (open: boolean) => void;
   /** Role being edited, or null/undefined to create a new one. */
   role?: Role | null;
+  /**
+   * Source role for "Duplicate role": the dialog is in create mode, but the
+   * name/permissions/scope start from this role.
+   */
+  prefillFrom?: Role | null;
   /** Backend permission presets (`GET /api/roles/presets`). */
   presets?: Array<{ key: string; label?: string; permissions: string[] }>;
-  onSubmit: (payload: RoleCreatorPayload) => void;
+  /**
+   * `nodes` is the create-mode node selection this dialog collected locally
+   * (the selector cannot persist before the role exists). RolesPage flushes it
+   * after the create succeeds; in edit mode it is empty because the selector
+   * already persisted each change.
+   */
+  onSubmit: (payload: RoleCreatorPayload, nodes: NodeAssignmentWithExpiration[]) => void;
   isPending?: boolean;
 }) {
   const { t } = useTranslation('admin-access');
@@ -155,22 +167,32 @@ export function RoleCreatorDialog({
       hydratedFor.current = null;
       return;
     }
-    const target = role?.id ?? null;
+    const target = role?.id ?? (prefillFrom ? `dup:${prefillFrom.id}` : null);
     if (hydratedFor.current === target) return;
     hydratedFor.current = target;
 
-    setName(role?.name ?? '');
-    setDescription(role?.description ?? '');
-    const stored = role?.permissions ?? [];
+    setName(
+      prefillFrom
+        ? t('roles.duplicateName', { name: prefillFrom.name })
+        : role?.name ?? '',
+    );
+    setDescription(prefillFrom?.description ?? role?.description ?? '');
+    const stored = prefillFrom?.permissions ?? role?.permissions ?? [];
     setSuperAdmin(stored.includes('*'));
-    setSelected(mergeSelection(stored.filter((p) => p !== '*'), role?.scope?.permissions ?? []));
-    const mode = role?.scope?.mode ?? 'none';
+    setSelected(
+      mergeSelection(
+        stored.filter((p) => p !== '*'),
+        (prefillFrom?.scope ?? role?.scope)?.permissions ?? [],
+      ),
+    );
+    const sourceScope = prefillFrom?.scope ?? role?.scope;
+    const mode = sourceScope?.mode ?? 'none';
     if (mode === 'servers') {
       setBoundary('servers');
-      setServerIds(role?.scope?.serverIds ?? []);
+      setServerIds(sourceScope?.serverIds ?? []);
       setNodeIds([]);
     } else if (mode === 'nodes') {
-      const ids = role?.scope?.nodeIds ?? [];
+      const ids = sourceScope?.nodeIds ?? [];
       setBoundary(ids.includes(ALL_NODES) ? 'all' : 'nodes');
       setNodeIds(ids.filter((id) => id !== ALL_NODES));
       setServerIds([]);
@@ -181,7 +203,7 @@ export function RoleCreatorDialog({
     }
     setScopeSearch('');
     setNodeAssignments([]);
-  }, [open, role]);
+  }, [open, role, prefillFrom, t]);
 
   // ── Late scope arrival ───────────────────────────────────────────────
   // The detail payload carries the stored scope; the list row does not. When
@@ -301,12 +323,17 @@ export function RoleCreatorDialog({
               : { serverIds }),
             permissions: scopedSelected,
           };
-    onSubmit({
-      name: name.trim(),
-      description: description.trim() || undefined,
-      permissions,
-      scope,
-    });
+    onSubmit(
+      {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        permissions,
+        scope,
+      },
+      // Only the create flow has anything to flush: in edit mode the selector
+      // persisted each pick as it happened.
+      isEdit ? [] : nodeAssignments,
+    );
   };
 
   const nodeOptions = useMemo(
@@ -499,9 +526,19 @@ export function RoleCreatorDialog({
                       disabled={isPending}
                     />
                   ) : (
-                    <p className="rounded-sm border border-border bg-surface-1/40 px-2.5 py-2 text-micro text-muted-foreground">
-                      {t('roles.creator.nodeAccessCreateHint')}
-                    </p>
+                    // Create mode: the selector stays local (no target id yet) and
+                    // the picks are flushed by RolesPage right after the create
+                    // succeeds — the old static hint silently dropped them (A2).
+                    <>
+                      <NodeAssignmentsSelector
+                        selectedNodes={nodeAssignments}
+                        onSelectionChange={setNodeAssignments}
+                        disabled={isPending}
+                      />
+                      <p className="mt-1 text-micro text-muted-foreground">
+                        {t('roles.creator.nodeAccessCreateFlush')}
+                      </p>
+                    </>
                   )}
                 </div>
               </Section>

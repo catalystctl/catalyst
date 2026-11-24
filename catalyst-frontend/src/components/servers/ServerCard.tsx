@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { Server } from '../../types/server';
 import ServerStatusBadge from './ServerStatusBadge';
 import ServerControls from './ServerControls';
+import ServerAddressCopy from './ServerAddressCopy';
 import { notifyError } from '../../utils/notify';
 import { Button } from '@/components/ui/button';
 import { Meter, Segmented } from '../deck/primitives';
@@ -99,7 +100,7 @@ function ServerCard({ server }: { server: Server }) {
           </span>
           <span className="flex min-w-0 items-center gap-1">
             <Globe className="h-2.5 w-2.5 shrink-0" />
-            <span className="truncate font-mono tabular-nums">{host}:{port}</span>
+            <ServerAddressCopy host={host} port={port} variant="meta" />
           </span>
         </div>
 

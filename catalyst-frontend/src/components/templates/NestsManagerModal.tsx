@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
-import { FolderOpen, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { FolderOpen, Plus, Pencil, Trash2, X, Loader2 } from 'lucide-react';
 import { nestsApi, type Nest } from '../../services/api/nests';
 import { notifyError, notifySuccess } from '../../utils/notify';
 import ConfirmDialog from '../shared/ConfirmDialog';
@@ -92,15 +92,20 @@ function NestForm({
  placeholder={t('nests.descriptionPlaceholder')}
  />
  </label>
- <div className="flex justify-end gap-2 pt-1">
- <button
- className="h-8 rounded-sm border border-border/60 px-3 text-mini font-medium text-muted-foreground transition-colors hover:border-border hover:text-foreground"
+ <div className="flex justify-end gap-2 border-t border-border/60 pt-3">
+ <Button
+ type="button"
+ variant="outline"
+ size="sm"
+ className="h-8 px-3 text-mini"
  onClick={onCancel}
  >
  {t('common:actions.cancel')}
- </button>
- <button
- className="h-8 rounded-sm bg-primary px-3 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
+ </Button>
+ <Button
+ type="button"
+ size="sm"
+ className="h-8 gap-1.5 px-3 text-mini"
  onClick={() =>
  onSave({
  name: name.trim(),
@@ -111,8 +116,9 @@ function NestForm({
  }
  disabled={disableSubmit}
  >
+ {isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
  {isPending ? t('nests.saving') : initial ? t('nests.update') : t('common:actions.create')}
- </button>
+ </Button>
  </div>
  </div>
  );
@@ -234,11 +240,13 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  {editingNest ? t('nests.edit') : t('nests.new')}
  </BracketLabel>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
  onClick={() => {
  setIsCreating(false);
  setEditingNest(null);
  }}
+ title={t('common:actions.close')}
+ aria-label={t('common:actions.close')}
  >
  <X className="h-4 w-4" />
  </button>
@@ -300,12 +308,20 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
 
  {/* Info */}
  <div className="min-w-0 flex-1">
- <div className="flex items-center gap-2">
- <span className="font-display text-data font-semibold tracking-tight text-foreground">
+ <div className="flex min-w-0 items-center gap-2">
+ <span
+ className="min-w-0 truncate font-display text-data font-semibold tracking-tight text-foreground"
+ title={nest.name}
+ >
  {nest.name}
  </span>
  {nest.author && (
- <span className="type-meta">{t('nests.byAuthor', { author: nest.author })}</span>
+ <span
+ className="shrink-0 type-meta"
+ title={t('nests.byAuthor', { author: nest.author })}
+ >
+ {t('nests.byAuthor', { author: nest.author })}
+ </span>
  )}
  </div>
  {nest.description && (
@@ -319,21 +335,23 @@ export default function NestsManagerModal({ open, onOpenChange }: Props) {
  </div>
 
  {/* Actions */}
- <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+ <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+ className="flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
  onClick={() => {
  setEditingNest(nest);
  setIsCreating(false);
  }}
  title={t('common:actions.edit')}
+ aria-label={t('common:actions.edit')}
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
  <button
- className="flex h-7 w-7 items-center justify-center rounded-sm text-danger transition-colors hover:bg-danger/5 hover:text-danger"
+ className="flex h-8 w-8 items-center justify-center rounded-sm text-danger transition-colors hover:bg-danger/5 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
  onClick={() => setDeleteTarget(nest)}
  title={t('common:actions.delete')}
+ aria-label={t('common:actions.delete')}
  >
  <Trash2 className="h-3.5 w-3.5" />
  </button>

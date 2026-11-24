@@ -27,6 +27,18 @@ export const rolesApi = {
     return data.data;
   },
 
+  /**
+   * Role detail including its member list. `GET /api/roles/:id` returns
+   * `users` ([{id,email,username}]) plus `userCount`; the roles LIST payload
+   * carries only the count, which is why the members dialog fetches this.
+   */
+  getWithMembers: async (roleId: string) => {
+    const data = await apiClient.get<
+      ApiResponse<Role & { users?: Array<{ id: string; email: string; username: string }> }>
+    >(`/api/roles/${roleId}`);
+    return data.data;
+  },
+
   // Create a new role
   create: async (input: RoleCreateInput) => {
     const data = await apiClient.post<ApiResponse<Role>>('/api/roles', input);

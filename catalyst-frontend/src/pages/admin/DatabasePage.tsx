@@ -57,6 +57,7 @@ function HostDialog({
  children,
  footer,
  onOpenChange,
+ onSubmit,
 }: {
  open: boolean;
  title: string;
@@ -64,16 +65,26 @@ function HostDialog({
  children: React.ReactNode;
  footer: React.ReactNode;
  onOpenChange: (open: boolean) => void;
+ /** Submits the dialog on Enter; the footer's primary button is the submitter. */
+ onSubmit: () => void;
 }) {
  return (
  <Dialog open={open} onOpenChange={onOpenChange}>
  <DialogContent size="lg">
+ <form
+ className="flex min-h-0 flex-1 flex-col"
+ onSubmit={(event) => {
+ event.preventDefault();
+ onSubmit();
+ }}
+ >
  <DialogHeader icon={<Database className="h-4 w-4" />}>
  <DialogTitle>{title}</DialogTitle>
  <DialogDescription>{subtitle}</DialogDescription>
  </DialogHeader>
  <DialogBody>{children}</DialogBody>
  <DialogFooter>{footer}</DialogFooter>
+ </form>
  </DialogContent>
  </Dialog>
  );
@@ -527,6 +538,7 @@ function DatabasePage() {
  {/* ── Create Modal ── */}
  <HostDialog
  open={isCreateOpen}
+ onSubmit={() => { if (canSubmit && !createMutation.isPending) createMutation.mutate(); }}
  onOpenChange={(next) => {
  if (!next) {
  resetForm();
@@ -537,14 +549,14 @@ function DatabasePage() {
     subtitle={t('database.createDialog.subtitle')}
     footer={
       <>
-        <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
+        <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { resetForm(); setIsCreateOpen(false); }}>
           {t('common:actions.cancel')}
         </Button>
         <Button
+          type="submit"
           size="sm"
           className="h-8 px-3 text-mini"
           disabled={!canSubmit || createMutation.isPending}
-          onClick={() => createMutation.mutate()}
         >
           {createMutation.isPending ? t('database.creating') : t('database.createDialog.submit')}
         </Button>
@@ -557,6 +569,7 @@ function DatabasePage() {
  {/* ── Edit Modal ── */}
  <HostDialog
  open={!!editingHost}
+ onSubmit={() => { if (editingHost && !updateMutation.isPending) updateMutation.mutate({ hostId: editingHost.id }); }}
  onOpenChange={(next) => {
  if (!next) {
  setEditingHost(null);
@@ -567,14 +580,14 @@ function DatabasePage() {
     subtitle={t('database.editDialog.subtitle')}
     footer={
       <>
-        <Button variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { setEditingHost(null); resetForm(); }}>
+        <Button type="button" variant="outline" size="sm" className="h-8 px-3 text-mini" onClick={() => { setEditingHost(null); resetForm(); }}>
           {t('common:actions.cancel')}
         </Button>
         <Button
+          type="submit"
           size="sm"
           className="h-8 px-3 text-mini"
           disabled={updateMutation.isPending}
-          onClick={() => editingHost && updateMutation.mutate({ hostId: editingHost.id })}
         >
           {updateMutation.isPending ? t('database.saving') : t('database.editDialog.submit')}
         </Button>

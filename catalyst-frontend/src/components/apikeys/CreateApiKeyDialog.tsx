@@ -1,7 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Copy, CheckCircle2, AlertTriangle, Key, Shield, ShieldCheck, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { Copy, CheckCircle2, AlertTriangle, Key, Shield, ShieldCheck, ChevronDown, ChevronRight, Loader2, Search } from 'lucide-react';
+import { useQuery } from '@/csync';
+import { qk } from '@/lib/queryKeys';
 import { useCreateApiKey, usePermissionsCatalog, useMyPermissions } from '../../hooks/useApiKeys';
+import { rolesApi } from '../../services/api/roles';
 import { CreateApiKeyRequest, PermissionCategory } from '../../services/apiKeys';
 import { hasAnyPermission } from '../auth/ProtectedRoute';
 import { toast } from 'sonner';
@@ -43,7 +46,9 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   const [formData, setFormData] = useState<CreateApiKeyRequest & { permissions: string[] }>({
     name: '',
     expiresIn: 7776000,
-    allPermissions: true,
+    // Scoped by default: the audit's longest-path complaint (D16) was that an
+    // admin had to toggle "all" off and then expand every category by hand.
+    allPermissions: false,
     permissions: [],
     rateLimitMax: 100,
     rateLimitTimeWindow: 60000,
@@ -51,6 +56,16 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [permissionQuery, setPermissionQuery] = useState('');
+  const permissionNeedle = permissionQuery.trim().toLowerCase();
+
+  // One-click bundles. The presets endpoint is role-oriented, but the shape is
+  // a plain permission list, so the same picks apply to a key.
+  const { data: presets = [] } = useQuery({
+    queryKey: qk.rolePresets(),
+    queryFn: rolesApi.getPresets,
+    staleTime: 10 * 60 * 1000,
+  });
 
   // Determine what permissions the user can grant
   const userHasWildcard = myPermissions.includes('*');
@@ -70,6 +85,38 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   }, [catalog, myPermissions, userHasWildcard]);
 
   const selectedCount = formData.allPermissions ? -1 : formData.permissions.length;
+
+  /** Every permission this key could be granted — used to filter presets. */
+  const grantable = useMemo(
+    () => new Set(availablePermissions.flatMap((cat) => cat.permissions.map((p) => p.value))),
+    [availablePermissions],
+  );
+
+  /**
+   * Categories narrowed by the search box. A match inside a collapsed category
+   * would be invisible, so every category with a hit is force-expanded while a
+   * query is active.
+   */
+  const searching = permissionNeedle.length > 0;
+  const visibleCategories = useMemo(() => {
+    if (!searching) return availablePermissions;
+    return availablePermissions
+      .map((cat) => ({
+        ...cat,
+        permissions: cat.permissions.filter(
+          (p) =>
+            p.label.toLowerCase().includes(permissionNeedle) ||
+            p.value.toLowerCase().includes(permissionNeedle),
+        ),
+      }))
+      .filter((cat) => cat.permissions.length > 0);
+  }, [availablePermissions, permissionNeedle, searching]);
+
+  const applyPreset = (values: string[]) => {
+    const kept = values.filter((v) => v !== '*' && grantable.has(v));
+    setFormData((prev) => ({ ...prev, allPermissions: false, permissions: kept }));
+    setExpandedCategories(new Set(availablePermissions.map((cat) => cat.id)));
+  };
 
   const toggleCategory = (catId: string) => {
     setExpandedCategories((prev) => {
@@ -139,20 +186,22 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
   };
 
   const handleClose = () => {
-    setFormData({ name: '', expiresIn: 7776000, allPermissions: true, permissions: [], rateLimitMax: 100, rateLimitTimeWindow: 60000 });
+    setFormData({ name: '', expiresIn: 7776000, allPermissions: false, permissions: [], rateLimitMax: 100, rateLimitTimeWindow: 60000 });
     setCreatedKey(null);
     setCopied(false);
     setExpandedCategories(new Set());
+    setPermissionQuery('');
     onOpenChange(false);
   };
 
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      setFormData({ name: '', expiresIn: 7776000, allPermissions: true, permissions: [], rateLimitMax: 100, rateLimitTimeWindow: 60000 });
+      setFormData({ name: '', expiresIn: 7776000, allPermissions: false, permissions: [], rateLimitMax: 100, rateLimitTimeWindow: 60000 });
       setCreatedKey(null);
       setCopied(false);
       setExpandedCategories(new Set());
+      setPermissionQuery('');
     }
   }, [open]);
 
@@ -227,8 +276,52 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                         <Switch
                           checked={formData.allPermissions}
                           onCheckedChange={(checked) => setFormData({ ...formData, allPermissions: checked, permissions: [] })}
+                          aria-label={t('apiKeys.form.allMine')}
                         />
                       </div>
+
+                      {/* Scoped keys are the default now, so the two things that
+                          make a scoped key cheap to build sit on top of the
+                          categories: a permission search, and the same one-click
+                          presets the role editor offers. */}
+                      {!formData.allPermissions && (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label className="relative flex min-w-[10rem] flex-1 items-center">
+                            <Search className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
+                            <input
+                              type="search"
+                              value={permissionQuery}
+                              onChange={(e) => setPermissionQuery(e.target.value)}
+                              placeholder={t('apiKeys.form.searchPermissions')}
+                              aria-label={t('apiKeys.form.searchPermissions')}
+                              className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+                            />
+                          </label>
+                          {presets.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {presets.map((preset) => (
+                                <button
+                                  key={preset.key}
+                                  type="button"
+                                  onClick={() => applyPreset(preset.permissions)}
+                                  title={preset.description || preset.label}
+                                  className="rounded-sm border border-border bg-card px-2 py-1 text-micro text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground"
+                                >
+                                  {preset.label}
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={() => setFormData((prev) => ({ ...prev, permissions: [] }))}
+                                disabled={formData.permissions.length === 0}
+                                className="rounded-sm border border-border bg-card px-2 py-1 text-micro text-muted-foreground transition-colors hover:border-primary/30 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {t('apiKeys.form.clearSelection')}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {!formData.allPermissions && (
                         <div className="overflow-hidden rounded-sm border border-border/50">
@@ -242,10 +335,14 @@ export function CreateApiKeyDialog({ open, onOpenChange }: CreateApiKeyDialogPro
                               <div className="type-meta px-3 py-6 text-center">
                                 {t('apiKeys.form.noneAvailable')}
                               </div>
+                            ) : visibleCategories.length === 0 ? (
+                              <div className="type-meta px-3 py-6 text-center">
+                                {t('apiKeys.form.noPermissionsMatch')}
+                              </div>
                             ) : (
-                              availablePermissions.map((cat) => {
+                              visibleCategories.map((cat) => {
                                 if (cat.permissions.length === 0) return null;
-                                const expanded = expandedCategories.has(cat.id);
+                                const expanded = searching || expandedCategories.has(cat.id);
                                 const fullySelected = isCategoryFullySelected(cat);
                                 const partiallySelected = isCategoryPartiallySelected(cat);
 

@@ -102,6 +102,7 @@ function RegisterPage() {
  id="email"
  type="email"
  autoComplete="email"
+ autoFocus
  placeholder={t('fields.emailPlaceholder')}
  className={`h-8 rounded-sm text-mini${errors.email ? ' border-danger/50' : ''}`}
  aria-invalid={errors.email ? true : undefined}

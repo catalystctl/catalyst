@@ -7,7 +7,7 @@
  * any other surface (fleet list, console start button) showed no prompt.
  *
  * The AppLayout-mounted global stream (`useServerStateUpdates`) now writes
- * the event into this store and `useEulaPrompt` consumes it, so the prompt no
+ * the event into this store and `EulaPrompt` consumes it, so the prompt no
  * longer depends on one component's socket being open at the exact moment.
  *
  * useSyncExternalStore-compatible: snapshots are the stored objects themselves
@@ -81,4 +81,19 @@ export function usePendingEula(serverId?: string): PendingEula | null {
     () => peekPendingEula(serverId),
     () => null,
   );
+}
+
+function firstPendingEula(): PendingEula | null {
+  return pending.values().next().value ?? null;
+}
+
+/**
+ * The oldest pending prompt across every server, whoever started it.
+ *
+ * The per-server hook only sees one server id, so a start from the fleet list
+ * or a node page produced no prompt at all. A mounted-once prompt (EulaPrompt
+ * in AppLayout) reads this instead, which is why the store is global.
+ */
+export function useAnyPendingEula(): PendingEula | null {
+  return useSyncExternalStore(subscribePendingEula, firstPendingEula, () => null);
 }

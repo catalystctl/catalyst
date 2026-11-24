@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMutation, useQueryClient } from '@/csync';
+import { Loader2, Play } from 'lucide-react';
 import ScheduleTaskModal from '../../tasks/ScheduleTaskModal';
 import ServerTabCard from './ServerTabCard';
 import StatGrid from './StatGrid';
@@ -11,6 +13,8 @@ import LastUpdated from '../../shared/LastUpdated';
 import { qk } from '../../../lib/queryKeys';
 import { Clock } from 'lucide-react';
 import { formatDateTime } from '@/i18n/format';
+import { tasksApi } from '../../../services/api/tasks';
+import { notifyError, notifySuccess } from '../../../utils/notify';
 import type { Task } from '../../../types/task';
 
 const formatTaskDateTime = (value?: string | null) =>
@@ -38,9 +42,27 @@ export default function ServerTasksTab({
  deletePending,
 }: Props) {
  const { t } = useTranslation('server-tabs');
+ const queryClient = useQueryClient();
  const tasks = Array.isArray(tasksProp) ? tasksProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
  const pendingDeleteTask = tasks.find((task) => task.id === pendingDeleteId);
+
+ // Run-now: the backend executes the stored action immediately, so this is the
+ // same code path cron uses — no editing the schedule and reverting it.
+ const runNowMutation = useMutation({
+   mutationFn: (taskId: string) => tasksApi.execute(serverId, taskId),
+   onSuccess: (_data, taskId) => {
+     const name = tasks.find((task) => task.id === taskId)?.name;
+     notifySuccess(name ? t('tasks.runNow.successNamed', { name }) : t('tasks.runNow.success'));
+   },
+   onError: (error: any) => {
+     notifyError(error);
+   },
+   onSettled: () => {
+     queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
+   },
+ });
+ const [runningTaskId, setRunningTaskId] = useState<string | null>(null);
 
  return (
  <div className="space-y-4">
@@ -125,6 +147,23 @@ export default function ServerTasksTab({
  )}
 
  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+ <button
+ type="button"
+ className="inline-flex h-8 min-h-8 items-center gap-1 rounded-sm border border-primary/30 px-3 text-mini font-semibold text-primary transition-colors duration-200 hover:border-primary/50 hover:bg-primary/5 disabled:opacity-50"
+ onClick={() => {
+   setRunningTaskId(task.id);
+   runNowMutation.mutate(task.id, { onSettled: () => setRunningTaskId(null) });
+ }}
+ // server.schedule gates the whole tab; a suspended server cannot act.
+ disabled={isSuspended || runningTaskId === task.id}
+ >
+ {runningTaskId === task.id ? (
+   <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : (
+   <Play className="h-3.5 w-3.5" />
+ )}
+ {runningTaskId === task.id ? t('tasks.runNow.running') : t('tasks.runNow.action')}
+ </button>
  <ScheduleTaskModal
  serverId={serverId}
  task={task}

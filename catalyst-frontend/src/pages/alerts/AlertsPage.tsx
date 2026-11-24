@@ -6,7 +6,7 @@ import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
 import LastUpdated from '@/components/shared/LastUpdated';
 
-import { Bell, Plus, Settings, Trash2, CheckCircle, X } from 'lucide-react';
+import { Bell, Plus, Settings, Trash2, CheckCircle, X, Loader2 } from 'lucide-react';
 import { Input } from '../../components/ui/input';
 import { Button } from '@/components/ui/button';
 import { alertsApi } from '../../services/api/alerts';
@@ -223,6 +223,10 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   const [showRuleModal, setShowRuleModal] = useState(false);
   const [editingRule, setEditingRule] = useState<AlertRule | null>(null);
   const [filterResolved, setFilterResolved] = useState<'false' | 'true' | 'all'>('false');
+  // D24: severity filter — stats already carry the counts, so the filter
+  // narrows the list and the "Resolve all" target set together.
+  const [filterSeverity, setFilterSeverity] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
+  const [showResolveAll, setShowResolveAll] = useState(false);
   const [deletingRule, setDeletingRule] = useState<AlertRule | null>(null);
   const alertsRef = useRef<HTMLDivElement>(null);
 
@@ -263,12 +267,13 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
   // P1-24: alert lifecycle is event-driven — poll only while SSE is down.
   const outagePoll = useStreamAwareInterval(60_000);
   const { data: alertData, isLoading: alertsLoading } = useQuery({
-    queryKey: qk.alerts({ filterResolved, serverId, scope }),
+    queryKey: qk.alerts({ filterResolved, serverId, scope, severity: filterSeverity === 'all' ? undefined : filterSeverity }),
     queryFn: () =>
       alertsApi.list({
         resolved: filterResolved === 'all' ? undefined : filterResolved === 'true',
         serverId,
         scope,
+        severity: filterSeverity === 'all' ? undefined : filterSeverity,
       }),
     staleTime: 30_000,
     refetchInterval: outagePoll, // alert SSE via admin/server streams
@@ -587,14 +592,38 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
               <option value="true">{t('page.filterResolved')}</option>
               <option value="all">{t('page.filterAll')}</option>
             </select>
+            <select
+              value={filterSeverity}
+              onChange={(e) =>
+                setFilterSeverity(e.target.value as 'all' | 'critical' | 'warning' | 'info')
+              }
+              className="h-7 rounded-sm border border-border/60 bg-background/40 pl-2 pr-7 text-mini text-foreground outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/40"
+              aria-label={t('page.filterSeverityAria')}
+            >
+              <option value="all">{t('page.severityAll')}</option>
+              <option value="critical">
+                {t('page.severityCritical', { count: alertStats?.bySeverity?.critical ?? 0 })}
+              </option>
+              <option value="warning">
+                {t('page.severityWarning', { count: alertStats?.bySeverity?.warning ?? 0 })}
+              </option>
+              <option value="info">
+                {t('page.severityInfo', { count: alertStats?.bySeverity?.info ?? 0 })}
+              </option>
+            </select>
             <Button
               variant="outline"
               size="sm"
-              className="h-7 rounded-sm px-2.5 text-mini"
+              className="h-7 gap-1.5 rounded-sm px-2.5 text-mini"
               disabled={!canBulkResolve}
-              onClick={() => bulkResolveMutation.mutate(unresolvedAlertIds)}
+              onClick={() => setShowResolveAll(true)}
             >
-              {t('page.resolveAll')}
+              {bulkResolveMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle className="h-3.5 w-3.5" />
+              )}
+              {bulkResolveMutation.isPending ? t('page.resolvingAll') : t('page.resolveAll')}
               {unresolvedCount > 0 ? ` (${unresolvedCount})` : ''}
             </Button>
           </div>
@@ -1057,6 +1086,44 @@ function AlertsPage({ scope = 'mine', serverId, showAdminTargets = false }: Prop
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Resolve-all Confirmation ── */}
+      <ConfirmDialog
+        open={showResolveAll}
+        title={t('page.resolveAllTitle')}
+        message={
+          <div className="space-y-2">
+            <p>{t('page.resolveAllConfirm', { count: unresolvedAlertIds.length })}</p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {filterResolved !== 'false' && (
+                <span className="rounded-sm border border-border/50 px-1.5 py-0.5 type-overline">
+                  {filterResolved === 'true' ? t('page.filterResolved') : t('page.filterAll')}
+                </span>
+              )}
+              {filterSeverity !== 'all' && (
+                <span className="rounded-sm border border-border/50 px-1.5 py-0.5 type-overline">
+                  {filterSeverity}
+                </span>
+              )}
+              {serverId && (
+                <span className="rounded-sm border border-border/50 px-1.5 py-0.5 type-overline">
+                  {t('page.scopedToServer')}
+                </span>
+              )}
+            </div>
+            <p className="type-meta">{t('page.resolveAllHint')}</p>
+          </div>
+        }
+        confirmText={t('page.resolveAll')}
+        cancelText={t('common:actions.cancel')}
+        loading={bulkResolveMutation.isPending}
+        onConfirm={() =>
+          bulkResolveMutation.mutate(unresolvedAlertIds, {
+            onSuccess: () => setShowResolveAll(false),
+          })
+        }
+        onCancel={() => setShowResolveAll(false)}
+      />
 
       {/* ── Delete Rule Confirmation ── */}
       <ConfirmDialog

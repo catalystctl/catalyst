@@ -605,6 +605,7 @@ function AdminNodesPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder={t('nodes.searchPlaceholder')}
+              aria-label={t('nodes.searchLabel')}
               className="h-7 w-full rounded-sm border border-border/60 bg-background/40 pl-7 pr-2 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
             />
           </label>

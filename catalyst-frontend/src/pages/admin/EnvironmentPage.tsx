@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   SlidersHorizontal,
@@ -8,6 +8,7 @@ import {
   Lock,
   RefreshCw,
   AlertTriangle,
+  Loader2,
 } from 'lucide-react';
 import TabHeader from '../../components/servers/tabs/TabHeader';
 import LastUpdated from '../../components/shared/LastUpdated';
@@ -33,6 +34,7 @@ import {
   useUpdateEnvSettings,
 } from '../../hooks/useAdmin';
 import { notifyError, notifySuccess } from '../../utils/notify';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import type { EnvCategory, EnvEntry } from '../../types/admin';
 
 const CATEGORY_ORDER: EnvCategory[] = [
@@ -62,9 +64,15 @@ function sourceVariant(source: EnvEntry['source']): 'default' | 'secondary' | 'o
 function EnvRow({
   entry,
   onSaved,
+  reportDraft = () => {},
 }: {
   entry: EnvEntry;
   onSaved: () => void;
+  /**
+   * Reports this row's pending value (or `null` when clean) so the page's
+   * "Save all changed" can send every changed key in one PATCH.
+   */
+  reportDraft?: (key: string, value: string | null) => void;
 }) {
   const { t } = useTranslation('admin-environment');
   // Literal t() calls so the extractor sees every label key.
@@ -102,6 +110,13 @@ function EnvRow({
       },
     );
   };
+
+  // Report the dirty draft upward so the page can batch every changed value in
+  // one PATCH. The callback only touches a ref + a count, so typing never
+  // re-renders the whole page.
+  useEffect(() => {
+    reportDraft(entry.key, dirty ? draft : null);
+  }, [entry.key, draft, dirty, reportDraft]);
 
   const reset = () => {
     resetMutation.mutate(entry.key, {
@@ -247,10 +262,13 @@ function RestartCta() {
   const { data: status } = useEnvRestartStatus(true);
   const strategy = status?.strategy ?? 'supervised';
   const [restarting, setRestarting] = useState(false);
+  // Restarting takes the panel offline for every user, so it is confirmed.
+  const [confirming, setConfirming] = useState(false);
 
   const restart = () => {
     restartMutation.mutate(undefined, {
       onSuccess: () => {
+        setConfirming(false);
         setRestarting(true);
         notifySuccess(t('restart.started'));
       },
@@ -272,11 +290,33 @@ function RestartCta() {
             </p>
           </div>
         </div>
-        <Button size="sm" className="h-8 shrink-0 px-3 text-mini" onClick={restart} disabled={restarting || restartMutation.isPending}>
-          <RefreshCw className={`mr-1.5 h-3 w-3 ${restarting ? 'animate-spin' : ''}`} />
+        <Button
+          size="sm"
+          className="h-8 shrink-0 gap-1.5 px-3 text-mini"
+          onClick={() => setConfirming(true)}
+          disabled={restarting || restartMutation.isPending}
+        >
+          {restarting || restartMutation.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <RefreshCw className="h-3 w-3" />
+          )}
           {restarting ? t('restart.restarting') : t('restart.button')}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title={t('restart.confirmTitle')}
+        message={t('restart.confirmMessage')}
+        confirmText={t('restart.button')}
+        cancelText={t('common:actions.cancel')}
+        loading={restartMutation.isPending}
+        onConfirm={restart}
+        onCancel={() => {
+          if (!restartMutation.isPending) setConfirming(false);
+        }}
+      />
     </div>
   );
 }
@@ -304,6 +344,36 @@ function EnvironmentPage() {
   const { data: overview, isLoading, isError, refetch } = useEnvSettings();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | EnvCategory>('all');
+
+  // Changed (but unsaved) values, reported by each row. Kept in a ref plus a
+  // counter so typing does not re-render every field on the page.
+  const changedRef = useRef<Map<string, string>>(new Map());
+  const [changedCount, setChangedCount] = useState(0);
+  const reportDraft = useCallback((key: string, value: string | null) => {
+    const map = changedRef.current;
+    if (value === null) {
+      if (map.delete(key)) setChangedCount(map.size);
+      return;
+    }
+    if (map.get(key) === value) return;
+    map.set(key, value);
+    setChangedCount(map.size);
+  }, []);
+
+  const batchSaveMutation = useUpdateEnvSettings();
+  const saveAllChanged = () => {
+    const values = Object.fromEntries(changedRef.current);
+    if (Object.keys(values).length === 0) return;
+    batchSaveMutation.mutate(values, {
+      onSuccess: () => {
+        changedRef.current.clear();
+        setChangedCount(0);
+        notifySuccess(t('toast.savedAll', { count: Object.keys(values).length }));
+        refetch();
+      },
+      onError: (error: any) => notifyError(error),
+    });
+  };
 
   const entries = useMemo(() => {
     const list = overview?.entries ?? [];
@@ -377,6 +447,29 @@ function EnvironmentPage() {
           <RefreshCw className="h-3.5 w-3.5" />
           <span className="sr-only">{t('actions.refresh')}</span>
         </Button>
+        </div>
+
+      {/* Batch save: one PATCH for every changed row, instead of one click per
+          field. Disabled while nothing is dirty or a save is in flight. */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border/50 bg-surface-1/30 px-3 py-2">
+        <span className="text-mini text-muted-foreground">
+          {changedCount > 0
+            ? t('actions.changedCount', { count: changedCount })
+            : t('actions.noChanges')}
+        </span>
+        <Button
+          size="sm"
+          className="h-8 gap-1.5 px-3 text-mini"
+          disabled={changedCount === 0 || batchSaveMutation.isPending}
+          onClick={saveAllChanged}
+        >
+          {batchSaveMutation.isPending ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Check className="h-3 w-3" />
+          )}
+          {batchSaveMutation.isPending ? t('actions.savingAll') : t('actions.saveAll')}
+        </Button>
       </div>
 
       {isLoading && (
@@ -388,8 +481,17 @@ function EnvironmentPage() {
       )}
 
       {isError && (
-        <div className="deck-panel px-3 py-6 text-center text-mini text-muted-foreground">
-          {t('loadError')}
+        <div className="deck-panel flex flex-col items-center gap-3 px-3 py-6 text-center text-mini text-muted-foreground">
+          <span>{t('loadError')}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5 px-3 text-mini"
+            onClick={() => refetch()}
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            {t('common:actions.retry')}
+          </Button>
         </div>
       )}
 
@@ -405,7 +507,7 @@ function EnvironmentPage() {
             <BracketLabel>{categoryLabels[group.category]}</BracketLabel>
             <div className="space-y-2">
               {group.entries.map((entry) => (
-                <EnvRow key={entry.key} entry={entry} onSaved={() => refetch()} />
+                <EnvRow key={entry.key} entry={entry} onSaved={() => refetch()} reportDraft={reportDraft} />
               ))}
             </div>
           </section>

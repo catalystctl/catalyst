@@ -71,10 +71,13 @@ export default function ServerDatabasesTab({
  const databases = Array.isArray(databasesProp) ? databasesProp : [];
  const databaseHosts = Array.isArray(hostsProp) ? hostsProp : [];
  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+ // Rotating replaces a password other services are already using: confirm it.
+ const [pendingRotateId, setPendingRotateId] = useState<string | null>(null);
  const databaseLimitReached =
  databaseAllocation > 0 && databases.length >= databaseAllocation;
  const disabled = isSuspended || databaseAllocation === 0;
  const pendingDeleteDb = databases.find((db) => db.id === pendingDeleteId);
+ const pendingRotateDb = databases.find((db) => db.id === pendingRotateId);
 
  return (
  <div className="space-y-4">
@@ -165,8 +168,9 @@ export default function ServerDatabasesTab({
  <button
  type="button"
  className="h-7 rounded-sm border border-border/60 px-2.5 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:opacity-50"
- onClick={() => onRotate(db.id)}
+ onClick={() => setPendingRotateId(db.id)}
  disabled={rotatePending || isSuspended}
+ title={t('tabs.databases.rotateTitle')}
  >
  {t('tabs.databases.rotate')}
  </button>
@@ -210,6 +214,26 @@ export default function ServerDatabasesTab({
  setPendingDeleteId(null);
  }}
  onCancel={() => setPendingDeleteId(null)}
+ />
+
+ <ConfirmDialog
+ open={Boolean(pendingRotateId)}
+ title={t('tabs.databases.rotateTitle')}
+ message={
+ pendingRotateDb
+ ? t('tabs.databases.rotateConfirm', { name: pendingRotateDb.name })
+ : t('tabs.databases.rotateConfirmFallback')
+ }
+ confirmText={t('tabs.databases.rotate')}
+ cancelText={t('common:actions.cancel')}
+ variant="warning"
+ loading={rotatePending}
+ onConfirm={() => {
+ if (!pendingRotateId) return;
+ onRotate(pendingRotateId);
+ setPendingRotateId(null);
+ }}
+ onCancel={() => setPendingRotateId(null)}
  />
 
  {revealedCredentials && (

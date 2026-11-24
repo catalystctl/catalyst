@@ -13,6 +13,8 @@ import {
  Plus,
  ArrowLeft,
  Info,
+ Copy,
+ Check,
 } from 'lucide-react';
 import apiClient from '../../services/api/client';
 import { nodesApi } from '../../services/api/nodes';
@@ -104,6 +106,28 @@ function NodeAllocationsPage() {
  const [aliasInput, setAliasInput] = useState('');
  const [selectedIds, setSelectedIds] = useState<string[]>([]);
  const [showBulkDeleteDialog, setShowBulkDeleteDialog] = useState(false);
+ // Single free-allocation delete is confirmed: it is irreversible and was one
+ // unguarded click next to the row's copy action.
+ const [deleteTarget, setDeleteTarget] = useState<NodeAllocation | null>(null);
+ const [copiedId, setCopiedId] = useState<string | null>(null);
+
+ const copyAddress = async (allocation: NodeAllocation) => {
+ const text = `${allocation.ip}:${allocation.port}`;
+ try {
+ await navigator.clipboard.writeText(text);
+ } catch {
+ const textarea = document.createElement('textarea');
+ textarea.value = text;
+ textarea.style.position = 'fixed';
+ textarea.style.opacity = '0';
+ document.body.appendChild(textarea);
+ textarea.select();
+ document.execCommand('copy');
+ textarea.remove();
+ }
+ setCopiedId(allocation.id);
+ setTimeout(() => setCopiedId((prev) => (prev === allocation.id ? null : prev)), 2000);
+ };
 
  // IP pool state
  const [showCreatePoolModal, setShowCreatePoolModal] = useState(false);
@@ -225,6 +249,9 @@ function NodeAllocationsPage() {
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
+ // Pool counts also feed the node list and the node detail cards.
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
+ queryClient.invalidateQueries({ queryKey: qk.nodes() });
  },
  onError: (error: any) => {
  notifyError(error);
@@ -238,6 +265,9 @@ function NodeAllocationsPage() {
  },
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminIpPools(nodeId!) });
+ // Pool counts also feed the node list and the node detail cards.
+ queryClient.invalidateQueries({ queryKey: qk.adminNodes() });
+ queryClient.invalidateQueries({ queryKey: qk.nodes() });
  },
  onError: (error: any) => {
  notifyError(error);
@@ -320,11 +350,41 @@ function NodeAllocationsPage() {
  return { ...totals, pools: nodePools.length };
  }, [nodePools]);
 
- const handleQuickFillPorts = () => {
- if (node?.publicAddress) {
- setIpInput(node.publicAddress);
- setPortsInput('25565-25664');
+ /** Opens the add-range modal with the node's own IP already filled in. */
+ const openCreatePortModal = () => {
+ // D17: the modal used to open blank and force re-typing the node IP.
+ if (!ipInput.trim()) {
+ setIpInput(node?.publicAddress?.trim() || '0.0.0.0');
  }
+ setShowCreatePortModal(true);
+ };
+
+ /** First `count` ports not present on the prefilled IP, starting at 25565. */
+ const nextFreePorts = (count = 20): number[] => {
+ const ip = ipInput.trim() || node?.publicAddress?.trim() || '0.0.0.0';
+ const taken = new Set(
+ allocations.filter((a) => a.ip === ip).map((a) => a.port),
+ );
+ const free: number[] = [];
+ for (let port = 25565; port <= 65535 && free.length < count; port += 1) {
+ if (!taken.has(port)) free.push(port);
+ }
+ return free;
+ };
+
+ const applyNextFreePorts = (count: number) => {
+ const ports = nextFreePorts(count);
+ if (ports.length === 0) return;
+ if (ports.length === 1) {
+ setPortsInput(String(ports[0]));
+ return;
+ }
+ const contiguous = ports.every((port, index) => index === 0 || port === ports[index - 1] + 1);
+ setPortsInput(
+ contiguous
+ ? `${ports[0]}-${ports[ports.length - 1]}`
+ : ports.join(', '),
+ );
  };
 
  const handleAutoFillPool = () => {
@@ -467,7 +527,7 @@ function NodeAllocationsPage() {
               </span>
               <button
                 type="button"
-                onClick={() => setShowCreatePortModal(true)}
+                onClick={openCreatePortModal}
                 className="flex h-7 items-center gap-1.5 rounded-sm bg-primary px-2.5 text-mini font-medium text-primary-foreground transition-colors hover:bg-primary/90"
               >
                 <Plus className="h-3 w-3" />
@@ -594,7 +654,7 @@ function NodeAllocationsPage() {
                       !search.trim() ? (
                         <button
                           type="button"
-                          onClick={() => setShowCreatePortModal(true)}
+                          onClick={openCreatePortModal}
                           className="h-7 rounded-sm border border-border/60 px-3 text-mini font-medium text-primary transition-colors hover:border-primary/40"
                         >
                           {t('allocations.empty.createFirst')}
@@ -684,13 +744,39 @@ function NodeAllocationsPage() {
                         )}
                       </span>
                       <span className="flex shrink-0 items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => copyAddress(allocation)}
+                          className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                          title={
+                            copiedId === allocation.id
+                              ? t('allocations.addressCopied')
+                              : t('allocations.copyAddress', {
+                                  address: `${allocation.ip}:${allocation.port}`,
+                                })
+                          }
+                          aria-label={
+                            copiedId === allocation.id
+                              ? t('allocations.addressCopied')
+                              : t('allocations.copyAddress', {
+                                  address: `${allocation.ip}:${allocation.port}`,
+                                })
+                          }
+                        >
+                          {copiedId === allocation.id ? (
+                            <Check className="h-3 w-3 text-success" />
+                          ) : (
+                            <Copy className="h-3 w-3" />
+                          )}
+                        </button>
                         {!allocation.serverId && (
                           <button
                             type="button"
-                            onClick={() => deletePortMutation.mutate(allocation.id)}
+                            onClick={() => setDeleteTarget(allocation)}
                             disabled={deletePortMutation.isPending}
                             className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
                             title={t('common:actions.delete')}
+                            aria-label={t('common:actions.delete')}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -877,9 +963,23 @@ function NodeAllocationsPage() {
               />
             </label>
 
-            <Button variant="outline" size="sm" className="h-7 px-2.5 text-mini" onClick={handleQuickFillPorts}>
-              {t('allocations.createPort.quickFill')}
-            </Button>
+            <div className="flex flex-col gap-1.5">
+              <span className="type-overline">{t('allocations.createPort.nextFreeLabel')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 10, 50].map((count) => (
+                  <Button
+                    key={count}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2.5 text-mini"
+                    onClick={() => applyNextFreePorts(count)}
+                  >
+                    {t('allocations.createPort.nextFree', { count })}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </DialogBody>
 
           <DialogFooter>
@@ -1042,6 +1142,31 @@ function NodeAllocationsPage() {
         onCancel={() => setShowBulkDeleteDialog(false)}
         variant="danger"
         loading={bulkDeletePortsMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title={t('allocations.deleteTitle')}
+        message={
+          deleteTarget
+            ? t('allocations.deleteConfirm', {
+                address: `${deleteTarget.ip}:${deleteTarget.port}`,
+              })
+            : ''
+        }
+        confirmText={t('common:actions.delete')}
+        cancelText={t('common:actions.cancel')}
+        variant="danger"
+        loading={deletePortMutation.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deletePortMutation.mutate(deleteTarget.id, {
+            onSuccess: () => setDeleteTarget(null),
+          });
+        }}
+        onCancel={() => {
+          if (!deletePortMutation.isPending) setDeleteTarget(null);
+        }}
       />
     </div>
   );

@@ -550,6 +550,8 @@ function TemplatesPage({ hideHeader }: Props) {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.templates() });
+      // Nest rows carry templateCount, so deleting templates changes them too.
+      queryClient.invalidateQueries({ queryKey: qk.nests() });
     },
     onError: (error: unknown) => {
       notifyError(error, 'templates:page.deleteError');
@@ -709,7 +711,7 @@ function TemplatesPage({ hideHeader }: Props) {
 
         {/* Expandable filter panel */}
         {showFilters && (
-          <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/40 px-3 py-2">
+          <div className="flex flex-wrap items-end gap-4 border-b border-border/50 bg-surface-1/40 px-3 py-1.5">
             <label className="space-y-1">
               <span className="type-overline">{t('page.authorLabel')}</span>
               <Select

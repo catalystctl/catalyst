@@ -23,6 +23,14 @@ type Props = {
  sortField: SortField;
  sortDirection: SortDirection;
  renamingEntry: FileEntry | null;
+ /** Disables the inline rename input while the rename request is in flight. */
+ renamePending?: boolean;
+ createMode?: 'file' | 'directory' | null;
+ createName?: string;
+ createPending?: boolean;
+ onCreateNameChange?: (next: string) => void;
+ onCreateSubmit?: () => void;
+ onCreateCancel?: () => void;
  onSort: (field: SortField) => void;
  onSelectAll: () => void;
  onOpen: (entry: FileEntry) => void;
@@ -80,11 +88,14 @@ function InlineRenameInput({
  entry,
  onSubmit,
  onCancel,
+ pending = false,
 }: {
  entry: FileEntry;
  onSubmit: (entry: FileEntry, newName: string) => void;
  onCancel: () => void;
+ pending?: boolean;
 }) {
+ const { t } = useTranslation('server-tabs');
  const [value, setValue] = useState(entry.name);
  const inputRef = useRef<HTMLInputElement>(null);
 
@@ -105,16 +116,98 @@ function InlineRenameInput({
  return (
  <input
  ref={inputRef}
- className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-1 font-mono text-mini text-foreground outline-none"
+ className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-1 font-mono text-mini text-foreground outline-none disabled:opacity-60"
  value={value}
+ disabled={pending}
  onChange={(e) => setValue(e.target.value)}
- onBlur={() => onSubmit(entry, value)}
+ // A pending rename must not fire again on the blur that unmounts the input.
+ onBlur={() => { if (!pending) onSubmit(entry, value); }}
  onKeyDown={(e) => {
- if (e.key === 'Enter') onSubmit(entry, value);
+ if (e.key === 'Enter') {
+ if (!pending) onSubmit(entry, value);
+ }
  if (e.key === 'Escape') onCancel();
  }}
  onClick={(e) => e.stopPropagation()}
+ aria-label={t('files.manager.renamePrompt')}
  />
+ );
+}
+
+/**
+ * Inline "new file / new folder" row pinned to the top of the list. Enter
+ * creates, Escape cancels — the same two keys as inline rename, so creating an
+ * entry never opens a dialog over the listing.
+ */
+function InlineCreateRow({
+ mode,
+ value,
+ pending,
+ onChange,
+ onSubmit,
+ onCancel,
+}: {
+ mode: 'file' | 'directory';
+ value: string;
+ pending: boolean;
+ onChange: (next: string) => void;
+ onSubmit: () => void;
+ onCancel: () => void;
+}) {
+ const { t } = useTranslation('server-tabs');
+ const inputRef = useRef<HTMLInputElement>(null);
+
+ useEffect(() => {
+ inputRef.current?.focus();
+ }, []);
+
+ return (
+ <div className={`${GRID} flex-none border-b border-border/50 bg-primary/5 px-3 py-1.5`}>
+ <span className="flex items-center justify-center">
+ {mode === 'directory' ? (
+ <Folder className="h-4 w-4 text-primary" aria-hidden="true" />
+ ) : (
+ <FileTypeIcon name={value || 'new-file'} className="h-4 w-4" />
+ )}
+ </span>
+ <form
+ className="flex min-w-0 items-center gap-2"
+ onSubmit={(event) => {
+ event.preventDefault();
+ onSubmit();
+ }}
+ >
+ <input
+ ref={inputRef}
+ className="w-full max-w-xs rounded-sm border border-primary bg-background/60 px-2 py-1 font-mono text-mini text-foreground outline-none disabled:opacity-60"
+ value={value}
+ disabled={pending}
+ onChange={(event) => onChange(event.target.value)}
+ onKeyDown={(event) => {
+ if (event.key === 'Escape') {
+ event.preventDefault();
+ onCancel();
+ return;
+ }
+ // Explicit rather than relying on the form's implicit submission, so the
+ // same key works in every browser and in tests.
+ if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+ event.preventDefault();
+ onSubmit();
+ }
+ }}
+ placeholder={
+ mode === 'directory' ? t('files.manager.folderNamePlaceholder') : t('files.manager.fileNamePlaceholder')
+ }
+ aria-label={mode === 'directory' ? t('files.manager.newFolder') : t('files.manager.newFile')}
+ />
+ <span className="hidden shrink-0 text-micro text-muted-foreground sm:inline">
+ {pending
+ ? t('files.manager.creating')
+ : t('files.manager.createHint')}
+ </span>
+ </form>
+ </div>
  );
 }
 
@@ -127,6 +220,13 @@ function FileList({
  sortField,
  sortDirection,
  renamingEntry,
+ renamePending = false,
+ createMode = null,
+ createName = '',
+ createPending = false,
+ onCreateNameChange,
+ onCreateSubmit,
+ onCreateCancel,
  onSort,
  onSelectAll,
  onOpen,
@@ -146,6 +246,28 @@ function FileList({
  const parentRef = useRef<HTMLDivElement>(null);
  const [contextMenuEntry, setContextMenuEntry] = useState<FileEntry | null>(null);
  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+ // The context menu advertises ↵ / F2 / Del; these are the rows that answer them.
+ const [focusedPath, setFocusedPath] = useState<string | null>(null);
+
+ /**
+  * Keyboard model for a focused row: Enter opens, F2 renames, Delete asks for
+  * the usual delete confirmation. Events from an inline input (rename or the
+  * create row) are left alone so typing never triggers a row action.
+  */
+ const handleRowKeyDown = (event: React.KeyboardEvent<HTMLDivElement>, entry: FileEntry) => {
+   const target = event.target as HTMLElement;
+   if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+   if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+     event.preventDefault();
+     onOpen(entry);
+   } else if (event.key === 'F2') {
+     event.preventDefault();
+     onRename(entry);
+   } else if (event.key === 'Delete' || event.key === 'Del') {
+     event.preventDefault();
+     onDelete(entry);
+   }
+ };
 
  // Calculate total size for the footer
  const totalSize = useMemo(() => {
@@ -224,7 +346,7 @@ function FileList({
  );
  }
 
- if (!files.length) {
+ if (!files.length && !createMode) {
  return (
  <TabEmptyState
  title={t('files.list.emptyTitle')}
@@ -276,6 +398,18 @@ function FileList({
  <span className="sr-only">{t('files.contextMenu.fileActions')}</span>
  </div>
 
+ {/* Inline create row — stays out of the virtualizer so it is always first. */}
+ {createMode && onCreateSubmit && onCreateCancel && onCreateNameChange ? (
+ <InlineCreateRow
+ mode={createMode}
+ value={createName}
+ pending={createPending}
+ onChange={onCreateNameChange}
+ onSubmit={onCreateSubmit}
+ onCancel={onCreateCancel}
+ />
+ ) : null}
+
  {/* Virtual scroll container */}
  <div ref={parentRef} className="flex-1 overflow-auto" style={{ contain: 'strict' }}>
  <div style={{ height: virtualTotalSize, position: 'relative' }}>
@@ -285,13 +419,25 @@ function FileList({
  <div
  key={entry.path}
  data-index={virtualRow.index}
- className={`${GRID} absolute left-0 right-0 group px-3 py-1.5 transition-colors ${
+ // Enter / F2 / Del on the focused row (see handleRowKeyDown).
+ tabIndex={0}
+ role="row"
+ aria-selected={selected}
+ data-focused={focusedPath === entry.path ? 'true' : undefined}
+ onFocus={() => setFocusedPath(entry.path)}
+ // Focus moving between the row's own buttons must not clear the row focus.
+ onBlur={(event) => {
+ if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+ setFocusedPath((prev) => (prev === entry.path ? null : prev));
+ }}
+ onKeyDown={(event) => handleRowKeyDown(event, entry)}
+ className={`${GRID} absolute left-0 right-0 group px-3 py-1.5 transition-colors outline-none ${
  virtualRow.index > 0 ? 'border-t border-border/40' : ''
  } ${
  selected
  ? 'bg-primary/25 shadow-[inset_2px_0_0_hsl(var(--primary))] hover:bg-primary/30'
  : 'hover:bg-surface-3/80'
- }`}
+ } ${focusedPath === entry.path ? 'ring-1 ring-inset ring-primary/50' : ''}`}
  style={{
  height: ROW_HEIGHT,
  transform: `translateY(${virtualRow.start}px)`,
@@ -305,6 +451,7 @@ function FileList({
  if (!isRenaming) onOpen(entry);
  }}
  >
+
  {/* Selection checkbox */}
  <div className="flex items-center">
  <button
@@ -345,6 +492,7 @@ function FileList({
  entry={entry}
  onSubmit={onRenameSubmit}
  onCancel={onRenameCancel}
+ pending={renamePending}
  />
  ) : (
  <span className="flex min-w-0 items-baseline gap-2">

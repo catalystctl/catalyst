@@ -306,34 +306,47 @@ export function NodeAssignmentsSelector({
  };
 
  // Update expiration date for a node
- const updateExpiration = async (nodeId: string, expiresAt: string) => {
- if (disabled || isCreateMode) return;
+// In place (PATCH) so `assignedAt`/`assignedBy` survive: the old
+// remove-then-reassign lost the assignment's history and raced with readers.
+const updateExpiration = async (nodeId: string, expiresAt: string) => {
+ if (disabled) return;
 
- // Remove old assignment and create new one with expiration
+ // The datetime-local input has no zone; toISOString pins it to UTC so the
+ // backend's future-date check compares like with like.
+ const normalized = expiresAt ? new Date(expiresAt).toISOString() : null;
+
+ if (isCreateMode) {
+ // Create mode: nothing is persisted yet, so this only stages the expiry for
+ // the parent to flush once the account/role exists.
+ onSelectionChange(
+ selectedNodes.map(n =>
+ n.nodeId === nodeId ? { ...n, expiresAt: normalized ?? undefined } : n,
+ ),
+ );
+ setExpirationNodeId(null);
+ setExpirationDate('');
+ return;
+ }
+
  const targetId = userId || roleId;
  const targetType = userId ? 'user' : 'role';
 
  try {
- // First remove old assignment
  const nodeAssignments = await nodesApi.getAssignments(nodeId);
  const assignment = nodeAssignments.find(a =>
  targetType === 'user' ? a.userId === targetId : a.roleId === targetId
  );
 
- if (assignment) {
- await nodesApi.removeAssignment(nodeId, assignment.id);
+ if (!assignment) {
+ notifyError(t('nodeAssignments.toast.assignmentNotFound'));
+ return;
  }
 
- // Create new assignment with expiration
- await nodesApi.assignNode(nodeId, {
- targetType,
- targetId: targetId!,
- expiresAt: expiresAt || undefined,
- });
+ await nodesApi.updateAssignmentExpiry(nodeId, assignment.id, normalized);
 
  // Update local state
  const newSelection = selectedNodes.map(n =>
- n.nodeId === nodeId ? { ...n, expiresAt: expiresAt || undefined } : n
+ n.nodeId === nodeId ? { ...n, expiresAt: normalized ?? undefined } : n
  );
  onSelectionChange(newSelection);
 
@@ -396,6 +409,11 @@ export function NodeAssignmentsSelector({
         </div>
 
         <div className="p-3">
+        {isCreateMode && (
+          <p className="mb-2 rounded-sm border border-primary/25 bg-primary/5 px-2.5 py-1.5 text-micro leading-relaxed text-muted-foreground">
+            {t('nodeAssignments.createModeNote')}
+          </p>
+        )}
         {isLoading ? (
           <div className="py-4 text-center text-mini text-muted-foreground">
             {t('nodeAssignments.loading')}

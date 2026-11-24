@@ -10,6 +10,7 @@ import {
  Loader2,
  Download,
  CheckCircle,
+ Plus,
 } from 'lucide-react';
 import Combobox from '../../components/ui/combobox';
 import type { TemplateImageOption, TemplateVariable } from '../../types/template';
@@ -66,6 +67,29 @@ const createImageOptionDraft = (option?: Partial<TemplateImageOption>): ImageOpt
  image: option?.image ?? '',
 });
 
+/**
+ * Ports declared by an egg's Catalyst `ports` extension.
+ *
+ * `normalizeTemplateImport` collapses that list to the primary port; a
+ * multi-port egg (game + query, RCON) should arrive with its full set seeded in
+ * the Ports field instead of only the first entry.
+ */
+function eggDeclaredPorts(raw: unknown): number[] {
+ const ports = (raw as { ports?: unknown } | null | undefined)?.ports;
+ if (!Array.isArray(ports)) return [];
+ const parsed = ports
+ .map((entry) =>
+ entry && typeof entry === 'object'
+ ? Number(
+ (entry as Record<string, unknown>).port ??
+ (entry as Record<string, unknown>).default,
+ )
+ : Number(entry),
+ )
+ .filter((port) => Number.isInteger(port) && port > 0 && port <= 65535);
+ return Array.from(new Set(parsed));
+}
+
 function TemplateCreateModal() {
  const { t } = useTranslation('templates');
  const [open, setOpen] = useState(false);
@@ -108,6 +132,10 @@ function TemplateCreateModal() {
  const [importUrlError, setImportUrlError] = useState('');
  const [batchImportLoading, setBatchImportLoading] = useState(false);
  const [batchImportResult, setBatchImportResult] = useState<BatchImportResult | null>(null);
+ // Set by applyTemplateImport: unlocks the one-click "Import & create" path.
+ const [importedFromEgg, setImportedFromEgg] = useState(false);
+ // D13: create a nest inline instead of stacking the nests manager on top.
+ const [newNestName, setNewNestName] = useState('');
 
  // Re-open this modal when a nests manager sends the user back after creating a nest
  // If a nest was just created, auto-select it (preserves imported data)
@@ -128,6 +156,27 @@ function TemplateCreateModal() {
  queryKey: qk.nests(),
  queryFn: nestsApi.list,
  staleTime: 5 * 60 * 1000,
+ });
+
+ /**
+  * D13: create the nest from inside this dialog and select it. Opening the
+  * nests manager on top of an unsaved template form lost the user's place and
+  * stacked two modals; the inline field keeps both.
+  */
+ const createNestMutation = useMutation({
+ mutationFn: (nestName: string) => nestsApi.create({ name: nestName }),
+ onSuccess: (created) => {
+ notifySuccess(t('nests.created'));
+ setNewNestName('');
+ if (created?.id) setNestId(created.id);
+ },
+ onError: (error: unknown) => {
+ notifyError(error, 'templates:nests.createError');
+ },
+ onSettled: () => {
+ queryClient.invalidateQueries({ queryKey: qk.nests() });
+ queryClient.invalidateQueries({ queryKey: qk.templates() });
+ },
  });
 
  const parsedPorts = useMemo(
@@ -342,6 +391,8 @@ function TemplateCreateModal() {
  setNestId('');
  setVariables([createVariableDraft()]);
  setImportError('');
+ setImportedFromEgg(false);
+ setNewNestName('');
  },
  onError: (error: unknown) => {
    notifyError(error, 'templates:create.error');
@@ -359,6 +410,7 @@ function TemplateCreateModal() {
  }
  const payload = normalizeTemplateImport(raw);
  setImportError('');
+ setImportedFromEgg(true);
  setName(String(payload.name ?? ''));
  setDescription(String(payload.description ?? ''));
  setAuthor(String(payload.author ?? ''));
@@ -396,8 +448,13 @@ function TemplateCreateModal() {
  ? [String(features.configFile)]
  : [],
  );
+ // Seed every port the egg declares (game + query + RCON); fall back to the
+ // importer's primary port, then to the Minecraft default.
+ const declaredPorts = eggDeclaredPorts(raw);
  setSupportedPorts(
- Array.isArray(payload.supportedPorts)
+ declaredPorts.length
+ ? declaredPorts.join(', ')
+ : Array.isArray(payload.supportedPorts) && payload.supportedPorts.length
  ? (payload.supportedPorts as unknown[]).join(', ')
  : '25565',
  );
@@ -661,6 +718,8 @@ function TemplateCreateModal() {
  setOpen(next);
  if (!next) {
  setImportError('');
+ setImportedFromEgg(false);
+ setNewNestName('');
  }
  }}
  >
@@ -679,6 +738,27 @@ function TemplateCreateModal() {
  <p className="rounded-sm border border-danger/30 bg-danger/5 px-3 py-2 text-mini text-danger">
  {importError}
  </p>
+ ) : null}
+
+ {/* D12: an imported egg that already satisfies every required field can be
+     created in one click; otherwise the form below is the review step. */}
+ {importedFromEgg && missingFields.length === 0 ? (
+ <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-primary/30 bg-primary/5 px-3 py-2">
+ <p className="min-w-0 flex-1 type-meta">{t('create.importReady')}</p>
+ <Button
+ size="sm"
+ className="h-8 shrink-0 gap-1.5 px-3 text-mini"
+ onClick={() => mutation.mutate()}
+ disabled={mutation.isPending}
+ >
+ {mutation.isPending ? (
+ <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : (
+ <CheckCircle className="h-3.5 w-3.5" />
+ )}
+ {mutation.isPending ? t('create.creating') : t('create.importAndCreate')}
+ </Button>
+ </div>
  ) : null}
 
  {/* 1 — Nest & identity */}
@@ -719,23 +799,48 @@ function TemplateCreateModal() {
  />
  </div>
  ) : (
- <div className="rounded-sm border border-dashed border-border/50 px-4 py-3">
+ <div className="max-w-md rounded-sm border border-dashed border-border/50 px-4 py-3">
  <p className="type-meta">
- {t('create.noNests')}{' '}
- <button
- type="button"
- className="inline-flex items-center gap-1 font-medium text-primary hover:text-primary"
- onClick={() => {
- setOpen(false);
- window.dispatchEvent(new CustomEvent('catalyst:open-nests-modal', { detail: { returnTo: 'template-create' } }));
- }}
- >
- {t('create.createNest')}
- </button>{' '}
-   {t('create.noNestsSuffix')}
+ {t('create.noNests')} {t('create.noNestsSuffix')}
  </p>
  </div>
  )}
+ {/* Inline nest create (D13): the nests manager used to be stacked on top of
+     this dialog and its return threw the half-filled form away. */}
+ <form
+ className="max-w-md space-y-1.5"
+ onSubmit={(event) => {
+ event.preventDefault();
+ const nestName = newNestName.trim();
+ if (nestName && !createNestMutation.isPending) createNestMutation.mutate(nestName);
+ }}
+ >
+ <label className="block space-y-1">
+ <span className="type-overline">{t('create.createNest')}</span>
+ <div className="flex items-center gap-1.5">
+ <input
+ className="h-8 w-full min-w-0 rounded-sm border border-border/60 bg-background/40 px-2.5 text-mini text-foreground outline-none transition-colors placeholder:text-muted-foreground/70 focus:border-primary focus:ring-1 focus:ring-primary/40"
+ value={newNestName}
+ onChange={(event) => setNewNestName(event.target.value)}
+ placeholder={t('create.nestNamePlaceholder')}
+ aria-label={t('create.nestNamePlaceholder')}
+ />
+ <Button
+ type="submit"
+ size="sm"
+ className="h-8 shrink-0 gap-1.5 px-3 text-mini"
+ disabled={!newNestName.trim() || createNestMutation.isPending}
+ >
+ {createNestMutation.isPending ? (
+ <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : (
+ <Plus className="h-3.5 w-3.5" />
+ )}
+ {createNestMutation.isPending ? t('nests.saving') : t('common:actions.create')}
+ </Button>
+ </div>
+ </label>
+ </form>
  <p className="type-meta">{t('create.nestsHint')}</p>
  </div>
 
@@ -1418,14 +1523,16 @@ function TemplateCreateModal() {
  <p className="type-meta">
  {t('create.fromLocalFileHint')}
  </p>
- <button
- className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-border/50 px-4 py-4 text-mini font-medium text-muted-foreground transition-colors hover:border-primary/60 hover:text-foreground"
+ <Button
+ type="button"
+ variant="outline"
+ className="h-auto w-full gap-2 border-dashed px-4 py-4 text-mini"
  onClick={() => importFileRef.current?.click()}
  >
  <Upload className="h-4 w-4" />
- {t('create.chooseFile')}{''}
- <span className="text-micro opacity-60">(.json, .yaml, .yml)</span>
- </button>
+ {t('create.chooseFile')}
+ <span className="text-micro text-muted-foreground">(.json, .yaml, .yml)</span>
+ </Button>
  </div>
 
  {/* Divider */}
@@ -1486,8 +1593,10 @@ function TemplateCreateModal() {
  )}
  </div>
  ) : (
- <button
- className="flex w-full items-center justify-center gap-2 rounded-sm border border-dashed border-primary/40 px-4 py-4 text-mini font-medium text-foreground transition-colors hover:border-primary/60 hover:bg-primary/5"
+ <Button
+ type="button"
+ variant="outline"
+ className="h-auto w-full gap-2 border-dashed px-4 py-4 text-mini"
  onClick={handleBatchImport}
  disabled={batchImportLoading}
  >
@@ -1502,7 +1611,7 @@ function TemplateCreateModal() {
  {t('create.importAllButton')}
  </>
  )}
- </button>
+ </Button>
  )}
  {batchImportLoading && (
  <p className="type-meta">

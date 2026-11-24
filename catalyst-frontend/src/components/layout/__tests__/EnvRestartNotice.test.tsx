@@ -5,6 +5,9 @@
  * page load, so an operator with a pending (or spurious) restart could not use
  * the panel. It now lists the pending variables and remembers "Later" for that
  * exact pending set.
+ *
+ * Round 2 (audit A-fix): it is a non-blocking banner, not an AlertDialog — a
+ * pending environment change must never trap focus or cover the panel.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
@@ -50,7 +53,7 @@ describe('EnvRestartNotice', () => {
 
   it('remembers "Later" across reloads for the same pending set', () => {
     const first = render(<EnvRestartNotice />);
-    fireEvent.click(screen.getByRole('button', { name: 'Later' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Later|Close/ })[0]);
     expect(screen.queryByText('Restart required')).not.toBeInTheDocument();
     first.unmount();
 
@@ -61,7 +64,7 @@ describe('EnvRestartNotice', () => {
 
   it('shows again when a different change is pending', () => {
     const first = render(<EnvRestartNotice />);
-    fireEvent.click(screen.getByRole('button', { name: 'Later' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Later|Close/ })[0]);
     first.unmount();
 
     h.status = { restartRequired: true, changedKeys: ['LOG_LEVEL'], strategy: 'supervised' };
@@ -73,5 +76,26 @@ describe('EnvRestartNotice', () => {
     h.status = { restartRequired: false, changedKeys: [], strategy: 'supervised' };
     render(<EnvRestartNotice />);
     expect(screen.queryByText('Restart required')).not.toBeInTheDocument();
+  });
+
+  // ── Non-blocking banner (was a focus-trapping AlertDialog) ──
+
+  it('renders as a status banner, not a modal dialog', () => {
+    render(<EnvRestartNotice />);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(document.querySelector('[aria-modal="true"]')).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent('Restart required');
+  });
+
+  it('does not lock the page behind it', () => {
+    render(<EnvRestartNotice />);
+    expect(document.body.style.overflow).not.toBe('hidden');
+  });
+
+  it('restarts the panel from the banner action', () => {
+    render(<EnvRestartNotice />);
+    fireEvent.click(screen.getByRole('button', { name: 'Restart panel' }));
+    expect(h.mutate).toHaveBeenCalledOnce();
   });
 });

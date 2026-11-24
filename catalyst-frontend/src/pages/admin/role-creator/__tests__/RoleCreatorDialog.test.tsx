@@ -331,10 +331,35 @@ describe('RoleCreatorDialog', () => {
     expect(screen.getByTestId('node-assignments')).toHaveAttribute('data-role-id', 'role-9');
   });
 
-  it('defers node-access assignment until the role exists', () => {
+  it('collects node-access picks locally while creating, for the create flush', () => {
     renderDialog({ role: null });
-    expect(screen.queryByTestId('node-assignments')).toBeNull();
-    expect(screen.getByText('roles.creator.nodeAccessCreateHint')).toBeInTheDocument();
+    // The selector renders without a target id (create mode) — it persists
+    // nothing itself; RolesPage flushes the picks after the role exists.
+    expect(screen.getByTestId('node-assignments')).toHaveAttribute('data-role-id', '');
+    expect(screen.getByText('roles.creator.nodeAccessCreateFlush')).toBeInTheDocument();
+  });
+
+  it('prefills a duplicate from the source role and submits as a create', () => {
+    const source = {
+      id: 'role-src',
+      name: 'Moderators',
+      description: 'keeps the chat civil',
+      permissions: ['server.read'],
+      scope: { mode: 'none' as const, permissions: [] },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const { onSubmit } = renderDialog({ role: null, prefillFrom: source });
+
+    // The name carries a duplicated-name suffix (a key here: t returns keys).
+    expect(screen.getByDisplayValue('roles.duplicateName')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'roles.createTitle' }));
+
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({
+      name: 'roles.duplicateName',
+      description: 'keeps the chat civil',
+      permissions: ['server.read'],
+    });
   });
 
   it('demotes a super-admin role instead of silently re-asserting the wildcard', () => {

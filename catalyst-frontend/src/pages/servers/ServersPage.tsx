@@ -3,6 +3,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import CreateServerModal from '../../components/servers/CreateServerModal';
 import ServerControls from '../../components/servers/ServerControls';
+import ServerAddressCopy from '../../components/servers/ServerAddressCopy';
+import ServerBulkBar from '../../components/servers/ServerBulkBar';
+import { selectAllState, toggleAllVisible } from '../../components/servers/serverBulk';
+import { Checkbox } from '../../components/ui/checkbox';
 import { useServers } from '../../hooks/useServers';
 import { useAccessibleNodes } from '../../hooks/useNodes';
 import type { Server, ServerListParams, ServerStatus } from '../../types/server';
@@ -91,9 +95,13 @@ function stateTextClass(status: ServerStatus) {
 function ServerRow({
   server,
   onMoveFocus,
+  selected,
+  onToggleSelected,
 }: {
   server: Server;
   onMoveFocus: (dir: 1 | -1) => void;
+  selected: boolean;
+  onToggleSelected: (next: boolean) => void;
 }) {
   const { t } = useTranslation('servers');
   const { read } = useCpuFormat();
@@ -155,6 +163,12 @@ function ServerRow({
     >
       {/* identity — on small screens this cell also carries address + state */}
       <div className="flex min-w-0 items-center gap-2">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={(next) => onToggleSelected(next === true)}
+          aria-label={t('bulk.selectServer', { name: server.name })}
+          className="shrink-0"
+        />
         <StatusLed tone={toneForState(server.status)} pulse={running} />
         <GameChip game={game} className="hidden sm:inline-flex" />
         <div className="flex min-w-0 flex-col leading-tight">
@@ -173,9 +187,7 @@ function ServerRow({
             )}
           </span>
           <span className="server-list-mobile-meta flex items-center gap-2 text-micro text-muted-foreground">
-            <span className="truncate font-mono">
-              {host}:{port}
-            </span>
+            <ServerAddressCopy host={host} port={port} />
             <span className={cn('shrink-0 text-micro uppercase', stateTextClass(server.status))}>
               {serverStatusLabel(t, server.status)}
             </span>
@@ -222,12 +234,10 @@ function ServerRow({
         </Segmented>
       </span>
 
-      {/* address */}
+      {/* address — copyable in place (audit D8) */}
       <span className="server-list-md min-w-0 items-center gap-1.5">
         <Globe className="h-3 w-3 shrink-0 text-muted-foreground/60" />
-        <span className="truncate font-mono text-micro text-muted-foreground">
-          {host}:{port}
-        </span>
+        <ServerAddressCopy host={host} port={port} />
       </span>
 
       {/* state — left-aligned like the rest of the text columns */}
@@ -391,6 +401,29 @@ function ServersPage() {
   const totalServers = data?.length ?? 0;
   const hasFilters = Boolean(search || status);
 
+  // ── Bulk power selection (audit D9) ──
+  // Selection is by id and survives filtering, but "select all" only covers the
+  // CURRENT filtered list — the same rule the bulk bar's counts use.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const visibleIds = useMemo(() => filtered.map((server) => server.id), [filtered]);
+  const selectAll = selectAllState(selectedIds, visibleIds);
+  const selectedServers = useMemo(
+    () => filtered.filter((server) => selectedIds.has(server.id)),
+    [filtered, selectedIds],
+  );
+  // Drop ids that no longer exist (a server deleted in another tab) and ids the
+  // current filter hides, so the bar can never act on something invisible.
+  useEffect(() => {
+    setSelectedIds((current) => {
+      if (current.size === 0) return current;
+      const next = new Set<string>();
+      for (const id of visibleIds) {
+        if (current.has(id)) next.add(id);
+      }
+      return next.size === current.size ? current : next;
+    });
+  }, [visibleIds]);
+
   const moveFocus = (index: number, dir: 1 | -1) => {
     const target = index + dir;
     if (target < 0 || target >= filtered.length) return;
@@ -528,7 +561,15 @@ function ServersPage() {
             'server-list-columns sticky top-0 z-10 border-b border-border/50 bg-surface-1 py-1.5 pl-3 pr-3 text-muted-foreground',
           )}
         >
-          <span className="type-overline">{cols.server}</span>
+          <span className="type-overline flex items-center gap-2">
+            <Checkbox
+              checked={selectAll === 'all' ? true : selectAll === 'some' ? 'indeterminate' : false}
+              onCheckedChange={(next) => setSelectedIds(toggleAllVisible(selectedIds, visibleIds, next !== false))}
+              aria-label={t('bulk.selectAll')}
+              disabled={visibleIds.length === 0}
+            />
+            <span>{cols.server}</span>
+          </span>
           <span className="type-overline server-list-lg">{cols.game}</span>
           <span className="type-overline server-list-xl">{cols.cpu}</span>
           <span className="type-overline server-list-xl">{cols.ram}</span>
@@ -537,6 +578,12 @@ function ServersPage() {
           <span className="type-overline server-list-md">{cols.state}</span>
           <span className="type-overline justify-self-end">{cols.actions}</span>
         </div>
+
+        {/* Bulk power bar — only while rows are ticked (audit D9) */}
+        <ServerBulkBar
+          selected={selectedServers}
+          onClear={() => setSelectedIds(new Set())}
+        />
 
         {/* A refetch failure keeps any stale rows visible, but is never shown as an empty fleet. */}
         {isError && data && <TabErrorState onRetry={() => void refetch()} />}
@@ -631,6 +678,15 @@ function ServersPage() {
                       <ServerRow
                         server={server}
                         onMoveFocus={(dir) => moveFocus(item.index, dir)}
+                        selected={selectedIds.has(server.id)}
+                        onToggleSelected={(next) =>
+                          setSelectedIds((current) => {
+                            const updated = new Set(current);
+                            if (next) updated.add(server.id);
+                            else updated.delete(server.id);
+                            return updated;
+                          })
+                        }
                       />
                     </div>
                   </div>
@@ -665,6 +721,7 @@ function ServersPage() {
             <span className="hidden sm:inline">
               <kbd className="font-mono text-muted-foreground/80">↹</kbd> {t('hints.actions')}
             </span>
+            <span className="hidden lg:inline">{t('hints.select')}</span>
           </div>
         </div>
       </div>

@@ -38,6 +38,8 @@ function TemplateDeleteDialog({ templateId, templateName, onDeleted, buttonClass
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.templates() });
       queryClient.invalidateQueries({ queryKey: qk.template(templateId) });
+      // Nest rows carry templateCount, so a delete changes them too.
+      queryClient.invalidateQueries({ queryKey: qk.nests() });
     },
   });
 

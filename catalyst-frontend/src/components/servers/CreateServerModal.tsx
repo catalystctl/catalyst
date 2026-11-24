@@ -40,6 +40,7 @@ import {
 } from '../../lib/serverLimits';
 import { BracketLabel } from '@/components/deck/primitives';
 import CpuAffinityField from './CpuAffinityField';
+import CreateAllocationInline from './CreateAllocationInline';
 import { countCpus, normalizeCpuAffinity } from '../../lib/cpuAffinity';
 
 /** Deck field chrome — 4px radius, 32px control height, mini type ramp. */
@@ -112,6 +113,9 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
   >([]);
   const [allocLoadError, setAllocLoadError] = useState<string | null>(null);
   const [allocRefreshKey, setAllocRefreshKey] = useState(0);
+  const [nodeAllocations, setNodeAllocations] = useState<
+    Array<{ id: string; ip: string; port: number; serverId?: string | null }>
+  >([]);
   const [nodeIpPools, setNodeIpPools] = useState<
     Array<{ id: string; networkName: string; cidr: string; availableCount: number }>
   >([]);
@@ -336,6 +340,16 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
       .allocations(nodeId)
       .then((allocations) => {
         if (!active) return;
+        // Every allocation on the node (not only the free ones): the inline
+        // allocation creator suggests the next free port from this pool.
+        setNodeAllocations(
+          allocations.map((allocation) => ({
+            id: allocation.id,
+            ip: allocation.ip,
+            port: allocation.port,
+            serverId: allocation.serverId ?? null,
+          })),
+        );
         setAvailableAllocations(
           allocations
             .filter((allocation) => !allocation.serverId)
@@ -356,6 +370,27 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
       active = false;
     };
   }, [nodeId, networkMode, allocRefreshKey]);
+
+  // Auto-select an allocation the operator just created inline: the list
+  // refreshed under them, so picking it by hand would be the second click the
+  // inline creator exists to remove.
+  const [pendingAllocation, setPendingAllocation] = useState<{ ip: string; port: number } | null>(null);
+  useEffect(() => {
+    if (!pendingAllocation || availableAllocations.length === 0) return;
+    const match = availableAllocations.find(
+      (allocation) => allocation.port === pendingAllocation.port,
+    );
+    if (!match) return;
+    setAllocationId(match.id);
+    setPendingAllocation(null);
+  }, [pendingAllocation, availableAllocations]);
+
+  // Refresh the pool after an inline create; the effect above then selects the
+  // new entry once the list arrives.
+  const handleAllocationCreated = (created: { ip: string; port: number }) => {
+    setPendingAllocation(created);
+    setAllocRefreshKey((key) => key + 1);
+  };
 
   // Auto-refresh allocations when user returns from another tab
   useEffect(() => {
@@ -473,6 +508,14 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.servers() });
       queryClient.invalidateQueries({ queryKey: qk.adminServers() });
+      // The new server consumed a node allocation and memory/CPU headroom:
+      // node allocation pages have no poll, so a stale pool count outlives the
+      // request that changed it (audit C6).
+      queryClient.invalidateQueries({ queryKey: qk.dashboardStats() });
+      queryClient.invalidateQueries({ queryKey: qk.adminStats() });
+      if (nodeId) {
+        queryClient.invalidateQueries({ queryKey: qk.adminNodeAllocations(nodeId) });
+      }
     },
     onError: (error: any) => {
       if (error instanceof InstallStartError) {
@@ -650,11 +693,6 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                         <span className="type-overline">{t('createServer.fields.node')}</span>
                         <Combobox value={nodeId} onChange={(newNodeId) => setNodeId(newNodeId)} options={availableNodes.map((n) => ({ value: n.id, label: n.name, keywords: [n.name] }))} placeholder={t('createServer.fields.nodePlaceholder')} searchPlaceholder={t('createServer.fields.nodeSearchPlaceholder')} className={fieldClass}/>
                       </label>
-                      {selectedNode ? (
-                        <p className="border-t border-border/50 pt-2.5 font-mono text-micro text-muted-foreground">
-                          {`locationId: ${locationId || '—'}`}
-                        </p>
-                      ) : null}
                     </div>
                   </FormSection>
 
@@ -756,14 +794,29 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                                   <option value="">{t('fields.selectAllocation')}</option>
                                   {availableAllocations.map((allocation) => (<option key={allocation.id} value={allocation.id}>{allocation.ip}:{allocation.port}{allocation.alias ? ` (${allocation.alias})` : ''}</option>))}
                                 </select>
-                                {canManageAllocations && <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-sm border border-border/60 px-2.5 text-mini text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground" title={t('createServer.network.createAllocationsHint')}>
-                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4"/></svg> {t('createServer.network.newAllocation')}
-                                </a>}
+                                {/* Inline create: the old link opened the node's
+                                    allocation page in a NEW TAB, stranding the
+                                    half-filled form (audit A1/D-dead-end). */}
+                                {canManageAllocations && nodeId && (
+                                  <CreateAllocationInline
+                                    nodeId={nodeId}
+                                    allocations={nodeAllocations}
+                                    onCreated={handleAllocationCreated}
+                                  />
+                                )}
                               </div>
                             </label>
                             {allocLoadError ? (<p className="text-micro text-warning">{allocLoadError}</p>) : null}
                             {!allocLoadError && availableAllocations.length === 0 ? (
-                              <p className="type-meta">{t('fields.noAllocations')}{canManageAllocations && <> <a href={`/admin/nodes/${nodeId}/allocations`} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">{t('fields.createOne')}</a></>}</p>
+                              <p className="type-meta">
+                                {t('fields.noAllocations')}
+                                {canManageAllocations && nodeId ? <> <CreateAllocationInline
+                                  nodeId={nodeId}
+                                  allocations={nodeAllocations}
+                                  variant="link"
+                                  onCreated={handleAllocationCreated}
+                                /></> : null}
+                              </p>
                             ) : null}
                           </div>
 
@@ -836,9 +889,6 @@ function CreateServerModal({ openOnIntent = false, onIntentHandled }: { openOnIn
                         <span className="shrink-0 text-micro text-muted-foreground">{t('createServer.fields.node')}</span>
                         <span className="min-w-0 truncate text-right text-mini text-foreground">
                           {selectedNode ? selectedNode.name : '—'}
-                          {selectedNode ? (
-                            <span className="block font-mono text-micro text-muted-foreground">{`locationId: ${locationId || '—'}`}</span>
-                          ) : null}
                         </span>
                       </div>
                     </div>

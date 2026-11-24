@@ -373,7 +373,7 @@ export default function ServerImportModal({
  </div>
  </div>
 
- <div className="flex justify-end gap-2 pt-1">
+ <div className="flex justify-end gap-2 border-t border-border/50 pt-3">
  <Button
    size="sm"
    variant="outline"

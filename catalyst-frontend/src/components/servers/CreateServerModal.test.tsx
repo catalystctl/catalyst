@@ -6,6 +6,8 @@ const create = vi.fn();
 const install = vi.fn();
 const navigate = vi.fn();
 const invalidateQueries = vi.fn();
+const createAllocations = vi.fn();
+const allocationList = vi.fn();
 const setPermissions = { current: ['admin.write'] };
 const templates = [{ id: 'template-1', name: 'Minecraft' }];
 const templateDetail = { id: 'template-1', variables: [] };
@@ -16,7 +18,13 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => navigate }));
 vi.mock('../../stores/authStore', () => ({ useAuthStore: (select: (state: any) => unknown) => select({ user: { permissions: setPermissions.current } }) }));
 vi.mock('../../hooks/useTemplates', () => ({ useTemplates: () => ({ data: templates }), useTemplate: () => ({ data: templateDetail }) }));
 vi.mock('../../hooks/useNodes', () => ({ useNodes: () => ({ data: nodes }), useAccessibleNodes: () => ({ data: { nodes, hasWildcard: false } }) }));
-vi.mock('../../services/api/nodes', () => ({ nodesApi: { allocations: () => Promise.resolve([{ id: 'allocation-1', ip: '127.0.0.1', port: 25565 }]), ipPools: () => Promise.resolve([]) } }));
+vi.mock('../../services/api/nodes', () => ({
+  nodesApi: {
+    allocations: (...args: unknown[]) => allocationList(...args),
+    ipPools: () => Promise.resolve([]),
+    createAllocations: (...args: unknown[]) => createAllocations(...args),
+  },
+}));
 vi.mock('../../services/api/admin', () => ({ adminApi: { listUsers: vi.fn() } }));
 vi.mock('../../services/api/servers', () => ({ serversApi: { create: (...args: unknown[]) => create(...args), install: (...args: unknown[]) => install(...args) } }));
 vi.mock('../../utils/notify', () => ({ notifyError: vi.fn(), notifySuccess: vi.fn() }));
@@ -47,7 +55,7 @@ vi.mock('@/components/ui/dialog', () => ({
 import CreateServerModal from './CreateServerModal';
 
 describe('server creation installation recovery', () => {
-  beforeEach(() => { create.mockReset().mockResolvedValue({ id: 'created-1' }); install.mockReset().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({}); navigate.mockReset(); setPermissions.current = ['admin.write']; });
+  beforeEach(() => { create.mockReset().mockResolvedValue({ id: 'created-1' }); install.mockReset().mockRejectedValueOnce(new Error('offline')).mockResolvedValue({}); navigate.mockReset(); setPermissions.current = ['admin.write']; allocationList.mockReset().mockResolvedValue([{ id: 'allocation-1', ip: '127.0.0.1', port: 25565, serverId: null }]); createAllocations.mockReset().mockResolvedValue({ created: 1 }); });
   afterEach(cleanup);
 
   it('retries installation on the created server without another create request', async () => {
@@ -87,7 +95,39 @@ describe('server creation installation recovery', () => {
     fireEvent.click(screen.getAllByRole('combobox')[0]);
     fireEvent.click(screen.getAllByRole('combobox')[1]);
     await waitFor(() => expect(screen.getByRole('option', { name: '127.0.0.1:25565' })).toBeInTheDocument());
-    expect(screen.queryByRole('link', { name: 'createServer.network.newAllocation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /createServer\.network\.newAllocation/ })).not.toBeInTheDocument();
+  });
+
+  it('creates a node allocation inline instead of opening the node page in a new tab', async () => {
+    // The pool grows between the two loads: the modal's list must pick it up.
+    allocationList
+      .mockResolvedValueOnce([{ id: 'allocation-1', ip: '127.0.0.1', port: 25565, serverId: null }])
+      .mockResolvedValue([
+        { id: 'allocation-1', ip: '127.0.0.1', port: 25565, serverId: null },
+        { id: 'allocation-2', ip: '0.0.0.0', port: 25566, serverId: null },
+      ]);
+    render(<CreateServerModal />);
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.newServer' }));
+    fireEvent.change(screen.getByPlaceholderText('my-awesome-server'), { target: { value: 'my-server' } });
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.templatePlaceholder' }));
+    fireEvent.click(screen.getByRole('combobox', { name: 'createServer.fields.nodePlaceholder' }));
+    await waitFor(() => expect(screen.getByRole('option', { name: '127.0.0.1:25565' })).toBeInTheDocument());
+
+    // No new-tab link survives; creation happens in place.
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /createServer\.network\.newAllocation/ }));
+    // Ports default to the next free port on this node (25565 is taken).
+    const ports = screen.getByPlaceholderText('25566');
+    fireEvent.change(ports, { target: { value: '25566' } });
+    fireEvent.click(screen.getByRole('button', { name: 'createServer.network.createAllocation' }));
+
+    await waitFor(() =>
+      expect(createAllocations).toHaveBeenCalledWith('node-1', { ip: '0.0.0.0', ports: '25566' }),
+    );
+    // The refreshed list supplies the new allocation and it becomes the pick:
+    // the summary rail and the option both carry the address.
+    await waitFor(() => expect(screen.getAllByText('0.0.0.0:25566').length).toBeGreaterThan(1));
   });
 
   it('sends the selected node location and refuses to submit without a node', async () => {

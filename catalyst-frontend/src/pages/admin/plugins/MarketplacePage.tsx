@@ -96,6 +96,9 @@ export default function MarketplacePage() {
   const [newSourceUrl, setNewSourceUrl] = useState('');
   const [newSourceLabel, setNewSourceLabel] = useState('');
   const [pendingSourceId, setPendingSourceId] = useState<string | null>(null);
+  // D-B: one id can be busy two ways. Tracking the kind keeps the enable Switch
+  // from spinning the Trash icon (and vice versa) while a request is in flight.
+  const [pendingKind, setPendingKind] = useState<'toggle' | 'delete' | 'add' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
@@ -162,34 +165,34 @@ export default function MarketplacePage() {
 
   const addSourceMutation = useMutation({
     mutationFn: ({ url, label }: { url: string; label?: string }) => addMarketplaceSource(url, label),
-    onMutate: () => setPendingSourceId('new'),
+    onMutate: () => { setPendingSourceId('new'); setPendingKind('add'); },
     onSuccess: (source: MarketplaceSource) => {
       toast.success(t('pluginsAdmin.toastMarketplaceAdded', { host: sourceHostLabel(source.url) }));
       setNewSourceUrl('');
       setNewSourceLabel('');
       void refreshMarketplace();
     },
-    onSettled: () => setPendingSourceId(null),
+    onSettled: () => { setPendingSourceId(null); setPendingKind(null); },
     onError: (error: any) => notifyError(error),
   });
 
   const toggleSourceMutation = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
       updateMarketplaceSource(id, enabled),
-    onMutate: ({ id }) => setPendingSourceId(id),
+    onMutate: ({ id }) => { setPendingSourceId(id); setPendingKind('toggle'); },
     onSuccess: () => refreshMarketplace(),
-    onSettled: () => setPendingSourceId(null),
+    onSettled: () => { setPendingSourceId(null); setPendingKind(null); },
     onError: (error: any) => notifyError(error),
   });
 
   const deleteSourceMutation = useMutation({
     mutationFn: ({ id }: { id: string }) => deleteMarketplaceSource(id),
-    onMutate: ({ id }) => setPendingSourceId(id),
+    onMutate: ({ id }) => { setPendingSourceId(id); setPendingKind('delete'); },
     onSuccess: () => {
       toast.success(t('pluginsAdmin.toastMarketplaceRemoved'));
       void refreshMarketplace();
     },
-    onSettled: () => setPendingSourceId(null),
+    onSettled: () => { setPendingSourceId(null); setPendingKind(null); },
     onError: (error: any) => notifyError(error),
   });
 
@@ -448,6 +451,8 @@ export default function MarketplacePage() {
                   {sources.map((source) => {
                     const health = healthByUrl.get(source.url);
                     const busy = pendingSourceId === source.id;
+                    const toggling = busy && pendingKind === 'toggle';
+                    const deleting = busy && pendingKind === 'delete';
                     const selected = sourceFilter === source.url;
                     return (
                       <li
@@ -468,20 +473,25 @@ export default function MarketplacePage() {
                           </button>
                           {source.removable && (
                             <>
-                              <Switch
-                                checked={source.enabled}
-                                disabled={busy}
-                                className="scale-75"
-                                aria-label={t('pluginsAdmin.toggleSourceAria', {
-                                  action: source.enabled
-                                    ? t('common:actions.disable')
-                                    : t('common:actions.enable'),
-                                  url: source.url,
-                                })}
-                                onCheckedChange={(checked) =>
-                                  toggleSourceMutation.mutate({ id: source.id, enabled: checked })
-                                }
-                              />
+                              <span className="relative flex items-center">
+                                <Switch
+                                  checked={source.enabled}
+                                  disabled={busy}
+                                  className="scale-75"
+                                  aria-label={t('pluginsAdmin.toggleSourceAria', {
+                                    action: source.enabled
+                                      ? t('common:actions.disable')
+                                      : t('common:actions.enable'),
+                                    url: source.url,
+                                  })}
+                                  onCheckedChange={(checked) =>
+                                    toggleSourceMutation.mutate({ id: source.id, enabled: checked })
+                                  }
+                                />
+                                {toggling && (
+                                  <Loader2 className="pointer-events-none absolute -right-3.5 h-3 w-3 animate-spin text-muted-foreground" />
+                                )}
+                              </span>
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -490,7 +500,7 @@ export default function MarketplacePage() {
                                 disabled={busy}
                                 onClick={() => deleteSourceMutation.mutate({ id: source.id })}
                               >
-                                {busy ? (
+                                {deleting ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <Trash2 className="h-3 w-3" />

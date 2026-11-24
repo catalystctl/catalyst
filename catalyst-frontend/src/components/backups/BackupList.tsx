@@ -1,6 +1,6 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { HardDrive, Pin } from 'lucide-react';
+import { Check, HardDrive, Loader2, Pin } from 'lucide-react';
 import { useMutation, useVirtualizer } from '@/csync';
 import { qk } from '@/lib/queryKeys';
 import { queryClient } from '@/lib/queryClient';
@@ -13,6 +13,7 @@ import { notifyError, notifySuccess } from '../../utils/notify';
 import BackupStatusBadge from './BackupStatusBadge';
 import RestoreBackupDialog from './RestoreBackupDialog';
 import DeleteBackupDialog from './DeleteBackupDialog';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value);
@@ -24,14 +25,14 @@ type BackupWithDownload = Backup & { download?: () => void; downloadProgress?: s
 /**
  * One grid template shared by the column header and every row, so columns line
  * up exactly at each breakpoint. Hidden cells drop out of grid placement.
- *   base : identity · actions
- *   md   : identity · size · actions
- *   xl   : identity · size · storage · compressed · checksum · path · actions
+ *   base : select · identity · actions
+ *   md   : select · identity · size · actions
+ *   xl   : select · identity · size · storage · compressed · checksum · path · actions
  */
 const GRID =
- 'grid grid-cols-1 items-center gap-x-3 gap-y-1 ' +
- 'md:grid-cols-[minmax(0,1fr)_6rem_11rem] ' +
- 'xl:grid-cols-[minmax(0,1fr)_6rem_5.5rem_5.5rem_9rem_minmax(0,1fr)_11rem]';
+ 'grid grid-cols-[1.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 ' +
+ 'md:grid-cols-[1.5rem_minmax(0,1fr)_6rem_11rem] ' +
+ 'xl:grid-cols-[1.5rem_minmax(0,1fr)_6rem_5.5rem_5.5rem_9rem_minmax(0,1fr)_11rem]';
 
 function BackupList({
  serverId,
@@ -42,6 +43,7 @@ function BackupList({
  canRestore,
  canDelete,
  canPin = false,
+ onCancelDownload,
 }: {
  serverId: string;
  backups: BackupWithDownload[];
@@ -53,10 +55,15 @@ function BackupList({
  canDelete?: boolean;
  /** Whether the user holds backup.pin (pin/unpin controls). */
  canPin?: boolean;
+ /** Aborts an in-flight archive download for that backup. */
+ onCancelDownload?: (backupId: string) => void;
 }) {
  const { t } = useTranslation('server-tabs');
  const allowRestore = canRestore ?? canWrite;
  const allowDelete = canDelete ?? canWrite;
+ const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+ const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+ const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
  const pinMutation = useMutation({
    mutationFn: ({ id, pinned }: { id: string; pinned: boolean }) =>
      backupsApi.setPinned(serverId, id, pinned),
@@ -76,6 +83,61 @@ function BackupList({
  return next;
  }, [backups]);
 
+ // A page change drops rows; keep the selection to what is on screen.
+ useEffect(() => {
+   const present = new Set(sorted.map((backup) => backup.id));
+   setSelectedIds((prev) => {
+     const next = new Set([...prev].filter((id) => present.has(id)));
+     return next.size === prev.size ? prev : next;
+   });
+ }, [sorted]);
+
+ const selectableAll = sorted.length > 0 && selectedIds.size === sorted.length;
+ const someSelected = selectedIds.size > 0 && !selectableAll;
+ const bulkBusy = bulkProgress !== null;
+
+ const toggleOne = (id: string) => {
+   setSelectedIds((prev) => {
+     const next = new Set(prev);
+     if (next.has(id)) next.delete(id);
+     else next.add(id);
+     return next;
+   });
+ };
+ const toggleAll = () => {
+   setSelectedIds((prev) =>
+     prev.size === sorted.length ? new Set() : new Set(sorted.map((backup) => backup.id)),
+   );
+ };
+
+ // Sequential, one existing endpoint per row: the backend backup worker is
+ // serialized anyway, and this keeps per-row errors attributable.
+  const handleBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+    setBulkDeleteOpen(false);
+    setBulkProgress({ done: 0, total: ids.length });
+    const deleted = new Set<string>();
+    let failed = 0;
+    for (const [index, id] of ids.entries()) {
+      try {
+        await backupsApi.remove(serverId, id);
+        deleted.add(id);
+      } catch {
+        failed += 1;
+      }
+      setBulkProgress({ done: index + 1, total: ids.length });
+    }
+    setBulkProgress(null);
+    setSelectedIds((prev) => new Set([...prev].filter((id) => !deleted.has(id))));
+    if (failed) {
+      notifyError(t('backups.bulkDelete.partialFailed', { count: failed }));
+    } else {
+      notifySuccess(t('backups.bulkDelete.success', { count: deleted.size }));
+    }
+    queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+  };
+
  // ── Virtualization setup ──
  const backupsListRef = useRef<HTMLDivElement>(null);
  const backupsVirtualizer = useVirtualizer({
@@ -94,10 +156,60 @@ function BackupList({
  );
  }
 
+ const selectBox = (selected: boolean) =>
+   `flex h-4 w-4 items-center justify-center rounded-sm border transition-colors ${
+     selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border/60 bg-card'
+   }`;
+
  return (
+ <div className="flex flex-col gap-2">
+ {/* Bulk selection bar — appears only with a selection, like the files list. */}
+ {selectedIds.size > 0 ? (
+   <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-border/60 bg-surface-1/50 px-3 py-1.5 text-micro">
+     <span className="font-mono tabular-nums text-foreground">
+       {t('backups.list.selected', { count: selectedIds.size })}
+     </span>
+     <div className="flex items-center gap-1.5">
+       {allowDelete ? (
+         <button
+           type="button"
+           className="inline-flex h-7 items-center gap-1 rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:border-danger/50 hover:bg-danger/5 disabled:opacity-60"
+           onClick={() => setBulkDeleteOpen(true)}
+           disabled={bulkBusy || isSuspended}
+         >
+           {bulkBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+           {bulkProgress
+             ? t('backups.bulkDelete.progress', { done: bulkProgress.done, total: bulkProgress.total })
+             : t('backups.bulkDelete.action', { count: selectedIds.size })}
+         </button>
+       ) : null}
+       <button
+         type="button"
+         className="inline-flex h-7 items-center rounded-sm border border-border/60 px-2 text-mini font-medium text-muted-foreground transition-colors hover:bg-surface-1/40 hover:text-foreground disabled:opacity-60"
+         onClick={() => setSelectedIds(new Set())}
+         disabled={bulkBusy}
+       >
+         {t('backups.list.clearSelection')}
+       </button>
+     </div>
+   </div>
+ ) : null}
+
  <div className="deck-panel flex flex-col overflow-hidden">
  {/* Column header — same grid template as the rows */}
  <div className={`${GRID} sticky top-0 z-10 hidden border-b border-border/50 bg-surface-1 px-3 py-1.5 text-muted-foreground/70 md:grid`}>
+ <button
+   type="button"
+   role="checkbox"
+   aria-label={t('backups.list.selectAll')}
+   aria-checked={selectableAll ? true : someSelected ? 'mixed' : false}
+   onClick={toggleAll}
+   className="flex h-8 min-h-8 items-center"
+ >
+   <span className={selectBox(selectableAll || someSelected)}>
+     {selectableAll ? <Check className="h-3 w-3" /> : null}
+   </span>
+ </button>
  <span className="type-overline">{t('files.list.name')}</span>
  <span className="type-overline hidden justify-end md:inline-flex">{t('backups.list.size')}</span>
  <span className="type-overline hidden justify-end xl:inline-flex">{t('backups.list.storage')}</span>
@@ -115,6 +227,7 @@ function BackupList({
  if (!backup) return null;
  const status = getBackupStatus(backup);
  const downloading = Boolean(backup.downloadProgress);
+ const selected = selectedIds.has(backup.id);
  return (
  <div
  key={item.key}
@@ -124,10 +237,24 @@ function BackupList({
  style={{ transform: `translateY(${item.start}px)` }}
  >
  <div
- className={`${GRID} px-3 py-2 transition-colors hover:bg-surface-1/40 ${
- item.index > 0 ? 'border-t border-border/40' : ''
- }`}
+ className={`${GRID} px-3 py-2 transition-colors ${
+ selected ? 'bg-primary/10' : 'hover:bg-surface-1/40'
+ } ${item.index > 0 ? 'border-t border-border/40' : ''}`}
  >
+ {/* selection */}
+ <button
+   type="button"
+   role="checkbox"
+   aria-label={backup.name}
+   aria-checked={selected}
+   onClick={() => toggleOne(backup.id)}
+   className="flex h-9 min-h-9 items-center"
+ >
+   <span className={selectBox(selected)}>
+     {selected ? <Check className="h-3 w-3" /> : null}
+   </span>
+ </button>
+
  {/* identity + timestamps */}
  <div className="flex min-w-0 flex-col leading-tight">
  <span className="flex min-w-0 items-center gap-2">
@@ -219,6 +346,15 @@ function BackupList({
  {backup.downloadProgress ?? t('common:actions.download')}
  </button>
  ) : null}
+ {downloading && onCancelDownload ? (
+ <button
+ type="button"
+ className="inline-flex h-8 min-h-8 items-center rounded-sm border border-danger/30 px-2 text-mini font-medium text-danger transition-colors hover:border-danger/50 hover:bg-danger/5"
+ onClick={() => onCancelDownload(backup.id)}
+ >
+ {t('backups.download.cancel')}
+ </button>
+ ) : null}
  {canPin ? (
  <button
  type="button"
@@ -237,7 +373,8 @@ function BackupList({
  <RestoreBackupDialog
  serverId={serverId}
  backup={backup}
- disabled={serverStatus !== 'stopped' || isSuspended}
+ isSuspended={isSuspended}
+ serverStatus={serverStatus}
  />
  ) : null}
  {allowDelete ? (
@@ -250,6 +387,18 @@ function BackupList({
  })}
  </div>
  </div>
+ </div>
+
+ <ConfirmDialog
+   open={bulkDeleteOpen}
+   title={t('backups.bulkDelete.title')}
+   message={t('backups.bulkDelete.confirm', { count: selectedIds.size })}
+   confirmText={t('backups.bulkDelete.action', { count: selectedIds.size })}
+   cancelText={t('common:actions.cancel')}
+   variant="danger"
+   onConfirm={() => void handleBulkDelete()}
+   onCancel={() => setBulkDeleteOpen(false)}
+ />
  </div>
  );
 }

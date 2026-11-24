@@ -26,6 +26,17 @@ vi.mock('../../../stores/authStore', () => ({
 }));
 vi.mock('../../../components/servers/CreateServerModal', () => ({ default: () => null }));
 vi.mock('../../../components/servers/ServerControls', () => ({ default: () => null }));
+// The backlog bar pulls the bulk endpoint; the row checkboxes have their own
+// coverage in components/servers/__tests__/ServerBulkBar.test.tsx.
+vi.mock('../../../components/servers/ServerBulkBar', () => ({ default: () => null }));
+// @/csync is fully mocked above (virtualizer only), so the singleton query
+// client it usually re-exports is not reachable from this suite; the address
+// copy control only needs the clipboard.
+vi.mock('../../../components/servers/ServerAddressCopy', () => ({
+  default: ({ host, port }: { host: string | number; port: string | number }) => (
+    <span>{`${host}:${port}`}</span>
+  ),
+}));
 
 import ServersPage from '../ServersPage';
 

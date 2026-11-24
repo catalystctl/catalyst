@@ -1,17 +1,20 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { formatNumber } from '@/i18n/format';
 import { formatRelativeTime } from '../../utils/formatters';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../stores/authStore';
 import { useDashboardStats, useDashboardActivity, useResourceStats } from '../../hooks/useDashboard';
 import { useServers } from '../../hooks/useServers';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Bell, Plus } from 'lucide-react';
 import type { DashboardActivity } from '../../services/api/dashboard';
 import { PluginSlot } from '../../plugins/PluginSlot';
 import { serverStatusLabel } from '../../utils/constants';
+import { auditActionLabel, auditResourceLabel } from '../../utils/logLabels';
 import { BracketLabel, Meter, StatusLed } from '../../components/deck/primitives';
 import { Skeleton } from '../../components/shared/Skeleton';
+import { buttonVariants } from '../../components/ui/button';
 import { cn } from '@/lib/utils';
 import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 
@@ -19,6 +22,10 @@ import { hasAnyPermission } from '../../components/auth/ProtectedRoute';
 const DOWN_STATUSES = new Set(['crashed', 'error', 'suspended', 'unhealthy']);
 const MAX_ATTENTION_ITEMS = 8;
 const MAX_SERVER_ATTENTION_ITEMS = MAX_ATTENTION_ITEMS - 2;
+/** Relative timestamps advance on their own: 1s while fresh, 15s once an hour old. */
+const TICK_MS = 1_000;
+const SLOW_TICK_MS = 15_000;
+const FRESH_WINDOW_MS = 60_000;
 
 interface AttentionItem {
   key: string;
@@ -34,6 +41,76 @@ type LedTone = 'go' | 'hazard' | 'alarm' | 'idle' | 'info';
 function severityClass(value: number | null) {
   if (value == null) return undefined;
   return value >= 90 ? 'text-danger' : value >= 75 ? 'text-warning' : undefined;
+}
+
+/**
+ * Wall-clock reference for relative activity times. `formatRelativeTime` reads
+ * `Date.now()` on every call, so without a ticker the feed freezes at whatever
+ * "2m ago" was when the query last settled. Same adaptive cadence as
+ * `useDataFreshness`: 1s while the reading is fresh, 15s once it is older.
+ */
+function useTickingNow(newest: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const fresh = newest === 0 || Date.now() - newest < FRESH_WINDOW_MS;
+    const timer = window.setTimeout(() => setNow(Date.now()), fresh ? TICK_MS : SLOW_TICK_MS);
+    return () => window.clearTimeout(timer);
+  }, [newest, now]);
+  return now;
+}
+
+/** First eight characters of an id — the same shape the audit page shows. */
+function shortId(id: string): string {
+  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+}
+
+/**
+ * Human summary for one activity row.
+ *
+ * The API's `detail` is the raw stored audit blob whenever an entry has no
+ * `resourceId` (`{"ip":"127.0.0.1","_meta":{…}}`), which is unreadable in a
+ * feed. When the payload is structured, pull the actor / action / resource out
+ * of it and label them; the whole blob stays on the audit-logs page. Otherwise
+ * the `resource: <short id>` shorthand is localized.
+ */
+function summarizeActivity(
+  t: TFunction,
+  item: DashboardActivity,
+): { title: string; meta: string } {
+  const raw = typeof item.detail === 'string' ? item.detail.trim() : '';
+
+  if (raw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw) as {
+        _meta?: { action?: string; resource?: string; resourceId?: string };
+        _actor?: { username?: string; name?: string };
+      };
+      const actor = parsed._actor?.name || parsed._actor?.username;
+      const resource = parsed._meta?.resource
+        ? parsed._meta.resourceId
+          ? `${auditResourceLabel(t, parsed._meta.resource)} ${shortId(parsed._meta.resourceId)}`
+          : auditResourceLabel(t, parsed._meta.resource)
+        : '';
+      const parts = [resource, actor ? t('activity.byActor', { actor }) : ''].filter(Boolean);
+      return {
+        title: parsed._meta?.action ? auditActionLabel(t, parsed._meta.action) : item.title,
+        meta: parts.join(' · '),
+      };
+    } catch {
+      // Unparseable JSON is still stored data, not a sentence: show the action only.
+      return { title: item.title, meta: '' };
+    }
+  }
+
+  const resourceShorthand = /^([A-Za-z_]+):\s*(.+)$/.exec(raw);
+  if (resourceShorthand) {
+    return {
+      title: item.title,
+      meta: `${auditResourceLabel(t, resourceShorthand[1])} · ${resourceShorthand[2]}`,
+    };
+  }
+
+  return { title: item.title, meta: raw };
 }
 
 /** One vitals reading: overline label, mono value, optional meter + sub. */
@@ -141,7 +218,7 @@ function DashboardPage() {
   const canCreateServers = hasAnyPermission(user?.permissions, ['server.create']);
 
   // ── Attention feed: only what needs an operator, most severe first ──
-  const attentionItems = useMemo<AttentionItem[]>(() => {
+  const attentionFeed = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
     for (const server of servers) {
       if (items.length >= MAX_SERVER_ATTENTION_ITEMS) break;
@@ -174,13 +251,32 @@ function DashboardPage() {
         to: isAdmin ? '/admin/alerts' : '/servers',
       });
     }
-    // Keep the dashboard's operator feed bounded even when a large fleet is
-    // unhealthy, while reserving room for aggregate node/alert entries.
-    return items.slice(0, MAX_ATTENTION_ITEMS);
+    return items;
   }, [servers, nodesTotal, nodesOnline, alertsUnacked, canReadNodes, isAdmin, t]);
+
+  // Keep the dashboard's operator feed bounded even on a large unhealthy fleet,
+  // while reserving room for the aggregate node/alert entries — and say so
+  // instead of dropping the remainder silently.
+  const attentionItems = attentionFeed.slice(0, MAX_ATTENTION_ITEMS);
+  const hiddenAttentionCount = attentionFeed.length - attentionItems.length;
 
   const showAlertsTile = isAdmin || alertsUnacked > 0;
   const showResourceTiles = canReadNodes;
+
+  // Relative times tick on their own instead of freezing at refetch time.
+  const newestActivity = useMemo(() => {
+    if (!activities?.length) return 0;
+    const stamps = activities
+      .map((item) => (item.timestamp ? Date.parse(item.timestamp) : 0))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return stamps.length ? Math.max(...stamps) : 0;
+  }, [activities]);
+  // The ticker re-renders this component; each row then re-derives its own
+  // label from the clock (a memo would freeze the strings it exists to move).
+  useTickingNow(newestActivity);
+
+  // Operators see the alert queue; everyone else is pointed at their fleet.
+  const alertsHref = isAdmin ? '/admin/alerts' : '/servers';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -198,10 +294,13 @@ function DashboardPage() {
           </p>
         </div>
         {alertsUnacked > 0 && (
-          <span className="flex h-8 items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 font-display text-mini text-foreground">
+          <Link
+            to={alertsHref}
+            className="flex h-8 items-center gap-2 rounded-sm border border-warning/30 bg-warning/10 px-3 font-display text-mini text-foreground transition-colors hover:border-warning/60 hover:bg-warning/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/50"
+          >
             <StatusLed tone="hazard" pulse />
             {t('pendingAlerts', { count: alertsUnacked })}
-          </span>
+          </Link>
         )}
       </header>
 
@@ -211,13 +310,40 @@ function DashboardPage() {
           <h2 id="onboarding-title" className="mt-2 font-display text-base font-semibold text-foreground">{t('onboarding.title')}</h2>
           <p className="type-meta mt-1">{t('onboarding.description')}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {nodesTotal === 0 && canCreateNodes && <Link to="/admin/nodes" className="rounded-sm border border-border px-3 py-2 text-mini text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-primary">{t('onboarding.addNode')}</Link>}
-            {canManageTemplates && <Link to="/admin/templates" className="rounded-sm border border-border px-3 py-2 text-mini text-foreground hover:border-primary focus-visible:outline-2 focus-visible:outline-primary">{t('onboarding.templates')}</Link>}
-            <Link to={canCreateServers ? '/servers?action=create' : '/servers'} className="rounded-sm border border-primary px-3 py-2 text-mini text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary">
+            {nodesTotal === 0 && canCreateNodes && (
+              <Link to="/admin/nodes" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                {t('onboarding.addNode')}
+              </Link>
+            )}
+            {canManageTemplates && (
+              <Link to="/admin/templates" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                {t('onboarding.templates')}
+              </Link>
+            )}
+            <Link
+              to={canCreateServers ? '/servers?action=create' : '/servers'}
+              className={buttonVariants({ variant: 'default', size: 'sm' })}
+            >
               {t(canCreateServers ? 'onboarding.createServer' : 'onboarding.browseServers')}
             </Link>
           </div>
         </section>
+      )}
+
+      {/* Quick actions — the two things an operator does most, after setup. */}
+      {serversTotal > 0 && (canCreateServers || alertsUnacked > 0) && (
+        <div className="flex flex-wrap items-center gap-2">
+          {canCreateServers && (
+            <Link to="/servers?action=create" className={buttonVariants({ variant: 'default', size: 'sm' })}>
+              <Plus className="h-3.5 w-3.5" />
+              {t('quickActions.newServer')}
+            </Link>
+          )}
+          <Link to={alertsHref} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+            <Bell className="h-3.5 w-3.5" />
+            {t('quickActions.viewAlerts')}
+          </Link>
+        </div>
       )}
 
       {/* ── Fleet vitals: one framed panel of readings ── */}
@@ -314,6 +440,15 @@ function DashboardPage() {
               {attentionItems.map((item) => (
                 <AttentionRow key={item.key} item={item} />
               ))}
+              {hiddenAttentionCount > 0 && (
+                <Link
+                  to="/servers"
+                  className="flex items-center gap-1 border-t border-border/50 px-3 py-2 text-micro text-muted-foreground transition-colors hover:text-primary focus-visible:bg-surface-1/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50"
+                >
+                  {t('attention.andMore', { count: hiddenAttentionCount })}
+                  <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-2.5 px-3 py-3">
@@ -356,26 +491,43 @@ function DashboardPage() {
             </div>
           ) : activities && activities.length > 0 ? (
             <div>
-              {activities.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-start gap-2.5 px-3 py-2 transition-colors hover:bg-surface-1/40"
-                >
-                  <StatusLed tone={activityTone[item.type] ?? 'idle'} className="mt-1" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-display text-data font-semibold text-foreground">
-                      {item.title}
+              {activities.map((item) => {
+                const summary = summarizeActivity(t, item);
+                const time = item.timestamp ? formatRelativeTime(item.timestamp) : item.time;
+                const row = (
+                  <>
+                    <StatusLed tone={activityTone[item.type] ?? 'idle'} className="mt-1" />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate font-display text-data font-semibold text-foreground group-hover:text-primary">
+                        {summary.title}
+                      </div>
+                      <div className="mt-0.5 flex min-w-0 items-center gap-2 text-mini text-muted-foreground">
+                        {summary.meta && <span className="truncate">{summary.meta}</span>}
+                        {summary.meta && <span className="shrink-0" aria-hidden>·</span>}
+                        <span className="shrink-0 font-mono tabular-nums text-micro">{time}</span>
+                      </div>
                     </div>
-                    <div className="mt-0.5 flex items-center gap-2 text-mini text-muted-foreground">
-                      <span className="truncate">{item.detail}</span>
-                      <span className="shrink-0">·</span>
-                      <span className="shrink-0 font-mono tabular-nums text-micro">
-                        {item.timestamp ? formatRelativeTime(item.timestamp) : item.time}
-                      </span>
-                    </div>
+                    {isAdmin && (
+                      <ArrowRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    )}
+                  </>
+                );
+
+                const rowClass =
+                  'group flex w-full items-start gap-2.5 px-3 py-2 text-left transition-colors hover:bg-surface-1/40 focus-visible:bg-surface-1/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50';
+
+                // Admins land on the entry in the audit trail; the raw detail
+                // blob is readable there and never rendered in this feed.
+                return isAdmin ? (
+                  <Link key={item.id} to="/admin/audit-logs" className={rowClass}>
+                    {row}
+                  </Link>
+                ) : (
+                  <div key={item.id} className="group flex w-full items-start gap-2.5 px-3 py-2">
+                    {row}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="px-3 py-3">

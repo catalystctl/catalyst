@@ -409,7 +409,9 @@ export default function Sidebar({ hideCollapseOnMobile = false }: { hideCollapse
               : 'flex-1 items-center gap-1 overflow-y-auto [scrollbar-width:none]',
             expanded &&
               navScrolls &&
-              '[mask-image:linear-gradient(to_bottom,black_calc(100%-2.5rem),transparent_calc(100%-1rem))]',
+              // Fade only the last 1rem: enough to say "there is more", small
+              // enough that the last visible entry does not read as disabled.
+              '[mask-image:linear-gradient(to_bottom,black_calc(100%-1rem),transparent_100%)]',
           )}
         >
           {expanded ? (

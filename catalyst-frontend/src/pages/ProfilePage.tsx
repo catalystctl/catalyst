@@ -280,8 +280,8 @@ export default function ProfilePage() {
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-sm border border-border/60 bg-surface-2 text-micro font-semibold text-foreground sm:h-14 sm:w-14">{initials}</div>
             )}
-            <button onClick={() => fileRef.current?.click()} aria-label={t('common:actions.edit')} className="absolute inset-0 flex items-center justify-center rounded-sm bg-background/60 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 group-hover:opacity-100">
-              <Camera className="h-3.5 w-3.5 text-foreground" />
+            <button onClick={() => fileRef.current?.click()} disabled={avatarMutation.isPending} aria-label={t('account.changeAvatar')} title={t('account.changeAvatar')} className="absolute inset-0 flex items-center justify-center rounded-sm bg-background/60 opacity-0 transition-opacity hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 group-hover:opacity-100 disabled:opacity-100">
+              {avatarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground" /> : <Camera className="h-3.5 w-3.5 text-foreground" />}
             </button>
             <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) avatarMutation.mutate(f); e.target.value = ''; }} />
           </div>
@@ -290,9 +290,20 @@ export default function ProfilePage() {
             {editingProfile ? (
               <div className="space-y-2">
                 <div className="flex min-w-0 flex-1 flex-wrap gap-2">
-                  <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} placeholder={t('account.username')} className="h-8 w-36 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
-                  <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} placeholder={t('account.firstName')} className="h-8 w-32 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
-                  <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} placeholder={t('account.lastName')} className="h-8 w-32 min-w-0 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  <label className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="type-overline">{t('account.username')}</span>
+                    <Input value={editUsername} onChange={(e) => setEditUsername(e.target.value)} aria-label={t('account.username')} className="h-8 min-w-0 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  </label>
+                  <label className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="type-overline">{t('account.firstName')}</span>
+                    <Input value={editFirstName} onChange={(e) => setEditFirstName(e.target.value)} aria-label={t('account.firstName')} className="h-8 min-w-0 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  </label>
+                  <label className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="type-overline">{t('account.lastName')}</span>
+                    <Input value={editLastName} onChange={(e) => setEditLastName(e.target.value)} aria-label={t('account.lastName')} className="h-8 min-w-0 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
+                  </label>
+                </div>
+                <div className="flex gap-2">
                   <Button size="sm" onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isPending} aria-label={t('common:actions.save')} className="h-8 px-3 text-mini">
                     {updateProfileMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
                   </Button>
@@ -307,7 +318,7 @@ export default function ProfilePage() {
  <button onClick={startEditProfile} aria-label={t('common:actions.edit')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-surface-2 hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
  </div>
  <div className="mt-1 flex flex-wrap items-center gap-3 text-micro text-muted-foreground">
- <span className="flex min-w-0 items-center gap-1"><Mail className="h-3 w-3 shrink-0" /><span className="truncate">{profile?.email}</span></span>
+ <span className="flex min-w-0 items-center gap-1"><Mail className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{profile?.email}</span></span>
  {!profile?.emailVerified && (
  <button onClick={() => resendVerifyMutation.mutate()} disabled={resendVerifyMutation.isPending} className="flex h-6 items-center gap-1 rounded-sm border border-warning/30 px-1.5 text-micro font-medium text-warning hover:bg-warning/10">
  {resendVerifyMutation.isPending ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <MailCheck className="h-2.5 w-2.5" />}
@@ -315,7 +326,7 @@ export default function ProfilePage() {
  </button>
  )}
  {profile?.emailVerified && <span className="inline-flex items-center gap-1.5"><StatusLed tone="go" /><Segmented className="truncate">{t('account.verified')}</Segmented></span>}
- <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{t('account.joined', { date: fmtDate(profile?.createdAt) })}</span>
+ <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5 shrink-0" />{t('account.joined', { date: fmtDate(profile?.createdAt) })}</span>
  </div>
  </>
  )}
@@ -327,8 +338,17 @@ export default function ProfilePage() {
  <span className="inline-flex min-w-0 items-center gap-1.5"><StatusLed tone={hasPw ? 'go' : 'idle'} /><Segmented className="truncate">{hasPw ? t('account.passwordSet') : t('account.passwordUnset')}</Segmented></span>
  </div>
  {profile?.image && (
- <button onClick={() => removeAvatarMutation.mutate()} className="text-micro text-muted-foreground hover:text-danger">{t('account.removeAvatar')}</button>
- )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeAvatarMutation.mutate()}
+                disabled={removeAvatarMutation.isPending}
+                className="h-7 gap-1.5 px-2 text-micro text-danger hover:bg-danger/5 hover:text-danger"
+              >
+                {removeAvatarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                {t('account.removeAvatar')}
+              </Button>
+            )}
  </div>
  </div>
  </ServerTabCard>
@@ -395,7 +415,7 @@ export default function ProfilePage() {
  <div className="space-y-3">
  <div className="flex gap-2">
  <Input value={pkName} onChange={(e) => setPkName(e.target.value)} placeholder={t('passkeys.namePlaceholder')} className="h-8 flex-1 rounded-sm border-border/60 bg-background/40 px-2.5 text-mini" />
- <Button size="sm" onClick={() => addPkMutation.mutate()} disabled={addPkMutation.isPending}>{addPkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="mr-1 h-3 w-3" />{t('passkeys.add')}</>}</Button>
+ <Button size="sm" onClick={() => addPkMutation.mutate()} disabled={addPkMutation.isPending}>{addPkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><Plus className="mr-1 h-3.5 w-3.5" />{t('passkeys.add')}</>}</Button>
  </div>
  <div className="space-y-2">
  {passkeys.length === 0 ? (
@@ -416,11 +436,26 @@ export default function ProfilePage() {
  </div>
  <div className="flex items-center gap-1 shrink-0">
  {editPkId === pk.id ? (
- <button onClick={() => updPkMutation.mutate()} disabled={!editPkName} className="flex h-7 items-center rounded-sm px-2 text-mini font-medium text-foreground hover:bg-surface-2">{t('common:actions.save')}</button>
+ <Button variant="ghost" size="sm" onClick={() => updPkMutation.mutate()} disabled={!editPkName || updPkMutation.isPending} aria-label={t('common:actions.save')} className="h-7 gap-1.5 px-2 text-mini">
+ {updPkMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+ {t('common:actions.save')}
+ </Button>
  ) : (
- <button onClick={() => { setEditPkId(pk.id); setEditPkName(pk.name || ''); }} className="flex h-7 items-center rounded-sm px-2 text-mini text-muted-foreground hover:text-foreground">{t('passkeys.rename')}</button>
+ <Button variant="ghost" size="sm" onClick={() => { setEditPkId(pk.id); setEditPkName(pk.name || ''); }} className="h-7 px-2 text-mini text-muted-foreground hover:text-foreground">{t('passkeys.rename')}</Button>
  )}
- <button onClick={() => delPkMutation.mutate(pk.id)} aria-label={t('common:actions.delete')} className="flex h-7 w-7 items-center justify-center rounded-sm text-muted-foreground hover:bg-danger/5 hover:text-danger"><Trash2 className="h-3 w-3" /></button>
+ <Button
+ variant="ghost"
+ size="sm"
+ onClick={() => delPkMutation.mutate(pk.id)}
+ disabled={delPkMutation.isPending && delPkMutation.variables === pk.id}
+ aria-label={t('common:actions.delete')}
+ title={t('common:actions.delete')}
+ className="h-7 gap-1.5 px-2 text-muted-foreground hover:bg-danger/5 hover:text-danger"
+ >
+ {delPkMutation.isPending && delPkMutation.variables === pk.id
+ ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ : <Trash2 className="h-3.5 w-3.5" />}
+ </Button>
  </div>
  </div>
  ))
@@ -436,7 +471,7 @@ export default function ProfilePage() {
  <div className="space-y-3">
  <div className="flex flex-wrap gap-2">
  {availableProviders.map((p) => (
- <Button key={p} variant="outline" size="sm" onClick={() => profileApi.linkSso(p).then(() => { queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }); queryClient.invalidateQueries({ queryKey: qk.profile() }); })} className="h-8 px-3 text-mini"><ExternalLink className="mr-1.5 h-3 w-3" />{t('linkedAccounts.link', { provider: p.toUpperCase() })}</Button>
+ <Button key={p} variant="outline" size="sm" onClick={() => profileApi.linkSso(p).then(() => { queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }); queryClient.invalidateQueries({ queryKey: qk.profile() }); })} className="h-8 px-3 text-mini"><ExternalLink className="mr-1.5 h-3.5 w-3.5" />{t('linkedAccounts.link', { provider: p.toUpperCase() })}</Button>
  ))}
  </div>
  {(ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').length === 0 ? (
@@ -445,7 +480,16 @@ export default function ProfilePage() {
  (ssoAccounts ?? []).filter((a) => a.providerId !== 'credential').map((a) => (
  <div key={a.id} className="flex items-center justify-between border-b border-border/50 py-2 last:border-b-0">
  <span className="text-mini font-medium text-foreground">{a.providerId.toUpperCase()}</span>
-  <button onClick={() => profileApi.unlinkSso(a.providerId, a.id).then(() => queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }))} className="text-mini text-danger hover:text-danger/80">{t('linkedAccounts.unlink')}</button>
+ <Button
+ variant="ghost"
+ size="sm"
+ onClick={() => profileApi.unlinkSso(a.providerId, a.id).then(() => queryClient.invalidateQueries({ queryKey: qk.profileSsoAccounts() }))}
+ aria-label={t('linkedAccounts.unlinkProvider', { provider: a.providerId.toUpperCase() })}
+ className="h-7 gap-1.5 px-2 text-mini text-danger hover:bg-danger/5 hover:text-danger"
+ >
+ <X className="h-3.5 w-3.5" />
+ {t('linkedAccounts.unlink')}
+ </Button>
  </div>
  ))
  )}
@@ -571,12 +615,12 @@ export default function ProfilePage() {
  </DialogHeader>
  <DialogBody>
  {qrValue && <div className="mb-4 flex justify-center"><img src={qrValue} alt={t('twoFactor.qrAlt')} className="rounded-sm border border-border/50 bg-surface-0 p-3" /></div>}
- {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-mini font-medium text-primary hover:text-primary/80"><ExternalLink className="h-3 w-3" /> {t('twoFactor.openInApp')}</a>}
+ {tfaSetup?.otpAuthUrl && <a href={tfaSetup.otpAuthUrl} target="_blank" rel="noopener noreferrer" className="mb-3 flex items-center gap-1 text-mini font-medium text-primary hover:text-primary/80"><ExternalLink className="h-3.5 w-3.5" /> {t('twoFactor.openInApp')}</a>}
  {tfaSetup?.secret && (
  <div className="mb-3 rounded-sm border border-border/50 px-3 py-2 text-center">
  <div className="type-overline">{t('twoFactor.manualKey')}</div>
  <code className="mt-1 block font-mono text-data font-semibold tabular-nums text-foreground select-all">{tfaSetup.secret}</code>
- <button onClick={() => { navigator.clipboard.writeText(tfaSetup?.secret ?? ''); notifySuccess(t('common:actions.copied')); }} className="mx-auto mt-2 flex h-7 items-center gap-1 rounded-sm px-2 text-micro text-muted-foreground hover:text-foreground"><Copy className="h-3 w-3" /> {t('common:actions.copy')}</button>
+ <button onClick={() => { navigator.clipboard.writeText(tfaSetup?.secret ?? ''); notifySuccess(t('common:actions.copied')); }} className="mx-auto mt-2 flex h-7 items-center gap-1 rounded-sm px-2 text-micro text-muted-foreground hover:text-foreground"><Copy className="h-3.5 w-3.5" /> {t('common:actions.copy')}</button>
  </div>
  )}
  {(tfaSetup?.backupCodes?.length ?? 0) > 0 && (

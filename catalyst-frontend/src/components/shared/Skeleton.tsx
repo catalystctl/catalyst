@@ -19,6 +19,7 @@ const roundedClasses = {
 export function Skeleton({ className, width, height, rounded = 'sm' }: SkeletonProps) {
  return (
  <div
+ aria-hidden="true"
  className={cn(
  'animate-pulse bg-surface-3',
  roundedClasses[rounded],

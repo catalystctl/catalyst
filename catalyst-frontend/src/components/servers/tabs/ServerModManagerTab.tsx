@@ -24,6 +24,7 @@ import {
 } from '../../../services/api/providerKeys';
 import { qk } from '../../../lib/queryKeys';
 import { useStreamAwareInterval } from '../../../hooks/useStreamAwareInterval';
+import { useModUpdatesSummary } from '../../../hooks/useModUpdates';
 import { useDebounce } from '../../../hooks/useDebounce';
 import {
  notifyError,
@@ -100,6 +101,29 @@ function ResultThumb({ src }: { src?: string }) {
 
 const RESULTS_PER_PAGE = 12;
 
+/**
+ * Stable-first version pick — the single auto-pick rule.
+ *
+ * The detail picker pre-selects a version for the expanded project, and the
+ * one-click Install on a result card must land on that same version without
+ * the user opening the picker first (audit D5: installing a mod was 6 clicks).
+ * Both paths call this, so "the version the picker would have chosen" and "the
+ * version the quick install takes" cannot drift apart.
+ *
+ * Prefer a stable release, otherwise the first entry of the already
+ * game-version-filtered, newest-first list.
+ */
+function pickPreferredVersionId(
+  versionOptions: any[],
+  fallbackOptions: any[] = [],
+): string {
+  const list = versionOptions.length ? versionOptions : fallbackOptions;
+  if (!list.length) return '';
+  const preferred =
+    list.find((entry: any) => isStableRelease(entry)) ?? list[0];
+  return normalizeVersionId(preferred) || '';
+}
+
 // ── Types ──
 type ModManagerTarget = 'mods' | 'datapacks' | 'modpacks';
 /** Empty string = provider default (relevance when searching, downloads when browsing). */
@@ -154,7 +178,7 @@ function BrowseSkeleton() {
  {Array.from({ length: 6 }).map((_, i) => (
  <div
  key={i}
- className="rounded-sm border border-border/50 bg-card p-4"
+ className="rounded-sm border border-border/50 bg-card p-3"
  >
  <div className="flex gap-3">
  <Skeleton className="h-11 w-11 rounded-sm" />
@@ -524,6 +548,11 @@ export default function ServerModManagerTab({
  refetchIntervalInBackground: false,
  });
 
+ // Audit D13: the count used to be reachable only from Mods → Installed. One
+ // shared query now feeds the header badge and the page tab bar, which reads
+ // the same key with `enabled: false` (no request of its own).
+ const modUpdatesSummary = useModUpdatesSummary(serverId, installedMods.length);
+
  // ── Mutations ──
  const uninstallModMutation = useMutation({
  mutationFn: (filename: string) =>
@@ -540,18 +569,22 @@ export default function ServerModManagerTab({
  });
 
  const installModMutation = useMutation({
- mutationFn: () => {
- if (!serverId || !selectedProject || !selectedVersion) {
+ mutationFn: (payload: {
+ projectId: string;
+ projectName?: string;
+ versionId: string;
+ }) => {
+ if (!serverId || !payload.projectId || !payload.versionId) {
  reportSystemError({ level: 'error', component: 'ServerModManagerTab', message: 'Missing mod selection', metadata: { context: 'install mod mutation' } });
  throw new Error(t('tabs.mods.missingSelection'));
  }
  return modManagerApi.install(serverId, {
  provider: modProvider,
  game: modProviderGame,
- projectId: selectedProject,
- versionId: selectedVersion,
+ projectId: payload.projectId,
+ versionId: payload.versionId,
  target: modTarget,
- projectName: selectedProjectName || undefined,
+ projectName: payload.projectName || undefined,
  });
  },
  onSuccess: () => notifySuccess(t('tabs.mods.installedSuccess')),
@@ -562,6 +595,71 @@ export default function ServerModManagerTab({
  notifyError(error, t('tabs.mods.installFailed'));
  },
  });
+
+ // ── One-click install (audit D5) ──
+ // The result card installs the version the expanded picker would have
+ // pre-selected, so a user who wants the stable release never has to open the
+ // picker. `quickInstallProject` is the project id whose card is busy; it is
+ // also what disables the other cards' buttons while the request is in flight.
+ const [quickInstallProject, setQuickInstallProject] = useState<string | null>(null);
+
+ const handleQuickInstall = useCallback(
+ async (projectId: string, title: string) => {
+ if (!serverId || !projectId || quickInstallProject) return;
+ setQuickInstallProject(projectId);
+ let versionId = '';
+ try {
+ // Same query the picker uses, so an already-expanded card costs no
+ // extra provider call and a fresh card costs exactly one.
+ const versionsPayload = await queryClient.fetchQuery({
+ queryKey: qk.modManagerVersions(serverId, modProvider, modProviderGame ?? '', projectId, 1),
+ queryFn: () =>
+ modManagerApi.versions(serverId ?? '', {
+ provider: modProvider,
+ game: modProviderGame,
+ projectId,
+ }),
+ });
+ const raw = Array.isArray((versionsPayload as any)?.data)
+ ? (versionsPayload as any).data
+ : Array.isArray(versionsPayload)
+ ? (versionsPayload as any)
+ : [];
+ const options = filterAndSortVersions(raw, modGameVersion);
+ versionId = pickPreferredVersionId(options, raw);
+ } catch {
+ setQuickInstallProject(null);
+ notifyError(t('tabs.mods.versionsFailed'));
+ return;
+ }
+ if (!versionId) {
+ setQuickInstallProject(null);
+ notifyError(t('tabs.mods.noVersions'));
+ return;
+ }
+ try {
+ await installModMutation.mutateAsync({
+ projectId,
+ projectName: title,
+ versionId,
+ });
+ } catch {
+ // installModMutation.onError already surfaced the failure to the user.
+ } finally {
+ setQuickInstallProject(null);
+ }
+ },
+ [
+ serverId,
+ quickInstallProject,
+ queryClient,
+ modProvider,
+ modProviderGame,
+ modGameVersion,
+ installModMutation,
+ t,
+ ],
+ );
 
  // ── Derived data ──
  const modResults = useMemo(() => {
@@ -614,6 +712,12 @@ export default function ServerModManagerTab({
  const modsWithUpdatesSelected = modsWithUpdates.filter((m: any) =>
  selectedModFiles.has(m.name),
  );
+ // The badge reads the shared summary (D13) but never shrinks while that check
+ // is in flight: the installed list already knows which files have updates.
+ const updatesBadgeCount = Math.max(
+ modUpdatesSummary.updates,
+ modsWithUpdates.length,
+ );
 
  // Auto-select stable version
  const [prevAutoVersion, setPrevAutoVersion] = useState({
@@ -642,10 +746,7 @@ export default function ServerModManagerTab({
  )
  )
  ) {
- const preferred =
- modVersionOptions.find((entry: any) => isStableRelease(entry)) ??
- modVersionOptions[0];
- const preferredId = normalizeVersionId(preferred);
+ const preferredId = pickPreferredVersionId(modVersionOptions);
  if (preferredId && preferredId !== selectedVersion) {
  setSelectedVersion(preferredId);
  }
@@ -688,6 +789,11 @@ export default function ServerModManagerTab({
  setIsCheckingModUpdates(true);
  try {
  const result = await modManagerApi.checkUpdates(serverId);
+ // Seed the shared summary so the tab-bar badge reflects this fresh check
+ // without a second provider round-trip.
+ queryClient.setQueryData(qk.modUpdatesSummary(serverId), {
+ updates: result.updatesAvailable ?? 0,
+ });
  refetchInstalledMods();
  if (result.updatesAvailable > 0) {
  notifySuccess(
@@ -743,10 +849,10 @@ export default function ServerModManagerTab({
  {t('tabs.mods.installedCount', { count: installedMods.length })}
  </Badge>
  )}
- {modsWithUpdates.length > 0 && (
+ {updatesBadgeCount > 0 && (
  <Badge variant="warning" className="h-7 gap-1.5 px-2.5 text-mini">
  <ArrowUpCircle className="h-2.5 w-2.5" />
- {t('tabs.mods.updatesBadge', { count: modsWithUpdates.length })}
+ {t('tabs.mods.updatesBadge', { count: updatesBadgeCount })}
  </Badge>
  )}
  </div>
@@ -799,7 +905,7 @@ export default function ServerModManagerTab({
  {/* ── Filters ── */}
  <motion.div
  variants={itemVariants}
- className="flex flex-wrap items-center gap-2.5"
+ className="flex flex-wrap items-center gap-2.5 rounded-sm border border-border/50 bg-card p-3"
  >
  {/* Search */}
  <div className="relative min-w-[200px] flex-1 max-w-sm">
@@ -1006,6 +1112,8 @@ export default function ServerModManagerTab({
  variant="ghost"
  size="icon"
  className="h-7 w-7"
+ aria-label={t('common:actions.previous')}
+ title={t('common:actions.previous')}
  disabled={searchPage <= 1}
  onClick={() => setSearchPage((p) => Math.max(1, p - 1))}
  >
@@ -1018,6 +1126,8 @@ export default function ServerModManagerTab({
  variant="ghost"
  size="icon"
  className="h-7 w-7"
+ aria-label={t('common:actions.next')}
+ title={t('common:actions.next')}
  disabled={searchPage >= totalPages}
  onClick={() => setSearchPage((p) => Math.min(totalPages, p + 1))}
  >
@@ -1118,12 +1228,37 @@ export default function ServerModManagerTab({
  {summary}
  </p>
  )}
+ <div className="mt-1.5 flex items-center gap-2">
  {downloads > 0 && (
- <div className="mt-1.5 flex items-center gap-1 type-numeric text-mini text-muted-foreground">
+ <div className="flex items-center gap-1 type-numeric text-mini text-muted-foreground">
  <Download className="h-3 w-3" />
  {formatDownloadCount(downloads)}
  </div>
  )}
+ {/* One-click install of the version the picker would pre-select
+ (audit D5). The picker below stays for choosing another one. */}
+ <Button
+ variant="outline"
+ size="sm"
+ className="ml-auto h-6 shrink-0 gap-1 px-2 text-mini"
+ title={t('tabs.mods.quickInstallLabel', { name: title })}
+ aria-label={t('tabs.mods.quickInstallLabel', { name: title })}
+ disabled={quickInstallProject !== null}
+ onClick={(event) => {
+ event.stopPropagation();
+ void handleQuickInstall(String(id), title);
+ }}
+ >
+ {quickInstallProject === String(id) ? (
+ <Loader2 className="h-3 w-3 animate-spin" />
+ ) : (
+ <Download className="h-3 w-3" />
+ )}
+ {quickInstallProject === String(id)
+ ? t('tabs.mods.installing')
+ : t('tabs.mods.install')}
+ </Button>
+ </div>
  </div>
  </div>
 
@@ -1136,8 +1271,15 @@ export default function ServerModManagerTab({
  onVersionChange={setSelectedVersion}
  isLoading={modVersionsLoading}
  isError={modVersionsError}
- onInstall={() => installModMutation.mutate()}
- isInstalling={installModMutation.isPending}
+ onInstall={() => {
+ if (!selectedProject || !selectedVersion) return;
+ installModMutation.mutate({
+ projectId: selectedProject,
+ projectName: selectedProjectName,
+ versionId: selectedVersion,
+ });
+ }}
+ isInstalling={installModMutation.isPending && quickInstallProject === null}
  />
  )}
  </AnimatePresence>
@@ -1541,7 +1683,7 @@ export default function ServerModManagerTab({
  )}
 
  {/* Actions */}
- <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+ <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
  {mod.hasUpdate && (
  <button
  type="button"

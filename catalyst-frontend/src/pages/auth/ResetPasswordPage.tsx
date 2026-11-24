@@ -182,6 +182,7 @@ function ResetPasswordPage() {
  id="password"
  type="password"
  autoComplete="new-password"
+ autoFocus
  placeholder="••••••••"
  value={password}
  onChange={(e) => setPassword(e.target.value)}

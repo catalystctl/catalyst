@@ -429,9 +429,11 @@ function SetupPage() {
  <button
  type="button"
  onClick={clearLogo}
- className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-sm bg-danger/70 text-primary-foreground transition-colors hover:bg-danger"
+ aria-label={t('welcome.removeLogo')}
+ title={t('welcome.removeLogo')}
+ className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-sm bg-danger/70 text-primary-foreground transition-colors hover:bg-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
  >
- <X className="h-3 w-3" />
+ <X className="h-3.5 w-3.5" />
  </button>
  </div>
  ) : (

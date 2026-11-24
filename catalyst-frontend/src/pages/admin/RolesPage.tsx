@@ -20,11 +20,19 @@ import {
   Clock,
   Users,
   Globe,
+  Copy,
+  UserMinus,
+  UserPlus,
+  Search as SearchIcon,
 } from 'lucide-react';
 
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import { rolesApi } from '../../services/api/roles';
+import { adminApi } from '../../services/api/admin';
+import { flushNodeAssignments } from './nodeAssignmentFlush';
+import type { NodeAssignmentWithExpiration } from '../../components/admin/NodeAssignmentsSelector';
 import { useStreamAwareInterval } from '../../hooks/useStreamAwareInterval';
 import LastUpdated from '../../components/shared/LastUpdated';
 import type { Role } from '../../types/admin';
@@ -246,7 +254,7 @@ function getPermissionCategories(t: TFunction<'admin-access'>, permissions: stri
  */
 const GRID =
  'grid grid-cols-1 items-center gap-x-3 gap-y-1.5 ' +
- 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_5rem_6.5rem]';
+ 'md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_7rem_5rem_10rem]';
 
 function RoleRow({
  role,
@@ -254,6 +262,8 @@ function RoleRow({
  onView,
  onEdit,
  onDelete,
+ onManageMembers,
+ onDuplicate,
  canDelete,
  isDeleting,
 }: {
@@ -262,6 +272,8 @@ function RoleRow({
  onView: () => void;
  onEdit: () => void;
  onDelete: () => void;
+ onManageMembers: () => void;
+ onDuplicate: () => void;
  canDelete: boolean;
  isDeleting: boolean;
 }) {
@@ -391,6 +403,24 @@ function RoleRow({
  >
  <Pencil className="h-3.5 w-3.5" />
  </button>
+ <button
+ type="button"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ onClick={(e) => { e.stopPropagation(); onManageMembers(); }}
+ title={t('roles.members.manage')}
+ aria-label={t('roles.members.manage')}
+ >
+ <Users className="h-3.5 w-3.5" />
+ </button>
+ <button
+ type="button"
+ className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+ onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
+ title={t('roles.duplicate')}
+ aria-label={t('roles.duplicate')}
+ >
+ <Copy className="h-3.5 w-3.5" />
+ </button>
  {canDelete ? (
  <button
  className="flex h-7 w-7 items-center justify-center rounded-sm border border-border/60 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive disabled:pointer-events-none disabled:opacity-30"
@@ -445,6 +475,25 @@ function RolesPage() {
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [viewingRole, setViewingRole] = useState<Role | null>(null);
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
+  // "Duplicate role": the editor opens in CREATE mode prefilled from this role.
+  const [duplicatingRole, setDuplicatingRole] = useState<Role | null>(null);
+  // Member management for one role (distinct from the read-only view dialog).
+  const [membersRole, setMembersRole] = useState<Role | null>(null);
+  const [memberSearch, setMemberSearch] = useState('');
+  // Role detail (members live on GET /api/roles/:id, not on the list payload).
+  const { data: membersDetail } = useQuery({
+    queryKey: qk.roleMembers(membersRole?.id ?? ''),
+    queryFn: () => rolesApi.getWithMembers(membersRole!.id),
+    enabled: !!membersRole?.id,
+    staleTime: 30_000,
+  });
+  // Candidate users for the add-member picker.
+  const { data: memberCandidates } = useQuery({
+    queryKey: qk.adminUsers({ page: 1, limit: 200 }),
+    queryFn: () => adminApi.listUsers({ page: 1, limit: 200 }),
+    enabled: !!membersRole?.id,
+    staleTime: 60_000,
+  });
 
   // Fetch roles
   // P1-24: role CRUD arrives via the admin stream only — poll during outages
@@ -465,14 +514,50 @@ function RolesPage() {
     staleTime: 10 * 60 * 1000,
   });
 
+  // Role CRUD also changes derived permission state: the caller's own effective
+  // permissions (`myPermissions`) and the shared server-permission catalog that
+  // invite/access pickers cache for 10 minutes. Invalidating only `adminRoles`
+  // left those stale (audit A5).
+  const invalidateRoleDerived = () => {
+    queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
+    queryClient.invalidateQueries({ queryKey: qk.myPermissions() });
+    queryClient.invalidateQueries({ queryKey: ['server-permissions'] });
+  };
+
   const createMutation = useMutation({
-    mutationFn: (data: RoleCreatorPayload) => rolesApi.create(data),
-    onSuccess: () => {
-      notifySuccess(t('roles.toasts.created'));
+    mutationFn: async ({ data, nodes }: { data: RoleCreatorPayload; nodes: NodeAssignmentWithExpiration[] }) => {
+      const created = await rolesApi.create(data);
+      // Create-mode node picks are local until the role exists — flush them now
+      // and keep going if one fails so the role itself is never lost (audit A2).
+      const nodeFlush = created && nodes.length > 0
+        ? await flushNodeAssignments({ targetType: 'role', targetId: created.id }, nodes)
+        : null;
+      return { created, nodeFlush };
+    },
+    onSuccess: ({ created, nodeFlush }) => {
+      const failedNodes = [
+        ...(nodeFlush?.failed ?? []),
+        ...(nodeFlush?.wildcardFailed ? [t('admin:nodeAssignments.allNodes')] : []),
+      ];
+      if (failedNodes.length > 0) {
+        notifyError(
+          t('roles.toasts.nodeAccessPartial', {
+            count: failedNodes.length,
+            names: failedNodes.join(', '),
+          }),
+        );
+      } else {
+        notifySuccess(t('roles.toasts.created'));
+      }
+      if (nodeFlush && created) {
+        queryClient.invalidateQueries({ queryKey: qk.roleNodes(created.id) });
+        queryClient.invalidateQueries({ queryKey: qk.nodes() });
+      }
       setIsCreateOpen(false);
+      setDuplicatingRole(null);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
+      invalidateRoleDerived();
     },
     onError: (error: any) => notifyError(error),
   });
@@ -485,7 +570,7 @@ function RolesPage() {
       setEditingRole(null);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
+      invalidateRoleDerived();
     },
     onError: (error: any) => notifyError(error),
   });
@@ -497,7 +582,38 @@ function RolesPage() {
       setViewingRole(null);
     },
     onSettled: () => {
+      invalidateRoleDerived();
+    },
+    onError: (error: any) => notifyError(error),
+  });
+
+  // ── Members ──────────────────────────────────────────────────────────
+  const addMemberMutation = useMutation({
+    mutationFn: ({ roleId, userId }: { roleId: string; userId: string }) =>
+      rolesApi.assignToUser(roleId, userId),
+    onSuccess: (_data, variables) => {
+      notifySuccess(t('roles.members.toasts.added'));
+      queryClient.invalidateQueries({ queryKey: qk.roleMembers(variables.roleId) });
+      queryClient.invalidateQueries({ queryKey: qk.userRoles(variables.userId) });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
+    },
+    onError: (error: any) => notifyError(error),
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: ({ roleId, userId }: { roleId: string; userId: string }) =>
+      rolesApi.removeFromUser(roleId, userId),
+    onSuccess: (_data, variables) => {
+      notifySuccess(t('roles.members.toasts.removed'));
+      queryClient.invalidateQueries({ queryKey: qk.roleMembers(variables.roleId) });
+      queryClient.invalidateQueries({ queryKey: qk.userRoles(variables.userId) });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.adminRoles() });
+      queryClient.invalidateQueries({ queryKey: qk.adminUsers() });
     },
     onError: (error: any) => notifyError(error),
   });
@@ -525,6 +641,32 @@ function RolesPage() {
     setIsCreateOpen(false);
   };
 
+  /**
+   * "Duplicate role": open the editor in create mode with the source role's
+   * name, description, permissions and scope prefilled. The copy starts with no
+   * members and no node reachability — those are assigned afterwards.
+   */
+  const startDuplicate = async (role: Role) => {
+    setViewingRole(null);
+    setEditingRole(null);
+    setIsCreateOpen(false);
+    setDuplicatingRole(role);
+    try {
+      const detail = await rolesApi.get(role.id);
+      if (detail) setDuplicatingRole(detail);
+    } catch {
+      // The list row carries permissions; only the scope may be missing.
+    }
+  };
+
+  const startManageMembers = (role: Role) => {
+    setViewingRole(null);
+    setEditingRole(null);
+    setIsCreateOpen(false);
+    setMembersRole(role);
+    setMemberSearch('');
+  };
+
   const filteredRoles = useMemo(
     () =>
       roles.filter(
@@ -545,16 +687,49 @@ function RolesPage() {
     getItemKey: (index) => filteredRoles[index]?.id ?? index,
   });
 
-  const isModalOpen = isCreateOpen || !!editingRole;
+  const isModalOpen = isCreateOpen || !!editingRole || !!duplicatingRole;
   const isPending = createMutation.isPending || updateMutation.isPending;
 
-  const handleSubmit = (payload: RoleCreatorPayload) => {
+  const handleSubmit = (
+    payload: RoleCreatorPayload,
+    nodes: NodeAssignmentWithExpiration[],
+  ) => {
     if (editingRole) {
+      // The selector persists each pick itself while editing.
       updateMutation.mutate({ roleId: editingRole.id, data: payload });
     } else {
-      createMutation.mutate(payload);
+      createMutation.mutate({ data: payload, nodes });
     }
   };
+
+  // ── Member picker data ───────────────────────────────────────────────
+  const memberIds = useMemo(
+    () => new Set((membersDetail?.users ?? []).map((user) => user.id)),
+    [membersDetail],
+  );
+  const filteredMembers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    const members = membersDetail?.users ?? [];
+    if (!query) return members;
+    return members.filter(
+      (user) =>
+        user.username.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query),
+    );
+  }, [membersDetail, memberSearch]);
+  const addableUsers = useMemo(() => {
+    const query = memberSearch.trim().toLowerCase();
+    const candidates = memberCandidates?.users ?? [];
+    return candidates
+      .filter((user) => !memberIds.has(user.id))
+      .filter(
+        (user) =>
+          !query ||
+          user.username.toLowerCase().includes(query) ||
+          user.email.toLowerCase().includes(query),
+      )
+      .slice(0, 8);
+  }, [memberCandidates, memberIds, memberSearch]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -575,6 +750,7 @@ function RolesPage() {
               setIsCreateOpen(true);
               setEditingRole(null);
               setViewingRole(null);
+              setDuplicatingRole(null);
             }}
             className="h-8 gap-1.5 rounded-sm px-3 text-mini"
           >
@@ -650,6 +826,7 @@ function RolesPage() {
                       setIsCreateOpen(true);
                       setEditingRole(null);
                       setViewingRole(null);
+                      setDuplicatingRole(null);
                     }}
                   >
                     <Plus className="h-3.5 w-3.5" />
@@ -677,6 +854,8 @@ function RolesPage() {
                       onView={() => startView(role)}
                       onEdit={() => startEdit(role)}
                       onDelete={() => setDeletingRole(role)}
+                      onManageMembers={() => startManageMembers(role)}
+                      onDuplicate={() => startDuplicate(role)}
                       canDelete={role.userCount === 0}
                       isDeleting={deleteMutation.isPending}
                     />
@@ -692,12 +871,14 @@ function RolesPage() {
       <RoleCreatorDialog
         open={isModalOpen}
         role={editingRole}
+        prefillFrom={duplicatingRole}
         presets={presets}
         isPending={isPending}
         onOpenChange={(open) => {
           if (!open) {
             setIsCreateOpen(false);
             setEditingRole(null);
+            setDuplicatingRole(null);
           }
         }}
         onSubmit={handleSubmit}
@@ -796,6 +977,122 @@ function RolesPage() {
               )}
             </div>
             <Button variant="ghost" size="sm" onClick={() => setViewingRole(null)}>
+              {t('common:actions.close')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Members ── */}
+      <Dialog
+        open={!!membersRole}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMembersRole(null);
+            setMemberSearch('');
+          }
+        }}
+      >
+        <DialogContent size="lg">
+          <DialogHeader>
+            <DialogTitle>
+              {t('roles.members.title', {
+                role: membersRole ? roleLabel(t, membersRole.name) : '',
+              })}
+            </DialogTitle>
+            <DialogDescription>{t('roles.members.description')}</DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-3">
+            <div className="relative">
+              <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={memberSearch}
+                onChange={(event) => setMemberSearch(event.target.value)}
+                placeholder={t('roles.members.searchPlaceholder')}
+                className="h-8 pl-8 text-mini"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="type-overline text-muted-foreground">
+                  {t('roles.members.currentHeading')}
+                </span>
+                <Segmented muted className="text-micro">
+                  {t('roles.members.count', { count: membersDetail?.users?.length ?? membersRole?.userCount ?? 0 })}
+                </Segmented>
+              </div>
+              {filteredMembers.length === 0 ? (
+                <p className="rounded-sm border border-border/40 bg-surface-1/40 px-2.5 py-2 text-mini italic text-muted-foreground">
+                  {t('roles.members.empty')}
+                </p>
+              ) : (
+                <div className="max-h-56 divide-y divide-border/40 overflow-y-auto rounded-sm border border-border/40">
+                  {filteredMembers.map((member) => (
+                    <div key={member.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-mini font-medium text-foreground">{member.username}</div>
+                        <div className="truncate text-micro text-muted-foreground">{member.email}</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 shrink-0 gap-1 px-2 text-micro text-destructive hover:border-destructive/20 hover:bg-destructive/5 hover:text-destructive"
+                        disabled={removeMemberMutation.isPending}
+                        onClick={() =>
+                          membersRole &&
+                          removeMemberMutation.mutate({ roleId: membersRole.id, userId: member.id })
+                        }
+                      >
+                        <UserMinus className="h-3 w-3" />
+                        {t('roles.members.remove')}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div className="mb-1.5 text-overline text-muted-foreground">
+                {t('roles.members.addHeading')}
+              </div>
+              {addableUsers.length === 0 ? (
+                <p className="px-1 text-micro text-muted-foreground">{t('roles.members.noCandidates')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {addableUsers.map((candidate) => (
+                    <Button
+                      key={candidate.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 gap-1 px-2 text-micro"
+                      disabled={addMemberMutation.isPending}
+                      onClick={() =>
+                        membersRole &&
+                        addMemberMutation.mutate({ roleId: membersRole.id, userId: candidate.id })
+                      }
+                    >
+                      <UserPlus className="h-3 w-3" />
+                      {candidate.username}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setMembersRole(null);
+                setMemberSearch('');
+              }}
+            >
               {t('common:actions.close')}
             </Button>
           </DialogFooter>

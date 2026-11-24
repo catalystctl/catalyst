@@ -421,7 +421,7 @@ function NodeDetailsPage() {
                       className="ml-3 flex shrink-0 items-center gap-1 h-6 rounded-sm border border-border/40 px-2 text-micro text-muted-foreground opacity-100 transition-colors hover:border-primary/50 hover:text-primary focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100"
                     >
                       {t('servers.open')}
-                      <ExternalLink className="h-2.5 w-2.5" />
+                      <ExternalLink className="h-3 w-3" />
                     </Link>
                   </div>
                 );

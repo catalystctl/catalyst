@@ -10,6 +10,7 @@ import { ConfirmDialog } from '../shared/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { agentApi } from '../../services/api/agent';
 import { getApiErrorCode } from '../../i18n/api-errors';
+import { serverStatusLabel } from '../../utils/constants';
 import type { Server, ServerStatus } from '../../types/server';
 import { Play, Square, RotateCw, OctagonX, Ban } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -190,6 +191,16 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
     cancelInstall.isPending ||
     enableHostNetwork.isPending;
 
+  // A disabled power button used to say nothing about why (audit: "Start greyed
+  // out during install / offline"). Every disabled reason is spelled out in the
+  // button's tooltip, including the busy case while another action runs. The
+  // status is named with its localized label, never the raw enum value.
+  const disabledReason = (applies: boolean, actionLabel: string): string | undefined => {
+    if (busy) return t('controls.disabled.busy');
+    if (!applies) return t('controls.disabled.status', { action: actionLabel, status: serverStatusLabel(t, status) });
+    return undefined;
+  };
+
   const actions = [
     canStart && {
       key: 'start',
@@ -203,6 +214,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       disabled: busy || !STARTABLE.includes(status),
       applies: STARTABLE.includes(status),
       pending: start.isPending,
+      title: disabledReason(STARTABLE.includes(status), t('controls.start')) ?? '',
       onClick: () => start.mutate(),
     },
     canStop && {
@@ -215,6 +227,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       disabled: busy || !STOPPABLE.includes(status),
       applies: STOPPABLE.includes(status),
       pending: stop.isPending,
+      title: disabledReason(STOPPABLE.includes(status), t('controls.stop')) ?? '',
       onClick: () => stop.mutate(),
     },
     canRestart && {
@@ -227,6 +240,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       disabled: busy || !RESTARTABLE.includes(status),
       applies: RESTARTABLE.includes(status),
       pending: restart.isPending,
+      title: disabledReason(RESTARTABLE.includes(status), t('controls.restart')) ?? '',
       onClick: () => restart.mutate(),
     },
     canKill && {
@@ -239,6 +253,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       disabled: busy || !KILLABLE.includes(status),
       applies: KILLABLE.includes(status),
       pending: kill.isPending,
+      title: disabledReason(KILLABLE.includes(status), t('controls.kill')) ?? '',
       onClick: () => setShowKillConfirm(true),
     },
     canCancelInstall && status === 'installing' && {
@@ -251,6 +266,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
       disabled: busy,
       applies: true,
       pending: cancelInstall.isPending,
+      title: busy ? t('controls.disabled.busy') : '',
       onClick: () => setShowCancelInstallConfirm(true),
     },
   ].filter(Boolean) as {
@@ -263,6 +279,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
     disabled: boolean;
     applies: boolean;
     pending: boolean;
+    title: string;
     onClick: () => void;
   }[];
 
@@ -280,7 +297,7 @@ function ServerControls({ serverId, status, permissions, compact = false }: Prop
               disabled={action.disabled}
               aria-busy={action.pending}
               aria-label={compact ? action.label : undefined}
-              title={compact ? action.label : undefined}
+              title={action.disabled ? action.title : compact ? action.label : undefined}
               onClick={action.onClick}
             >
               {compact ? <Icon className="h-3.5 w-3.5" /> : action.label}

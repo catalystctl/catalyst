@@ -3,7 +3,9 @@ import { Component } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { reportReactError } from '../../lib/error-reporter';
+import { queryClient } from '../../lib/queryClient';
 import { BracketLabel } from '../deck/primitives';
+import { buttonVariants } from '../ui/button';
 
 interface Props {
   children: ReactNode;
@@ -19,15 +21,22 @@ interface State {
   lastResetKey?: string | number | null;
 }
 
-/** Function component wrapper: the boundary itself cannot use hooks. */
+/**
+ * In-place failure panel.
+ *
+ * `min-h-screen` used to replace the whole viewport, which threw away the
+ * sidebar and every way back — a crash in one page's render looked like a dead
+ * app. This fills the content area instead, so navigation survives and the
+ * boundary's retry actually has somewhere to go.
+ */
 function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => void }) {
   const { t } = useTranslation('common');
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+    <div className="flex min-h-[50dvh] flex-1 items-center justify-center px-4 py-8">
       <div className="deck-panel w-full max-w-md overflow-hidden border-danger/30">
         <div className="flex items-start gap-2.5 border-b border-border/50 bg-surface-1/40 px-3 py-2.5">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />
           <div className="min-w-0">
             <BracketLabel tone="alarm">{t('errorBoundary.title')}</BracketLabel>
             <p className="type-meta mt-1">
@@ -35,11 +44,11 @@ function ErrorFallback({ message, onRetry }: { message?: string; onRetry: () => 
             </p>
           </div>
         </div>
-        <div className="px-3 py-2">
+        <div className="px-3 py-3">
           <button
             type="button"
             onClick={onRetry}
-            className="pressable flex h-8 items-center rounded-sm bg-primary px-3 font-display text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            className={buttonVariants({ variant: 'default', size: 'sm' })}
           >
             {t('errorBoundary.retry')}
           </button>
@@ -75,8 +84,18 @@ class ErrorBoundary extends Component<Props, State> {
     reportReactError(error, info);
   }
 
+  /**
+   * Clearing the error alone re-renders the children against the SAME cache
+   * state that broke them, so the retry usually crashed again immediately.
+   * Drop the error and re-fetch everything active: a transient bad payload is
+   * replaced, a genuine render bug still surfaces.
+   */
   private handleRetry = () => {
     this.setState({ hasError: false, message: undefined });
+    // `invalidateQueries` already re-fetches every active observer by default;
+    // the broken cache entry is what usually causes the crash, so a redraw
+    // against the same data would simply fail again.
+    void queryClient.invalidateQueries({}, { refetchType: 'all' });
   };
 
   render() {

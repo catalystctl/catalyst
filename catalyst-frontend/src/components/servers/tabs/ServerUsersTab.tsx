@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import SectionHeader from './SectionHeader';
 import TabEmptyState from './TabEmptyState';
+import { ConfirmDialog } from '../../shared/ConfirmDialog';
 import { formatDateTime } from '@/i18n/format';
 import { Users, UserPlus, ShieldCheck, Mail, Link2, RefreshCw } from 'lucide-react';
 
@@ -72,6 +74,12 @@ export default function ServerUsersTab({
  onCopyInviteLink,
 }: Props) {
  const { t } = useTranslation('server-tabs');
+ // Revoking access and cancelling an invite are both irreversible for the
+ // recipient, so both go through a confirm like every other destructive action.
+ const [pendingRemoveUserId, setPendingRemoveUserId] = useState<string | null>(null);
+ const [pendingCancelInviteId, setPendingCancelInviteId] = useState<string | null>(null);
+ const pendingRemoveUser = permissionsData?.find((entry) => entry.userId === pendingRemoveUserId);
+ const pendingCancelInvite = invites.find((invite) => invite.id === pendingCancelInviteId);
  return (
  <div className="space-y-4">
  <TabHeader
@@ -162,8 +170,9 @@ export default function ServerUsersTab({
  <button
  type="button"
  className="rounded-sm border border-danger/20 h-7 px-2 text-micro font-medium text-danger transition-colors hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
- onClick={() => onRemoveAccess(entry.userId)}
+ onClick={() => setPendingRemoveUserId(entry.userId)}
  disabled={removeAccessPending}
+ title={t('tabs.users.removeAccessTitle')}
  >
  {t('common:actions.remove')}
  </button>
@@ -251,8 +260,8 @@ export default function ServerUsersTab({
  key={invite.id}
  className="group relative flex flex-wrap items-center justify-between gap-3 border-b border-border/50 py-2.5 last:border-0"
  >
-  <div>
- <div className="text-mini font-medium text-foreground">{invite.email}</div>
+  <div className="min-w-0">
+ <div className="truncate text-mini font-medium text-foreground" title={invite.email}>{invite.email}</div>
  <div className="font-mono text-micro tabular-nums text-muted-foreground">
  {t('tabs.users.expires', { date: formatDateTime(invite.expiresAt) })}
  </div>
@@ -278,8 +287,9 @@ export default function ServerUsersTab({
  <button
  type="button"
  className="h-7 rounded-sm border border-danger/20 px-2 text-mini font-medium text-danger transition-colors hover:border-danger/40 hover:bg-danger/5 disabled:opacity-50"
- onClick={() => onCancelInvite(invite.id)}
+ onClick={() => setPendingCancelInviteId(invite.id)}
  disabled={cancelInvitePending}
+ title={t('tabs.users.cancelInviteTitle')}
  >
  {t('common:actions.cancel')}
  </button>
@@ -294,6 +304,46 @@ export default function ServerUsersTab({
  )}
  </div>
  </ServerTabCard>
+
+ <ConfirmDialog
+ open={Boolean(pendingRemoveUserId)}
+ title={t('tabs.users.removeAccessTitle')}
+ message={
+ pendingRemoveUser
+ ? t('tabs.users.removeAccessConfirm', { name: pendingRemoveUser.user.username })
+ : t('tabs.users.removeAccessConfirmFallback')
+ }
+ confirmText={t('common:actions.remove')}
+ cancelText={t('common:actions.cancel')}
+ variant="danger"
+ loading={removeAccessPending}
+ onConfirm={() => {
+ if (!pendingRemoveUserId) return;
+ onRemoveAccess(pendingRemoveUserId);
+ setPendingRemoveUserId(null);
+ }}
+ onCancel={() => setPendingRemoveUserId(null)}
+ />
+
+ <ConfirmDialog
+ open={Boolean(pendingCancelInviteId)}
+ title={t('tabs.users.cancelInviteTitle')}
+ message={
+ pendingCancelInvite
+ ? t('tabs.users.cancelInviteConfirm', { email: pendingCancelInvite.email })
+ : t('tabs.users.cancelInviteConfirmFallback')
+ }
+ confirmText={t('tabs.users.cancelInvite')}
+ cancelText={t('common:actions.cancel')}
+ variant="danger"
+ loading={cancelInvitePending}
+ onConfirm={() => {
+ if (!pendingCancelInviteId) return;
+ onCancelInvite(pendingCancelInviteId);
+ setPendingCancelInviteId(null);
+ }}
+ onCancel={() => setPendingCancelInviteId(null)}
+ />
  </div>
  );
 }

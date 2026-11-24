@@ -106,6 +106,21 @@ function ResultThumb({ src, fallbackLabel }: { src?: string; fallbackLabel: stri
 
 const RESULTS_PER_PAGE = 12;
 
+/**
+ * Stable-first version pick — the single auto-pick rule.
+ *
+ * Shared by the expanded version picker's pre-selection and the one-click
+ * Install on a result card (audit D5), so the quick install always takes the
+ * exact version the picker would have chosen: a stable release if the list has
+ * one, otherwise the first (newest) entry.
+ */
+function pickPreferredVersionId(versionOptions: any[]): string {
+  if (!versionOptions.length) return '';
+  const preferred =
+    versionOptions.find((entry: any) => isStableRelease(entry)) ?? versionOptions[0];
+  return normalizeVersionId(preferred) || '';
+}
+
 // ── Sort presets (mapped server-side to each provider's native params) ──
 type PluginSortId = 'trending' | 'popular' | 'rating' | 'updated' | 'newest';
 
@@ -133,7 +148,7 @@ function BrowseSkeleton() {
  {Array.from({ length: 6 }).map((_, i) => (
  <div
  key={i}
- className="rounded-sm border border-border/50 bg-card p-4"
+ className="rounded-sm border border-border/50 bg-card p-3"
  >
  <div className="flex gap-3">
  <Skeleton className="h-11 w-11 rounded-sm" />
@@ -496,16 +511,20 @@ export default function ServerPluginManagerTab({
  });
 
  const installPluginMutation = useMutation({
- mutationFn: () => {
- if (!serverId || !selectedPlugin || !selectedPluginVersion) {
+ mutationFn: (payload: {
+ projectId: string;
+ projectName?: string;
+ versionId: string;
+ }) => {
+ if (!serverId || !payload.projectId || !payload.versionId) {
  reportSystemError({ level: 'error', component: 'ServerPluginManagerTab', message: 'Missing plugin selection', metadata: { context: 'install plugin mutation' } });
  throw new Error(t('tabs.plugins.missingSelection'));
  }
  return pluginManagerApi.install(serverId, {
  provider: pluginProvider,
- projectId: selectedPlugin,
- versionId: selectedPluginVersion,
- projectName: selectedPluginName || undefined,
+ projectId: payload.projectId,
+ versionId: payload.versionId,
+ projectName: payload.projectName || undefined,
  });
  },
  onSuccess: () => notifySuccess(t('tabs.plugins.installedSuccess')),
@@ -516,6 +535,67 @@ export default function ServerPluginManagerTab({
  notifyError(error, t('tabs.plugins.installFailed'));
  },
  });
+
+ // ── One-click install (audit D5) ──
+ // Installs the version the expanded picker would pre-select, so the common
+ // "give me the current stable release" path is one click from the result.
+ const [quickInstallPlugin, setQuickInstallPlugin] = useState<string | null>(null);
+
+ const handleQuickInstall = useCallback(
+ async (projectId: string, title: string) => {
+ if (!serverId || !projectId || quickInstallPlugin) return;
+ setQuickInstallPlugin(projectId);
+ let versionId = '';
+ try {
+ const versionsPayload = await queryClient.fetchQuery({
+ queryKey: qk.pluginManagerVersions(serverId, pluginProvider, projectId),
+ queryFn: () =>
+ pluginManagerApi.versions(serverId ?? '', {
+ provider: pluginProvider,
+ projectId,
+ }),
+ });
+ const raw = Array.isArray(versionsPayload)
+ ? versionsPayload
+ : Array.isArray((versionsPayload as any)?.data)
+ ? (versionsPayload as any).data
+ : Array.isArray((versionsPayload as any)?.result)
+ ? (versionsPayload as any).result
+ : [];
+ const { list } = splitVersionsForGameVersion(raw, pluginGameVersion);
+ versionId = pickPreferredVersionId(list.length ? list : raw);
+ } catch {
+ setQuickInstallPlugin(null);
+ notifyError(t('tabs.plugins.versionsFailed'));
+ return;
+ }
+ if (!versionId) {
+ setQuickInstallPlugin(null);
+ notifyError(t('tabs.plugins.noVersions'));
+ return;
+ }
+ try {
+ await installPluginMutation.mutateAsync({
+ projectId,
+ projectName: title,
+ versionId,
+ });
+ } catch {
+ // installPluginMutation.onError already surfaced the failure to the user.
+ } finally {
+ setQuickInstallPlugin(null);
+ }
+ },
+ [
+ serverId,
+ quickInstallPlugin,
+ queryClient,
+ pluginProvider,
+ pluginGameVersion,
+ installPluginMutation,
+ t,
+ ],
+ );
 
  // ── Derived data ──
  const pluginResults = useMemo(() => {
@@ -626,13 +706,9 @@ export default function ServerPluginManagerTab({
  )
  )
  ) {
- const preferred =
- pluginVersionOptions.find((entry: any) =>
- isStableRelease(entry),
- ) ?? pluginVersionOptions[0];
- const preferredId = normalizeVersionId(preferred);
- if (preferredId && preferredId !== selectedPluginVersion) {
- setSelectedPluginVersion(preferredId);
+ const preferred = pickPreferredVersionId(pluginVersionOptions);
+ if (preferred && preferred !== selectedPluginVersion) {
+ setSelectedPluginVersion(preferred);
  }
  }
  }
@@ -779,7 +855,7 @@ export default function ServerPluginManagerTab({
  {/* ── Filters ── */}
  <motion.div
  variants={itemVariants}
- className="rounded-sm border border-border/50 bg-card p-2.5"
+ className="rounded-sm border border-border/50 bg-card p-3"
  >
  <div className="flex flex-wrap items-center gap-2.5">
  {/* Search */}
@@ -851,7 +927,7 @@ export default function ServerPluginManagerTab({
  variants={itemVariants}
  className="flex flex-wrap items-center justify-between gap-2"
  >
- <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border/50 bg-card p-1">
+ <div className="flex flex-wrap items-center gap-1 rounded-sm border border-border/50 bg-card p-3">
  {pluginSortOptions(t).map(({ id, label, icon: SortIcon }) => (
  <button
  key={id}
@@ -1078,6 +1154,29 @@ export default function ServerPluginManagerTab({
  </span>
  )}
  </div>
+ {/* One-click install of the version the picker would pre-select
+ (audit D5); the picker stays for choosing another version. */}
+ <Button
+ variant="outline"
+ size="sm"
+ className="ml-auto h-6 shrink-0 gap-1 px-2 text-mini"
+ title={t('tabs.plugins.quickInstallLabel', { name: titleText })}
+ aria-label={t('tabs.plugins.quickInstallLabel', { name: titleText })}
+ disabled={quickInstallPlugin !== null}
+ onClick={(event) => {
+ event.stopPropagation();
+ void handleQuickInstall(String(id), titleText);
+ }}
+ >
+ {quickInstallPlugin === String(id) ? (
+ <Loader2 className="h-3 w-3 animate-spin" />
+ ) : (
+ <Download className="h-3 w-3" />
+ )}
+ {quickInstallPlugin === String(id)
+ ? t('tabs.plugins.installing')
+ : t('tabs.plugins.install')}
+ </Button>
  <ChevronDown
  className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${
  isActive ? 'rotate-180 text-primary' : ''
@@ -1094,11 +1193,16 @@ export default function ServerPluginManagerTab({
  onVersionChange={setSelectedPluginVersion}
  isLoading={pluginVersionsLoading}
  isError={pluginVersionsError}
- onInstall={() =>
- installPluginMutation.mutate()
- }
+ onInstall={() => {
+ if (!selectedPlugin || !selectedPluginVersion) return;
+ installPluginMutation.mutate({
+ projectId: selectedPlugin,
+ projectName: selectedPluginName,
+ versionId: selectedPluginVersion,
+ });
+ }}
  isInstalling={
- installPluginMutation.isPending
+ installPluginMutation.isPending && quickInstallPlugin === null
  }
  gameVersionLabel={
  pluginGameVersion.trim() || undefined
@@ -1485,7 +1589,7 @@ export default function ServerPluginManagerTab({
  )}
 
  {/* Actions */}
- <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+ <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100">
  {plugin.hasUpdate && (
  <button
  type="button"

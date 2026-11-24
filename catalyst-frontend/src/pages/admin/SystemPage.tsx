@@ -143,6 +143,10 @@ function SystemPage() {
  onSuccess: () => notifySuccess(t('system.toastBackupSecondaryUpdated')),
  onSettled: () => {
  queryClient.invalidateQueries({ queryKey: qk.adminBackupSecondary() });
+ // CreateBackupModal offers the secondary drive from a per-server query
+ // (`backupSecondaryDrive(serverId)`), so enabling/disabling it here must
+ // refresh the availability of every server's modal too.
+ queryClient.invalidateQueries({ queryKey: qk.allBackupSecondaryDrives() });
  },
  onError: (error: any) => notifyError(error),
  });

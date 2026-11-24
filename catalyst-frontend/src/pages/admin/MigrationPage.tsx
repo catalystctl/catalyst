@@ -47,6 +47,7 @@ import StatGrid from '../../components/servers/tabs/StatGrid';
 import TabLoadingState from '../../components/servers/tabs/TabLoadingState';
 import TabEmptyState from '../../components/servers/tabs/TabEmptyState';
 import TabErrorState from '../../components/servers/tabs/TabErrorState';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { migrationApi } from '../../services/api/migration';
 import { notifySuccess, notifyError, notifyInfo } from '../../utils/notify';
 import { formatDate, formatDateTime } from '@/i18n/format';
@@ -257,7 +258,16 @@ function ProgressBar({ progress }: { progress: { total: number; completed: numbe
 }
 
 // ── Phase Step List ──
-function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (stepId: string) => void }) {
+function PhaseSteps({
+  steps,
+  onRetry,
+  retryingStepId,
+}: {
+  steps: MigrationStep[];
+  onRetry: (stepId: string) => void;
+  /** Step whose retry is in flight — disables and spins only that button. */
+  retryingStepId?: string | null;
+}) {
   const { t } = useTranslation('admin-infra');
   const [expanded, setExpanded] = useState(false);
  const [errorStepId, setErrorStepId] = useState<string | null>(null);
@@ -295,20 +305,33 @@ function PhaseSteps({ steps, onRetry }: { steps: MigrationStep[]; onRetry: (step
  <span className="text-mini text-muted-foreground flex-shrink-0">{formatDuration(step.durationMs)}</span>
  {step.status === 'failed' && (
  <div className="flex items-center gap-1.5 flex-shrink-0">
- <button
- onClick={() => setErrorStepId(showError ? null : step.id)}
- className="text-mini text-muted-foreground hover:text-foreground"
- title={t('migration.steps.toggleErrorDetails')}
+ <Button
+   type="button"
+   variant="ghost"
+   size="icon-sm"
+   className="h-7 w-7"
+   onClick={() => setErrorStepId(showError ? null : step.id)}
+   title={t('migration.steps.toggleErrorDetails')}
+   aria-label={t('migration.steps.toggleErrorDetails')}
  >
  {showError ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
- </button>
- <button
- onClick={() => onRetry(step.id)}
- className="text-mini text-primary hover:text-primary/80"
- title={t('common:actions.retry')}
+ </Button>
+ <Button
+   type="button"
+   variant="outline"
+   size="icon-sm"
+   className="h-7 w-7 text-primary"
+   onClick={() => onRetry(step.id)}
+   disabled={retryingStepId === step.id}
+   title={t('common:actions.retry')}
+   aria-label={t('common:actions.retry')}
  >
- <RefreshCw className="h-3 w-3" />
- </button>
+ {retryingStepId === step.id ? (
+   <Loader2 className="h-3 w-3 animate-spin" />
+ ) : (
+   <RefreshCw className="h-3 w-3" />
+ )}
+ </Button>
  </div>
  )}
  {step.status === 'completed' && step.metadata && (
@@ -768,6 +791,8 @@ export default function MigrationPage() {
  const [testResult, setTestResult] = useState<PterodactylTestResult | null>(null);
  const [testing, setTesting] = useState(false);
  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+ // Cancelling a job cannot be undone, so it asks first.
+ const [confirmCancel, setConfirmCancel] = useState(false);
 
  // Fetch Catalyst nodes (migration targets)
  const { data: catalystNodes = [] } = useQuery<CatalystNodeOption[]>({
@@ -1319,13 +1344,17 @@ export default function MigrationPage() {
  )}
  {(activeJob.status === 'running' || activeJob.status === 'paused') && (
  <Button
- onClick={() => cancelMutation.mutate()}
+ onClick={() => setConfirmCancel(true)}
  disabled={cancelMutation.isPending}
  variant="destructive"
  size="sm"
  className="h-8 gap-1.5 px-3 text-mini"
  >
- <X className="h-3.5 w-3.5" />
+ {cancelMutation.isPending ? (
+   <Loader2 className="h-3.5 w-3.5 animate-spin" />
+ ) : (
+   <X className="h-3.5 w-3.5" />
+ )}
  {t('common:actions.cancel')}
  </Button>
  )}
@@ -1449,7 +1478,11 @@ export default function MigrationPage() {
  </span>
  </div>
  {steps.length > 0 && (
- <PhaseSteps steps={steps} onRetry={handleRetryStep} />
+ <PhaseSteps
+ steps={steps}
+ onRetry={handleRetryStep}
+ retryingStepId={retryMutation.isPending ? (retryMutation.variables as string | undefined) ?? null : null}
+ />
  )}
  </div>
  );
@@ -1516,6 +1549,23 @@ export default function MigrationPage() {
  )}
  </div>
  )}
+
+ {/* Cancel running/paused job — irreversible, so it is confirmed. */}
+ <ConfirmDialog
+ open={confirmCancel}
+ title={t('migration.cancelTitle')}
+ message={t('migration.cancelConfirm')}
+ confirmText={t('migration.actions.cancelJob')}
+ cancelText={t('common:actions.cancel')}
+ variant="danger"
+ loading={cancelMutation.isPending}
+ onConfirm={() =>
+ cancelMutation.mutate(undefined, { onSuccess: () => setConfirmCancel(false) })
+ }
+ onCancel={() => {
+ if (!cancelMutation.isPending) setConfirmCancel(false);
+ }}
+ />
  </div>
  );
 }

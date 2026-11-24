@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ChevronDown, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -23,11 +24,17 @@ function CreateBackupModal({
   serverId,
   disabled = false,
   canPin = false,
+  variant = 'default',
 }: {
   serverId: string;
   disabled?: boolean;
   /** Whether the user holds backup.pin (exempt from the retention limit). */
   canPin?: boolean;
+  /**
+   * `split` renders "Backup now" (one click, defaults) with a caret that opens
+   * this dialog for name/pin/secondary-drive options.
+   */
+  variant?: 'default' | 'split';
 }) {
   const { t } = useTranslation('server-tabs');
   const [open, setOpen] = useState(false);
@@ -74,19 +81,66 @@ function CreateBackupModal({
     },
   });
 
+  // One-click path: no name, compressed, no extra copy. The dialog still
+  // exists for the options it cannot express.
+  const quickMutation = useMutation({
+    mutationFn: () => backupsApi.create(serverId, { name: undefined, compressed: true }),
+    onSuccess: () => {
+      notifySuccess(t('backups.create.success'));
+    },
+    onError: (error: any) => {
+      notifyError(error);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: qk.backups(serverId) });
+    },
+  });
+
   return (
     <div>
-      <Button
-        type="button"
-        size="sm"
-        className="h-8 px-3 text-mini"
-        onClick={() => {
-          if (!disabled) setOpen(true);
-        }}
-        disabled={disabled}
-      >
-        {t('backups.create.action')}
-      </Button>
+      {variant === 'split' ? (
+        <div className="inline-flex items-stretch">
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 rounded-r-none px-3 text-mini"
+            onClick={() => quickMutation.mutate()}
+            disabled={disabled || quickMutation.isPending}
+          >
+            {quickMutation.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              t('backups.create.now')
+            )}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 rounded-l-none border-l-0 px-1.5"
+            aria-label={t('backups.create.moreOptions')}
+            title={t('backups.create.moreOptions')}
+            onClick={() => {
+              if (!disabled) setOpen(true);
+            }}
+            disabled={disabled}
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          className="h-8 px-3 text-mini"
+          onClick={() => {
+            if (!disabled) setOpen(true);
+          }}
+          disabled={disabled}
+        >
+          {t('backups.create.action')}
+        </Button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="md">
           <DialogHeader>
