@@ -33,10 +33,20 @@
     "working": "En cours…",
     "yes": "Oui"
   },
+  "activity": {
+    "byActor": "{{actor}}"
+  },
   "apiKeys": {
     "created": "Clé API créée avec succès",
     "revoked": "Clé API révoquée avec succès",
     "updated": "Clé API mise à jour avec succès"
+  },
+  "bulk": {
+    "actions": {
+      "restart": "Redémarrer",
+      "start": "Démarrer",
+      "stop": "Arrêter"
+    }
   },
   "combobox": {
     "noMatches": "Aucun résultat.",

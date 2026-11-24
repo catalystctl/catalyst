@@ -1,12 +1,14 @@
 {
   "breadcrumbs": {
     "activity": "Activity",
+    "allocations": "Allocations",
     "backups": "Backups",
     "console": "Console",
     "files": "Files",
     "invites": "Invites",
     "metrics": "Metrics",
     "nav": "Breadcrumb",
+    "nests": "Nests",
     "network": "Network",
     "plugin": "Plugin",
     "settings": "Settings",
@@ -39,16 +41,20 @@
   },
   "search": {
     "all": "All",
+    "apiKeyDisabled": "Disabled",
+    "apiKeyEnabled": "Enabled",
     "categories": {
       "account": "Account",
       "actions": "Quick Actions",
       "admin": "Admin",
       "nodes": "Nodes",
       "pages": "Pages",
+      "plugins": "Plugins",
       "servers": "Servers",
       "serverTabs": "Server Tabs",
       "settings": "Settings & Config",
-      "templates": "Templates"
+      "templates": "Templates",
+      "usersRoles": "Users & Roles"
     },
     "close": "Close search",
     "hints": {
@@ -229,14 +235,28 @@
     "noResults": "No results found",
     "noResultsHint": "Try different keywords or clear the filter",
     "placeholder": "Search pages, settings, servers, nodes…",
+    "pluginTab": "Plugin tab",
     "quickActions": {
+      "createBackup": {
+        "description": "Snapshot a server’s files before a change",
+        "label": "Create New Backup"
+      },
       "createServer": {
         "description": "Deploy a new game server from a template",
         "label": "Create New Server"
+      },
+      "createUser": {
+        "description": "Add a panel account",
+        "label": "New User"
+      },
+      "restartServer": {
+        "description": "Bounce a running game server",
+        "label": "Restart a Server"
       }
     },
     "resultCount_one": "{{count}} result",
     "resultCount_other": "{{count}} results",
+    "roleDescription": "Permission group",
     "serverTabs": {
       "admin": {
         "description": "Owner transfer, suspension, and admin actions",

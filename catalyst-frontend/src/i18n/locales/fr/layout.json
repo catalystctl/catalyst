@@ -1,12 +1,14 @@
 {
   "breadcrumbs": {
     "activity": "Activité",
+    "allocations": "Allocations",
     "backups": "Sauvegardes",
     "console": "Console",
     "files": "Fichiers",
     "invites": "Invitations",
     "metrics": "Métriques",
     "nav": "Fil d’Ariane",
+    "nests": "Nids",
     "network": "Réseau",
     "plugin": "Plugin",
     "settings": "Paramètres",
@@ -39,16 +41,20 @@
   },
   "search": {
     "all": "Tout",
+    "apiKeyDisabled": "Désactivée",
+    "apiKeyEnabled": "Activée",
     "categories": {
       "account": "Compte",
       "actions": "Actions rapides",
       "admin": "Administration",
       "nodes": "Nœuds",
       "pages": "Pages",
+      "plugins": "Plugins",
       "servers": "Serveurs",
       "serverTabs": "Onglets de serveur",
       "settings": "Paramètres et configuration",
-      "templates": "Modèles"
+      "templates": "Modèles",
+      "usersRoles": "Utilisateurs et rôles"
     },
     "close": "Fermer la recherche",
     "hints": {
@@ -229,15 +235,29 @@
     "noResults": "Aucun résultat trouvé",
     "noResultsHint": "Essayez d’autres mots-clés ou effacez le filtre",
     "placeholder": "Rechercher des pages, des paramètres, des serveurs, des nœuds…",
+    "pluginTab": "Onglet de plugin",
     "quickActions": {
+      "createBackup": {
+        "description": "Instantané des fichiers d’un serveur avant une modification",
+        "label": "Créer une sauvegarde"
+      },
       "createServer": {
         "description": "Déployer un nouveau serveur de jeu à partir d’un modèle",
         "label": "Créer un nouveau serveur"
+      },
+      "createUser": {
+        "description": "Ajouter un compte au panneau",
+        "label": "Nouvel utilisateur"
+      },
+      "restartServer": {
+        "description": "Redémarrer un serveur de jeu en cours d’exécution",
+        "label": "Redémarrer un serveur"
       }
     },
     "resultCount_one": "{{count}} résultat",
     "resultCount_many": "{{count}} résultats",
     "resultCount_other": "{{count}} résultats",
+    "roleDescription": "Groupe de permissions",
     "serverTabs": {
       "admin": {
         "description": "Transfert de propriété, suspension et actions d’administration",

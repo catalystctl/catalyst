@@ -33,10 +33,20 @@
     "working": "Выполняется…",
     "yes": "Да"
   },
+  "activity": {
+    "byActor": "{{actor}}"
+  },
   "apiKeys": {
     "created": "Ключ API успешно создан",
     "revoked": "Ключ API успешно отозван",
     "updated": "Ключ API успешно обновлен"
+  },
+  "bulk": {
+    "actions": {
+      "restart": "Перезапустить",
+      "start": "Запустить",
+      "stop": "Остановить"
+    }
   },
   "combobox": {
     "noMatches": "Совпадений не найдено.",

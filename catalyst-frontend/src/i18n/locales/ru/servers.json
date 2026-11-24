@@ -1,4 +1,43 @@
 {
+  "bulk": {
+    "actions": {
+      "restart": "Перезапустить",
+      "stop": "Остановить"
+    },
+    "clear": "Снять выделение",
+    "done_one": "{{action}} отправлено на {{count}} сервер",
+    "done_few": "{{action}} отправлено на {{count}} сервера",
+    "done_many": "{{action}} отправлено на {{count}} серверов",
+    "done_other": "{{action}} отправлено на {{count}} серверов",
+    "noEligible": "Ни один выбранный сервер не принимает действие {{action}}",
+    "partial_one": "Обработан {{count}} сервер, {{failed}} с ошибкой",
+    "partial_few": "Обработано {{count}} сервера, {{failed}} с ошибкой",
+    "partial_many": "Обработано {{count}} серверов, {{failed}} с ошибкой",
+    "partial_other": "Обработано {{count}} серверов, {{failed}} с ошибкой",
+    "regionLabel": "Групповые действия с серверами",
+    "restartConfirmMessage_one": "Это перезапустит {{count}} выбранный сервер и отключит его игроков. Вы уверены?",
+    "restartConfirmMessage_few": "Это перезапустит {{count}} выбранных сервера и отключит их игроков. Вы уверены?",
+    "restartConfirmMessage_many": "Это перезапустит {{count}} выбранных серверов и отключит их игроков. Вы уверены?",
+    "restartConfirmMessage_other": "Это перезапустит {{count}} выбранных серверов и отключит их игроков. Вы уверены?",
+    "restartConfirmTitle_one": "Перезапустить {{count}} сервер?",
+    "restartConfirmTitle_few": "Перезапустить {{count}} сервера?",
+    "restartConfirmTitle_many": "Перезапустить {{count}} серверов?",
+    "restartConfirmTitle_other": "Перезапустить {{count}} серверов?",
+    "selectAll": "Выбрать все серверы в этом списке",
+    "selected_one": "{{count}} выбран",
+    "selected_few": "{{count}} выбраны",
+    "selected_many": "{{count}} выбрано",
+    "selected_other": "{{count}} выбрано",
+    "selectServer": "Выбрать {{name}}",
+    "stopConfirmMessage_one": "Это корректно остановит {{count}} выбранный сервер и отключит его игроков. Вы уверены?",
+    "stopConfirmMessage_few": "Это корректно остановит {{count}} выбранных сервера и отключит их игроков. Вы уверены?",
+    "stopConfirmMessage_many": "Это корректно остановит {{count}} выбранных серверов и отключит их игроков. Вы уверены?",
+    "stopConfirmMessage_other": "Это корректно остановит {{count}} выбранных серверов и отключит их игроков. Вы уверены?",
+    "stopConfirmTitle_one": "Остановить {{count}} сервер?",
+    "stopConfirmTitle_few": "Остановить {{count}} сервера?",
+    "stopConfirmTitle_many": "Остановить {{count}} серверов?",
+    "stopConfirmTitle_other": "Остановить {{count}} серверов?"
+  },
   "card": {
     "console": "Консоль",
     "manage": "Управлять"
@@ -145,6 +184,11 @@
     },
     "tab": {
       "bufferSize": "Размер буфера",
+      "clearConfirmMessage_one": "Это удалит {{count}} строку из буфера; это действие нельзя отменить.",
+      "clearConfirmMessage_few": "Это удалит {{count}} строки из буфера; это действие нельзя отменить.",
+      "clearConfirmMessage_many": "Это удалит {{count}} строк из буфера; это действие нельзя отменить.",
+      "clearConfirmMessage_other": "Это удалит {{count}} строк из буфера; это действие нельзя отменить.",
+      "clearConfirmTitle": "Очистить консоль?",
       "clearConsole": "Очистить консоль",
       "closeFind": "Закрыть поиск",
       "collapse": "Свернуть консоль",
@@ -173,6 +217,10 @@
     "cancelInstallConfirmMessage": "Это уничтожит застрявший контейнер установщика и остановит сервер, чтобы вы могли переустановить его. Файлы частичной установки сохраняются. Вы уверены?",
     "cancelInstallConfirmTitle": "Отменить установку?",
     "cancelling": "Отмена…",
+    "disabled": {
+      "busy": "Другое действие ещё выполняется",
+      "status": "{{action}} недоступно, пока сервер {{status}}"
+    },
     "installCancelled": "Установка отменена",
     "keepInstalling": "Продолжайте установку",
     "kill": "Принудительно остановить",
@@ -226,7 +274,14 @@
       "additionalBindings": "Дополнительные привязки портов",
       "additionalBindingsHint": "Сопоставьте дополнительные распределения с контейнерными портами.",
       "allocation": "Выделенный порт",
+      "allocationCreated": "Выделение {{ports}} создано",
+      "allocationIp": "IP-адрес",
+      "allocationPorts": "Порты",
+      "createAllocation": "Создать выделение",
       "createAllocationsHint": "Создание распределений — обновление при возврате",
+      "creatingAllocation": "Создание…",
+      "inlineAllocationHint": "Создайте выделение IP/порта на этом узле, не покидая форму.",
+      "inlineAllocationTitle": "Новое выделение",
       "interface": "Интерфейс",
       "interfaceOption_one": "{{network}} — {{cidr}} (доступно {{count}})",
       "interfaceOption_few": "{{network}} — {{cidr}} (доступно {{count}})",
@@ -235,6 +290,7 @@
       "ipAllocation": "Распределение IP",
       "macvlanTitle": "Конфигурация Маквлана",
       "newAllocation": "Новый",
+      "nextFreePortHint": "Следующий свободный порт на этом узле: {{port}}",
       "noInterfaces": "Для этого узла не настроены интерфейсы macvlan.",
       "portPlaceholder": "Порт",
       "primaryAllocation": "Первичное распределение",
@@ -281,6 +337,8 @@
     "allocationRemoved": "Распределение удалено",
     "cloningNotice": "Невозможно начать, пока копирование не завершится.",
     "copiedAddress": "Скопированный адрес",
+    "copyAddressHint": "Копировать {{address}} в буфер обмена",
+    "copyAddressLabel": "Копировать адрес {{address}}",
     "copyFailed": "Не удалось скопировать",
     "crashCountReset": "Сброс счетчика сбоев",
     "databaseCreated": "База данных создана",
@@ -346,7 +404,8 @@
   "hints": {
     "actions": "действия",
     "navigate": "перемещаться",
-    "open": "открыть"
+    "open": "открыть",
+    "select": "выбрать"
   },
   "hostNetwork": {
     "confirm": "Включить и начать",

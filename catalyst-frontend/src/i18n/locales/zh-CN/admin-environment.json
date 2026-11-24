@@ -1,8 +1,12 @@
 {
   "actions": {
+    "changedCount_other": "{{count}} 项更改未保存",
+    "noChanges": "没有未保存的更改",
     "refresh": "刷新",
     "reset": "恢复 .env 值",
-    "save": "保存"
+    "save": "保存",
+    "saveAll": "保存全部更改",
+    "savingAll": "保存中…"
   },
   "badge": {
     "envOnly": "仅 .env",
@@ -31,6 +35,8 @@
   "loadError": "无法加载环境变量。",
   "restart": {
     "button": "重启面板",
+    "confirmMessage": "面板重启期间，所有用户将断开连接几秒钟。",
+    "confirmTitle": "重启面板？",
     "description": "部分更改需要重启后才会生效。请立即重启以应用更改。",
     "later": "稍后",
     "pendingKeys": "等待应用：{{keys}}",
@@ -52,7 +58,8 @@
   "title": "环境变量",
   "toast": {
     "reset": "{{key}} 已恢复为环境变量或默认值",
-    "saved": "{{key}} 已保存"
+    "saved": "{{key}} 已保存",
+    "savedAll_other": "已保存 {{count}} 项设置"
   },
   "value": {
     "configured": "已配置",

@@ -46,13 +46,6 @@
     {
       "file": "src/components/files/FileManager.tsx",
       "type": "hardcoded",
-      "text": "# New file",
-      "count": 1,
-      "reason": "Code sample: default contents seeded into a new file."
-    },
-    {
-      "file": "src/components/files/FileManager.tsx",
-      "type": "hardcoded",
       "text": "MB",
       "count": 2,
       "reason": "Unit symbol rendered next to a number."

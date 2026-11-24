@@ -33,10 +33,20 @@
     "working": "Working…",
     "yes": "Yes"
   },
+  "activity": {
+    "byActor": "{{actor}}"
+  },
   "apiKeys": {
     "created": "API key created successfully",
     "revoked": "API key revoked successfully",
     "updated": "API key updated successfully"
+  },
+  "bulk": {
+    "actions": {
+      "restart": "Restart",
+      "start": "Start",
+      "stop": "Stop"
+    }
   },
   "combobox": {
     "noMatches": "No matches found.",

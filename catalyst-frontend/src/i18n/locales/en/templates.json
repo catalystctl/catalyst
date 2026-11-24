@@ -25,16 +25,19 @@
     "importAllButton": "Import All (~249 eggs)",
     "importAllEggs": "Import All Pterodactyl Eggs",
     "importAllEggsHint": "Download and import all templates from the pterodactyl/game-eggs repository. Nests are created automatically from egg categories.",
+    "importAndCreate": "Import & create",
     "importComplete": "Import complete",
     "importDescription": "Import from a URL, upload a local file, or import all Pterodactyl eggs.",
     "importedCount": "{{total}} imported",
     "importedTemplates_one": "Imported {{count}} template",
     "importedTemplates_other": "Imported {{count}} templates",
     "importingAll": "Importing all eggs…",
+    "importReady": "This egg is complete — create it now, or review the fields below.",
     "importTitle": "Import template",
     "invalidJson": "Invalid template JSON",
     "invalidUrl": "Failed to parse — the URL must return valid JSON or YAML.",
     "moreErrors": "+{{total}} more",
+    "nestNamePlaceholder": "New nest name",
     "nestsHint": "Nests are categories that help you organize templates. For example, you might have a “Minecraft” nest for all Minecraft-related templates, or a “Source Engine” nest for Counter-Strike and Garry’s Mod templates.",
     "newTemplate": "New Template",
     "noNests": "No nests exist yet.",
@@ -242,7 +245,10 @@
   },
   "variables": {
     "default": "Default:",
+    "edit": "Edit variable value",
     "empty": "No variables defined.",
-    "rules": "Rules:"
+    "rules": "Rules:",
+    "saved": "Variable saved",
+    "value": "Value"
   }
 }

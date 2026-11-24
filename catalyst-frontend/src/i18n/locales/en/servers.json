@@ -1,4 +1,29 @@
 {
+  "bulk": {
+    "actions": {
+      "restart": "Restart",
+      "stop": "Stop"
+    },
+    "clear": "Clear selection",
+    "done_one": "{{action}} sent to {{count}} server",
+    "done_other": "{{action}} sent to {{count}} servers",
+    "noEligible": "No selected server accepts {{action}}",
+    "partial_one": "{{count}} server acted on, {{failed}} failed",
+    "partial_other": "{{count}} servers acted on, {{failed}} failed",
+    "regionLabel": "Bulk server actions",
+    "restartConfirmMessage_one": "This restarts {{count}} selected server and disconnects its players. Are you sure?",
+    "restartConfirmMessage_other": "This restarts {{count}} selected servers and disconnects their players. Are you sure?",
+    "restartConfirmTitle_one": "Restart {{count}} server?",
+    "restartConfirmTitle_other": "Restart {{count}} servers?",
+    "selectAll": "Select all servers in this list",
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "selectServer": "Select {{name}}",
+    "stopConfirmMessage_one": "This gracefully stops {{count}} selected server and disconnects its players. Are you sure?",
+    "stopConfirmMessage_other": "This gracefully stops {{count}} selected servers and disconnects their players. Are you sure?",
+    "stopConfirmTitle_one": "Stop {{count}} server?",
+    "stopConfirmTitle_other": "Stop {{count}} servers?"
+  },
   "card": {
     "console": "Console",
     "manage": "Manage"
@@ -143,6 +168,9 @@
     },
     "tab": {
       "bufferSize": "Buffer size",
+      "clearConfirmMessage_one": "This discards {{count}} line currently in the buffer and cannot be undone.",
+      "clearConfirmMessage_other": "This discards {{count}} lines currently in the buffer and cannot be undone.",
+      "clearConfirmTitle": "Clear console?",
       "clearConsole": "Clear console",
       "closeFind": "Close find",
       "collapse": "Collapse console",
@@ -171,6 +199,10 @@
     "cancelInstallConfirmMessage": "This will kill the stuck installer container and reset the server to stopped so you can reinstall. Partial install files are kept. Are you sure?",
     "cancelInstallConfirmTitle": "Cancel install?",
     "cancelling": "Cancelling…",
+    "disabled": {
+      "busy": "Another action is still running",
+      "status": "{{action}} is not available while the server is {{status}}"
+    },
     "installCancelled": "Install cancelled",
     "keepInstalling": "Keep installing",
     "kill": "Kill",
@@ -224,13 +256,21 @@
       "additionalBindings": "Additional Port Bindings",
       "additionalBindingsHint": "Map additional allocations to container ports.",
       "allocation": "Allocation",
+      "allocationCreated": "Allocation {{ports}} created",
+      "allocationIp": "IP address",
+      "allocationPorts": "Ports",
+      "createAllocation": "Create allocation",
       "createAllocationsHint": "Create allocations — refreshes on return",
+      "creatingAllocation": "Creating…",
+      "inlineAllocationHint": "Create an IP/port allocation on this node without leaving this form.",
+      "inlineAllocationTitle": "New allocation",
       "interface": "Interface",
       "interfaceOption_one": "{{network}} — {{cidr}} ({{count}} available)",
       "interfaceOption_other": "{{network}} — {{cidr}} ({{count}} available)",
       "ipAllocation": "IP Allocation",
       "macvlanTitle": "Macvlan Configuration",
       "newAllocation": "New",
+      "nextFreePortHint": "Next free port on this node: {{port}}",
       "noInterfaces": "No macvlan interfaces configured for this node.",
       "portPlaceholder": "Port",
       "primaryAllocation": "Primary Allocation",
@@ -277,6 +317,8 @@
     "allocationRemoved": "Allocation removed",
     "cloningNotice": "Cannot start until copy completes.",
     "copiedAddress": "Copied address",
+    "copyAddressHint": "Copy {{address}} to the clipboard",
+    "copyAddressLabel": "Copy address {{address}}",
     "copyFailed": "Failed to copy",
     "crashCountReset": "Crash count reset",
     "databaseCreated": "Database created",
@@ -342,7 +384,8 @@
   "hints": {
     "actions": "actions",
     "navigate": "navigate",
-    "open": "open"
+    "open": "open",
+    "select": "select"
   },
   "hostNetwork": {
     "confirm": "Enable and start",

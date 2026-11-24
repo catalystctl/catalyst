@@ -1,4 +1,22 @@
 {
+  "bulk": {
+    "actions": {
+      "restart": "重启",
+      "stop": "停止"
+    },
+    "clear": "清除选择",
+    "done_other": "已向 {{count}} 个服务器发送{{action}}",
+    "noEligible": "所选服务器均不支持{{action}}",
+    "partial_other": "{{count}} 个服务器已执行，{{failed}} 个失败",
+    "regionLabel": "批量服务器操作",
+    "restartConfirmMessage_other": "这将重启 {{count}} 个所选服务器并断开其玩家连接。确定吗？",
+    "restartConfirmTitle_other": "重启 {{count}} 个服务器？",
+    "selectAll": "选择此列表中的所有服务器",
+    "selected_other": "已选 {{count}} 个",
+    "selectServer": "选择{{name}}",
+    "stopConfirmMessage_other": "这将正常停止 {{count}} 个所选服务器并断开其玩家连接。确定吗？",
+    "stopConfirmTitle_other": "停止 {{count}} 个服务器？"
+  },
   "card": {
     "console": "控制台",
     "manage": "管理"
@@ -142,6 +160,8 @@
     },
     "tab": {
       "bufferSize": "缓冲区大小",
+      "clearConfirmMessage_other": "这将丢弃缓冲区中的 {{count}} 行内容，且无法撤销。",
+      "clearConfirmTitle": "清空控制台？",
       "clearConsole": "清空控制台",
       "closeFind": "关闭查找",
       "collapse": "收起控制台",
@@ -170,6 +190,10 @@
     "cancelInstallConfirmMessage": "此操作将强制停止卡住的安装容器，并将服务器重置为已停止状态，以便重新安装。部分安装文件会保留。确定要继续吗？",
     "cancelInstallConfirmTitle": "取消安装？",
     "cancelling": "取消中…",
+    "disabled": {
+      "busy": "另一个操作仍在运行",
+      "status": "服务器处于{{status}}状态时无法{{action}}"
+    },
     "installCancelled": "安装已取消",
     "keepInstalling": "继续安装",
     "kill": "强制停止",
@@ -223,12 +247,20 @@
       "additionalBindings": "附加端口绑定",
       "additionalBindingsHint": "将附加分配映射到容器端口。",
       "allocation": "分配",
+      "allocationCreated": "分配 {{ports}} 已创建",
+      "allocationIp": "IP 地址",
+      "allocationPorts": "端口",
+      "createAllocation": "创建分配",
       "createAllocationsHint": "创建分配——返回后自动刷新",
+      "creatingAllocation": "创建中…",
+      "inlineAllocationHint": "无需离开此表单即可在此节点上创建 IP/端口分配。",
+      "inlineAllocationTitle": "新建分配",
       "interface": "接口",
       "interfaceOption_other": "{{network}} — {{cidr}}（{{count}} 个可用）",
       "ipAllocation": "IP 分配",
       "macvlanTitle": "Macvlan 配置",
       "newAllocation": "新建",
+      "nextFreePortHint": "此节点的下一个空闲端口：{{port}}",
       "noInterfaces": "此节点未配置 macvlan 接口。",
       "portPlaceholder": "端口",
       "primaryAllocation": "主分配",
@@ -275,6 +307,8 @@
     "allocationRemoved": "分配已移除",
     "cloningNotice": "复制完成前无法启动。",
     "copiedAddress": "已复制地址",
+    "copyAddressHint": "将{{address}}复制到剪贴板",
+    "copyAddressLabel": "复制地址{{address}}",
     "copyFailed": "复制失败",
     "crashCountReset": "崩溃次数已重置",
     "databaseCreated": "数据库已创建",
@@ -340,7 +374,8 @@
   "hints": {
     "actions": "操作",
     "navigate": "导航",
-    "open": "打开"
+    "open": "打开",
+    "select": "选择"
   },
   "hostNetwork": {
     "confirm": "启用并启动",

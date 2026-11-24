@@ -57,6 +57,7 @@
   "nodeAssignments": {
     "allNodes": "Tous les nœuds (*)",
     "allNodesDescription": "Accès à tous les nœuds actuels et futurs",
+    "createModeNote": "Enregistré une fois le compte créé.",
     "defaultLabel": "Accès aux nœuds",
     "dialog": {
       "description": "Choisissez quand l’accès à {{name}} expire.",
@@ -73,6 +74,7 @@
     "selectIndividualNodes": "Sélectionner des nœuds individuellement",
     "setExpiration": "Définir l’expiration",
     "toast": {
+      "assignmentNotFound": "Cette attribution n’existe plus.",
       "expirationUpdated": "Expiration mise à jour",
       "nodeAssigned": "Nœud attribué",
       "nodeUnassigned": "Attribution du nœud retirée",

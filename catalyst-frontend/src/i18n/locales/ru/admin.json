@@ -57,6 +57,7 @@
   "nodeAssignments": {
     "allNodes": "Все узлы (*)",
     "allNodesDescription": "Доступ ко всем текущим и будущим узлам",
+    "createModeNote": "Сохраняется после создания учётной записи.",
     "defaultLabel": "Доступ к узлу",
     "dialog": {
       "description": "Выберите, когда истечет срок действия доступа к {{name}}.",
@@ -73,6 +74,7 @@
     "selectIndividualNodes": "Выберите отдельные узлы",
     "setExpiration": "Установить срок действия",
     "toast": {
+      "assignmentNotFound": "Это назначение больше не существует.",
       "expirationUpdated": "Срок действия обновлен",
       "nodeAssigned": "Узел назначен",
       "nodeUnassigned": "Узел не назначен",

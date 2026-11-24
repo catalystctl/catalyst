@@ -1,12 +1,14 @@
 {
   "breadcrumbs": {
     "activity": "活动",
+    "allocations": "分配",
     "backups": "备份",
     "console": "控制台",
     "files": "文件",
     "invites": "邀请",
     "metrics": "监控指标",
     "nav": "面包屑导航",
+    "nests": "分类",
     "network": "网络",
     "plugin": "插件",
     "settings": "设置",
@@ -39,16 +41,20 @@
   },
   "search": {
     "all": "全部",
+    "apiKeyDisabled": "已禁用",
+    "apiKeyEnabled": "已启用",
     "categories": {
       "account": "账号",
       "actions": "快捷操作",
       "admin": "管理",
       "nodes": "节点",
       "pages": "页面",
+      "plugins": "插件",
       "servers": "服务器",
       "serverTabs": "服务器标签页",
       "settings": "设置与配置",
-      "templates": "模板"
+      "templates": "模板",
+      "usersRoles": "用户与角色"
     },
     "close": "关闭搜索",
     "hints": {
@@ -229,13 +235,27 @@
     "noResults": "未找到结果",
     "noResultsHint": "请尝试其他关键词或清除筛选条件",
     "placeholder": "搜索页面、设置、服务器、节点…",
+    "pluginTab": "插件标签页",
     "quickActions": {
+      "createBackup": {
+        "description": "在更改前快照服务器文件",
+        "label": "创建新备份"
+      },
       "createServer": {
         "description": "从模板部署新的游戏服务器",
         "label": "创建新服务器"
+      },
+      "createUser": {
+        "description": "添加面板账户",
+        "label": "新建用户"
+      },
+      "restartServer": {
+        "description": "重启正在运行的游戏服务器",
+        "label": "重启服务器"
       }
     },
     "resultCount_other": "{{count}} 个结果",
+    "roleDescription": "权限组",
     "serverTabs": {
       "admin": {
         "description": "所有者转移、暂停和管理操作",

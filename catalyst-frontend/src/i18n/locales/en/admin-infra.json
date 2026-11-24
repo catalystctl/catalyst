@@ -1,5 +1,6 @@
 {
   "allocations": {
+    "addressCopied": "Copied",
     "assigned": "Assigned",
     "assignedCannotSelect": "Assigned allocations cannot be deleted",
     "assignedIps": "Assigned IPs ({{value}})",
@@ -11,6 +12,7 @@
       "warning": "Assigned allocations cannot be deleted and are not selectable. This cannot be undone."
     },
     "clearSelection": "Clear",
+    "copyAddress": "Copy {{address}}",
     "createAllocations": "Create Allocations",
     "createPool": {
       "autofill": "Autofill /24",
@@ -37,13 +39,17 @@
       "ipFormat": "<strong>IP format:</strong> Single IP (192.168.1.100), multiple IPs (192.168.1.100, 192.168.1.101), or CIDR (192.168.1.0/24)",
       "ipLabel": "IP Address(es)",
       "ipPlaceholder": "192.168.1.100, 2001:db8::1, or 192.168.1.0/24",
+      "nextFree_one": "Next {{count}}",
+      "nextFree_other": "Next {{count}}",
+      "nextFreeLabel": "Next free ports",
       "portFormat": "<strong>Port format:</strong> Single port (25565), range (25565-25664), or multiple (25565, 25566, 25567)",
       "portsLabel": "Port(s)",
       "portsPlaceholder": "25565-25664 or 25565, 25566",
-      "quickFill": "Quick fill: Use node IP + ports 25565-25664",
       "submit": "Create allocations",
       "title": "Create port allocations"
     },
+    "deleteConfirm": "Delete the allocation {{address}}? Ports are freed immediately and cannot be restored.",
+    "deleteTitle": "Delete allocation",
     "description": "Manage port bindings and IP pools for {{node}}",
     "empty": {
       "createFirst": "Create your first allocations",
@@ -160,6 +166,7 @@
   },
   "migration": {
     "actions": {
+      "cancelJob": "Cancel migration",
       "pause": "Pause",
       "resume": "Resume"
     },
@@ -180,6 +187,8 @@
       "slotsFull_other": "{{count}} servers have all backup slots in use",
       "slotsFullDescription": "The migration will automatically increase the backup limit by 1 to make room for a migration backup."
     },
+    "cancelConfirm": "The job stops where it is and cannot be resumed from that point.",
+    "cancelTitle": "Cancel this migration",
     "connect": {
       "apiKey": "Application API Key",
       "clientApiKey": "Client API Key",
@@ -404,6 +413,7 @@
     "locations": "Locations",
     "manage": "Manage",
     "resultCount": "{{shown}} of {{total}}",
+    "searchLabel": "Search nodes",
     "searchPlaceholder": "Search nodes by name or hostname…",
     "selectAll": "Select all",
     "selectAllInSection": "Select all in section",

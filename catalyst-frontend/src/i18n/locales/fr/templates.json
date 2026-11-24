@@ -26,6 +26,7 @@
     "importAllButton": "Tout importer (~249 œufs)",
     "importAllEggs": "Importer tous les œufs Pterodactyl",
     "importAllEggsHint": "Téléchargez et importez tous les modèles du dépôt pterodactyl/game-eggs. Les nids sont créés automatiquement à partir des catégories d’œufs.",
+    "importAndCreate": "Importer et créer",
     "importComplete": "Importation terminée",
     "importDescription": "Importez depuis une URL, téléversez un fichier local ou importez tous les œufs Pterodactyl.",
     "importedCount": "{{total}} importés",
@@ -33,10 +34,12 @@
     "importedTemplates_many": "{{count}} modèles importés",
     "importedTemplates_other": "{{count}} modèles importés",
     "importingAll": "Importation de tous les œufs…",
+    "importReady": "Cet egg est complet — créez-le maintenant ou vérifiez les champs ci-dessous.",
     "importTitle": "Importer un modèle",
     "invalidJson": "JSON de modèle non valide",
     "invalidUrl": "Échec de l’analyse — l’URL doit renvoyer du JSON ou du YAML valide.",
     "moreErrors": "+{{total}} autres",
+    "nestNamePlaceholder": "Nom du nouveau nid",
     "nestsHint": "Les nids sont des catégories qui vous aident à organiser les modèles. Par exemple, vous pouvez avoir un nid « Minecraft » pour tous les modèles liés à Minecraft, ou un nid « Source Engine » pour les modèles Counter-Strike et Garry’s Mod.",
     "newTemplate": "Nouveau modèle",
     "noNests": "Aucun nid n’existe encore.",
@@ -250,7 +253,10 @@
   },
   "variables": {
     "default": "Par défaut :",
+    "edit": "Modifier la valeur de la variable",
     "empty": "Aucune variable définie.",
-    "rules": "Règles :"
+    "rules": "Règles :",
+    "saved": "Variable enregistrée",
+    "value": "Valeur"
   }
 }

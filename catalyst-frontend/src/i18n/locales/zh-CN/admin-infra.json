@@ -1,5 +1,6 @@
 {
   "allocations": {
+    "addressCopied": "已复制",
     "assigned": "已分配",
     "assignedCannotSelect": "已分配的分配无法删除",
     "assignedIps": "已分配 IP（{{value}}）",
@@ -10,6 +11,7 @@
       "warning": "已分配的分配无法删除且不可选择。此操作无法撤销。"
     },
     "clearSelection": "清除",
+    "copyAddress": "复制{{address}}",
     "createAllocations": "创建分配",
     "createPool": {
       "autofill": "自动填充 /24",
@@ -36,13 +38,16 @@
       "ipFormat": "<strong>IP 格式：</strong>单个 IP (192.168.1.100)、多个 IP (192.168.1.100, 192.168.1.101)，或 CIDR (192.168.1.0/24)",
       "ipLabel": "IP 地址",
       "ipPlaceholder": "192.168.1.100, 2001:db8::1 或 192.168.1.0/24",
+      "nextFree_other": "接下来 {{count}} 个",
+      "nextFreeLabel": "下一个空闲端口",
       "portFormat": "<strong>端口格式：</strong>单个端口 (25565)、端口范围 (25565-25664) 或多个端口 (25565, 25566, 25567)",
       "portsLabel": "端口",
       "portsPlaceholder": "25565-25664 或 25565, 25566",
-      "quickFill": "快速填充：使用节点 IP + 端口 25565-25664",
       "submit": "创建分配",
       "title": "创建端口分配"
     },
+    "deleteConfirm": "删除分配 {{address}}？端口将立即释放且无法恢复。",
+    "deleteTitle": "删除分配",
     "description": "管理 {{node}} 的端口绑定和 IP 池",
     "empty": {
       "createFirst": "创建您的第一组分配",
@@ -155,6 +160,7 @@
   },
   "migration": {
     "actions": {
+      "cancelJob": "取消迁移",
       "pause": "暂停",
       "resume": "继续"
     },
@@ -173,6 +179,8 @@
       "slotsFull_other": "{{count}} 台服务器的备份槽位已全部占用",
       "slotsFullDescription": "迁移会自动将备份上限加 1，为迁移备份腾出空间。"
     },
+    "cancelConfirm": "任务将停在当前进度，且无法从该点继续。",
+    "cancelTitle": "取消此迁移",
     "connect": {
       "apiKey": "应用 API 密钥",
       "clientApiKey": "客户端 API 密钥",
@@ -396,6 +404,7 @@
     "locations": "位置",
     "manage": "管理",
     "resultCount": "{{shown}}/{{total}}",
+    "searchLabel": "搜索节点",
     "searchPlaceholder": "按名称或主机名搜索节点…",
     "selectAll": "全选",
     "selectAllInSection": "全选此分组",

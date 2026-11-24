@@ -1,8 +1,13 @@
 {
   "actions": {
+    "changedCount_one": "{{count}} change not saved",
+    "changedCount_other": "{{count}} changes not saved",
+    "noChanges": "No unsaved changes",
     "refresh": "Refresh",
     "reset": "Reset to .env",
-    "save": "Save"
+    "save": "Save",
+    "saveAll": "Save all changed",
+    "savingAll": "Saving…"
   },
   "badge": {
     "envOnly": ".env only",
@@ -31,6 +36,8 @@
   "loadError": "Could not load the environment variables.",
   "restart": {
     "button": "Restart panel",
+    "confirmMessage": "Everyone is disconnected for a few seconds while the panel restarts.",
+    "confirmTitle": "Restart the panel?",
     "description": "Some changes only take effect after a restart. Restart now to apply them.",
     "later": "Later",
     "pendingKeys": "Waiting on: {{keys}}",
@@ -52,7 +59,9 @@
   "title": "Environment",
   "toast": {
     "reset": "{{key}} reset to the environment or default value",
-    "saved": "{{key}} saved"
+    "saved": "{{key}} saved",
+    "savedAll_one": "Saved {{count}} setting",
+    "savedAll_other": "Saved {{count}} settings"
   },
   "value": {
     "configured": "Configured",

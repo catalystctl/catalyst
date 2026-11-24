@@ -1,5 +1,6 @@
 {
   "account": {
+    "changeAvatar": "Changer l’avatar",
     "fallbackName": "Utilisateur",
     "firstName": "Prénom",
     "joined": "Membre depuis le {{date}}",
@@ -103,6 +104,7 @@
     },
     "form": {
       "allMine": "Toutes mes autorisations",
+      "clearSelection": "Effacer",
       "expiration": "Expiration",
       "inheritCount_one": "{{count}} autorisation",
       "inheritCount_many": "{{count}} autorisations",
@@ -114,10 +116,12 @@
       "nameHint": "Un nom descriptif pour identifier cette clé API.",
       "namePlaceholder": "p. ex., intégration du système de facturation",
       "noneAvailable": "Aucune autorisation disponible",
+      "noPermissionsMatch": "Aucune permission ne correspond à votre recherche",
       "perMinute": "requêtes par minute",
       "permissions": "Autorisations",
       "rateLimit": "Limite de débit",
       "rateLimitHint": "Nombre maximal de requêtes autorisées par minute.",
+      "searchPermissions": "Rechercher des permissions",
       "selectAtLeastOne": "Sélectionnez au moins une autorisation ci-dessus",
       "selectedCount_one": "{{count}} autorisation sélectionnée",
       "selectedCount_many": "{{count}} autorisations sélectionnées",
@@ -136,6 +140,7 @@
     "row": {
       "agent": "Agent",
       "by": "par",
+      "copyId": "Copier l’ID de la clé",
       "created": "Créée :",
       "edit": "Modifier la clé",
       "expires": "Expiration :",
@@ -207,7 +212,8 @@
     "emptyTitle": "Aucun compte lié",
     "link": "Lier {{provider}}",
     "title": "Comptes liés",
-    "unlink": "Dissocier"
+    "unlink": "Dissocier",
+    "unlinkProvider": "Dissocier {{provider}}"
   },
   "never": "Jamais",
   "notAvailable": "N/A",

@@ -57,6 +57,7 @@
   "nodeAssignments": {
     "allNodes": "所有节点 (*)",
     "allNodesDescription": "可访问当前及未来的所有节点",
+    "createModeNote": "账户创建后保存。",
     "defaultLabel": "节点访问权限",
     "dialog": {
       "description": "选择对 {{name}} 的访问权限何时过期。",
@@ -73,6 +74,7 @@
     "selectIndividualNodes": "选择单个节点",
     "setExpiration": "设置过期时间",
     "toast": {
+      "assignmentNotFound": "该分配已不存在。",
       "expirationUpdated": "过期时间已更新",
       "nodeAssigned": "已分配节点",
       "nodeUnassigned": "已取消分配节点",

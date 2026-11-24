@@ -14,6 +14,9 @@
     "alertsOpen_other": "{{count}} alertes ouvertes",
     "allClear": "Tous les systèmes sont nominaux",
     "allClearDetail": "Aucun serveur hors service et aucune alerte non acquittée.",
+    "andMore_one": "et {{count}} de plus",
+    "andMore_many": "et {{count}} de plus",
+    "andMore_other": "et {{count}} de plus",
     "nodesOffline_one": "{{count}} nœud hors ligne",
     "nodesOffline_many": "{{count}} nœuds hors ligne",
     "nodesOffline_other": "{{count}} nœuds hors ligne",
@@ -40,6 +43,10 @@
   "pendingAlerts_one": "{{count}} alerte non acquittée",
   "pendingAlerts_many": "{{count}} alertes non acquittées",
   "pendingAlerts_other": "{{count}} alertes non acquittées",
+  "quickActions": {
+    "newServer": "Nouveau serveur",
+    "viewAlerts": "Voir les alertes"
+  },
   "resources": {
     "cpu": "CPU",
     "memory": "Mémoire"

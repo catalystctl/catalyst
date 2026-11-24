@@ -1,8 +1,14 @@
 {
   "actions": {
+    "changedCount_one": "{{count}} modification non enregistrée",
+    "changedCount_many": "{{count}} modifications non enregistrées",
+    "changedCount_other": "{{count}} modifications non enregistrées",
+    "noChanges": "Aucune modification non enregistrée",
     "refresh": "Actualiser",
     "reset": "Rétablir la valeur .env",
-    "save": "Enregistrer"
+    "save": "Enregistrer",
+    "saveAll": "Tout enregistrer",
+    "savingAll": "Enregistrement…"
   },
   "badge": {
     "envOnly": ".env uniquement",
@@ -31,6 +37,8 @@
   "loadError": "Impossible de charger les variables d'environnement.",
   "restart": {
     "button": "Redémarrer le panneau",
+    "confirmMessage": "Tout le monde est déconnecté pendant quelques secondes lors du redémarrage du panneau.",
+    "confirmTitle": "Redémarrer le panneau ?",
     "description": "Certaines modifications ne prennent effet qu'après un redémarrage. Redémarrez maintenant pour les appliquer.",
     "later": "Plus tard",
     "pendingKeys": "En attente : {{keys}}",
@@ -52,7 +60,10 @@
   "title": "Environnement",
   "toast": {
     "reset": "{{key}} rétablie à la valeur d'environnement ou par défaut",
-    "saved": "{{key}} enregistrée"
+    "saved": "{{key}} enregistrée",
+    "savedAll_one": "{{count}} paramètre enregistré",
+    "savedAll_many": "{{count}} paramètres enregistrés",
+    "savedAll_other": "{{count}} paramètres enregistrés"
   },
   "value": {
     "configured": "Configurée",

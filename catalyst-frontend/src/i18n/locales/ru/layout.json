@@ -1,12 +1,14 @@
 {
   "breadcrumbs": {
     "activity": "Активность",
+    "allocations": "Выделения",
     "backups": "Резервные копии",
     "console": "Консоль",
     "files": "Файлы",
     "invites": "Приглашения",
     "metrics": "Метрики",
     "nav": "Навигация",
+    "nests": "Категории",
     "network": "Сеть",
     "plugin": "Плагин",
     "settings": "Настройки",
@@ -39,16 +41,20 @@
   },
   "search": {
     "all": "Все",
+    "apiKeyDisabled": "Отключён",
+    "apiKeyEnabled": "Включён",
     "categories": {
       "account": "Учётная запись",
       "actions": "Быстрые действия",
       "admin": "Администрирование",
       "nodes": "Узлы",
       "pages": "Страницы",
+      "plugins": "Плагины",
       "servers": "Серверы",
       "serverTabs": "Вкладки сервера",
       "settings": "Настройки и конфигурация",
-      "templates": "Шаблоны"
+      "templates": "Шаблоны",
+      "usersRoles": "Пользователи и роли"
     },
     "close": "Закрыть поиск",
     "hints": {
@@ -229,16 +235,30 @@
     "noResults": "Результаты не найдены",
     "noResultsHint": "Попробуйте другие ключевые слова или очистите фильтр",
     "placeholder": "Поиск страниц, настроек, серверов, узлов…",
+    "pluginTab": "Вкладка плагина",
     "quickActions": {
+      "createBackup": {
+        "description": "Снимок файлов сервера перед изменением",
+        "label": "Создать резервную копию"
+      },
       "createServer": {
         "description": "Разверните новый игровой сервер из шаблона",
         "label": "Создать новый сервер"
+      },
+      "createUser": {
+        "description": "Добавить учётную запись панели",
+        "label": "Новый пользователь"
+      },
+      "restartServer": {
+        "description": "Перезапустить работающий игровой сервер",
+        "label": "Перезапустить сервер"
       }
     },
     "resultCount_one": "{{count}} результат",
     "resultCount_few": "{{count}} результата",
     "resultCount_many": "{{count}} результатов",
     "resultCount_other": "{{count}} результата",
+    "roleDescription": "Группа разрешений",
     "serverTabs": {
       "admin": {
         "description": "Передача владельца, приостановка и действия администратора",

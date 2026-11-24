@@ -1,5 +1,6 @@
 {
   "account": {
+    "changeAvatar": "Сменить аватар",
     "fallbackName": "Пользователь",
     "firstName": "Имя",
     "joined": "Присоединился {{date}}",
@@ -105,6 +106,7 @@
     },
     "form": {
       "allMine": "Все мои разрешения",
+      "clearSelection": "Очистить",
       "expiration": "Срок действия",
       "inheritCount_one": "{{count}} право",
       "inheritCount_few": "{{count}} права",
@@ -117,10 +119,12 @@
       "nameHint": "Описательное имя для идентификации этого ключа API.",
       "namePlaceholder": "например, интеграция биллинговой системы",
       "noneAvailable": "Нет доступных разрешений",
+      "noPermissionsMatch": "Нет разрешений, соответствующих запросу",
       "perMinute": "запросов в минуту",
       "permissions": "Права",
       "rateLimit": "Ограничение скорости",
       "rateLimitHint": "Максимальное количество запросов, разрешенных в минуту.",
+      "searchPermissions": "Поиск разрешений",
       "selectAtLeastOne": "Выберите хотя бы одно разрешение выше",
       "selectedCount_one": "Выбрано {{count}} разрешение",
       "selectedCount_few": "Выбрано {{count}} разрешения",
@@ -141,6 +145,7 @@
     "row": {
       "agent": "Агент",
       "by": "к",
+      "copyId": "Копировать ID ключа",
       "created": "Созданный:",
       "edit": "Редактировать ключ",
       "expires": "Срок действия истекает:",
@@ -215,7 +220,8 @@
     "emptyTitle": "Нет связанных аккаунтов",
     "link": "Ссылка {{provider}}",
     "title": "Связанные аккаунты",
-    "unlink": "Отсоединить"
+    "unlink": "Отсоединить",
+    "unlinkProvider": "Отвязать {{provider}}"
   },
   "never": "Никогда",
   "notAvailable": "Н/Д",

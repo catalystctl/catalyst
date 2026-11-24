@@ -1,5 +1,6 @@
 {
   "account": {
+    "changeAvatar": "更换头像",
     "fallbackName": "用户",
     "firstName": "名字",
     "joined": "加入于 {{date}}",
@@ -99,6 +100,7 @@
     },
     "form": {
       "allMine": "我的全部权限",
+      "clearSelection": "清除",
       "expiration": "有效期",
       "inheritCount_other": "{{count}} 项权限",
       "inherits": "密钥将继承您当前的所有权限（{{summary}}）",
@@ -108,10 +110,12 @@
       "nameHint": "用于标识此 API 密钥的描述性名称。",
       "namePlaceholder": "例如：账单系统集成",
       "noneAvailable": "没有可用的权限",
+      "noPermissionsMatch": "没有符合搜索的权限",
       "perMinute": "次请求 / 分钟",
       "permissions": "权限",
       "rateLimit": "速率限制",
       "rateLimitHint": "每分钟允许的最大请求数。",
+      "searchPermissions": "搜索权限",
       "selectAtLeastOne": "请在上方至少选择一项权限",
       "selectedCount_other": "已选择 {{count}} 项权限"
     },
@@ -126,6 +130,7 @@
     "row": {
       "agent": "Agent",
       "by": "由",
+      "copyId": "复制密钥 ID",
       "created": "创建时间：",
       "edit": "编辑密钥",
       "expires": "过期时间：",
@@ -191,7 +196,8 @@
     "emptyTitle": "暂无关联账号",
     "link": "关联 {{provider}}",
     "title": "关联账号",
-    "unlink": "取消关联"
+    "unlink": "取消关联",
+    "unlinkProvider": "解除关联 {{provider}}"
   },
   "never": "从不",
   "notAvailable": "无",

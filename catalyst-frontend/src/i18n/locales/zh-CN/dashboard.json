@@ -12,6 +12,7 @@
     "alertsOpen_other": "{{count}} 个未处理告警",
     "allClear": "一切正常",
     "allClearDetail": "没有停机的服务器，也没有未确认的告警。",
+    "andMore_other": "还有 {{count}} 条",
     "nodesOffline_other": "{{count}} 个节点离线",
     "title": "需要关注"
   },
@@ -34,6 +35,10 @@
     "serversRunning": "{{servers}} 台运行中"
   },
   "pendingAlerts_other": "{{count}} 条未确认告警",
+  "quickActions": {
+    "newServer": "新建服务器",
+    "viewAlerts": "查看警报"
+  },
   "resources": {
     "cpu": "CPU",
     "memory": "内存"

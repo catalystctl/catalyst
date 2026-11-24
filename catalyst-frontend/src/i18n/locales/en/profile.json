@@ -1,5 +1,6 @@
 {
   "account": {
+    "changeAvatar": "Change avatar",
     "fallbackName": "User",
     "firstName": "First name",
     "joined": "Joined {{date}}",
@@ -101,6 +102,7 @@
     },
     "form": {
       "allMine": "All my permissions",
+      "clearSelection": "Clear",
       "expiration": "Expiration",
       "inheritCount_one": "{{count}} permission",
       "inheritCount_other": "{{count}} permissions",
@@ -111,10 +113,12 @@
       "nameHint": "A descriptive name to identify this API key.",
       "namePlaceholder": "e.g., Billing System Integration",
       "noneAvailable": "No permissions available",
+      "noPermissionsMatch": "No permissions match your search",
       "perMinute": "requests per minute",
       "permissions": "Permissions",
       "rateLimit": "Rate Limit",
       "rateLimitHint": "Maximum requests allowed per minute.",
+      "searchPermissions": "Search permissions",
       "selectAtLeastOne": "Select at least one permission above",
       "selectedCount_one": "{{count}} permission selected",
       "selectedCount_other": "{{count}} permissions selected"
@@ -131,6 +135,7 @@
     "row": {
       "agent": "Agent",
       "by": "by",
+      "copyId": "Copy key ID",
       "created": "Created:",
       "edit": "Edit key",
       "expires": "Expires:",
@@ -199,7 +204,8 @@
     "emptyTitle": "No linked accounts",
     "link": "Link {{provider}}",
     "title": "Linked Accounts",
-    "unlink": "Unlink"
+    "unlink": "Unlink",
+    "unlinkProvider": "Unlink {{provider}}"
   },
   "never": "Never",
   "notAvailable": "N/A",

@@ -1,4 +1,36 @@
 {
+  "bulk": {
+    "actions": {
+      "restart": "Redémarrer",
+      "stop": "Arrêter"
+    },
+    "clear": "Effacer la sélection",
+    "done_one": "{{action}} envoyé à {{count}} serveur",
+    "done_many": "{{action}} envoyé à {{count}} serveurs",
+    "done_other": "{{action}} envoyé à {{count}} serveurs",
+    "noEligible": "Aucun serveur sélectionné n’accepte {{action}}",
+    "partial_one": "{{count}} serveur traité, {{failed}} en échec",
+    "partial_many": "{{count}} serveurs traités, {{failed}} en échec",
+    "partial_other": "{{count}} serveurs traités, {{failed}} en échec",
+    "regionLabel": "Actions groupées sur les serveurs",
+    "restartConfirmMessage_one": "Cela redémarre {{count}} serveur sélectionné et déconnecte ses joueurs. Êtes-vous sûr ?",
+    "restartConfirmMessage_many": "Cela redémarre {{count}} serveurs sélectionnés et déconnecte leurs joueurs. Êtes-vous sûr ?",
+    "restartConfirmMessage_other": "Cela redémarre {{count}} serveurs sélectionnés et déconnecte leurs joueurs. Êtes-vous sûr ?",
+    "restartConfirmTitle_one": "Redémarrer {{count}} serveur ?",
+    "restartConfirmTitle_many": "Redémarrer {{count}} serveurs ?",
+    "restartConfirmTitle_other": "Redémarrer {{count}} serveurs ?",
+    "selectAll": "Sélectionner tous les serveurs de cette liste",
+    "selected_one": "{{count}} sélectionné",
+    "selected_many": "{{count}} sélectionnés",
+    "selected_other": "{{count}} sélectionnés",
+    "selectServer": "Sélectionner {{name}}",
+    "stopConfirmMessage_one": "Cela arrête proprement {{count}} serveur sélectionné et déconnecte ses joueurs. Êtes-vous sûr ?",
+    "stopConfirmMessage_many": "Cela arrête proprement {{count}} serveurs sélectionnés et déconnecte leurs joueurs. Êtes-vous sûr ?",
+    "stopConfirmMessage_other": "Cela arrête proprement {{count}} serveurs sélectionnés et déconnecte leurs joueurs. Êtes-vous sûr ?",
+    "stopConfirmTitle_one": "Arrêter {{count}} serveur ?",
+    "stopConfirmTitle_many": "Arrêter {{count}} serveurs ?",
+    "stopConfirmTitle_other": "Arrêter {{count}} serveurs ?"
+  },
   "card": {
     "console": "Console",
     "manage": "Gérer"
@@ -144,6 +176,10 @@
     },
     "tab": {
       "bufferSize": "Taille du tampon",
+      "clearConfirmMessage_one": "Cela supprime {{count}} ligne actuellement dans le tampon et est irréversible.",
+      "clearConfirmMessage_many": "Cela supprime {{count}} lignes actuellement dans le tampon et est irréversible.",
+      "clearConfirmMessage_other": "Cela supprime {{count}} lignes actuellement dans le tampon et est irréversible.",
+      "clearConfirmTitle": "Effacer la console ?",
       "clearConsole": "Effacer la console",
       "closeFind": "Fermer la recherche",
       "collapse": "Réduire la console",
@@ -172,6 +208,10 @@
     "cancelInstallConfirmMessage": "Cette action arrêtera de force le conteneur d’installation bloqué et remettra le serveur à l’état arrêté pour permettre une réinstallation. Les fichiers d’installation partiels sont conservés. Êtes-vous sûr ?",
     "cancelInstallConfirmTitle": "Annuler l’installation ?",
     "cancelling": "Annulation…",
+    "disabled": {
+      "busy": "Une autre action est encore en cours",
+      "status": "{{action}} n’est pas disponible tant que le serveur est {{status}}"
+    },
     "installCancelled": "Installation annulée",
     "keepInstalling": "Poursuivre l’installation",
     "kill": "Arrêter de force",
@@ -225,7 +265,14 @@
       "additionalBindings": "Liaisons de ports supplémentaires",
       "additionalBindingsHint": "Associez des allocations supplémentaires à des ports du conteneur.",
       "allocation": "Allocation",
+      "allocationCreated": "Allocation {{ports}} créée",
+      "allocationIp": "Adresse IP",
+      "allocationPorts": "Ports",
+      "createAllocation": "Créer l’allocation",
       "createAllocationsHint": "Créer des allocations — actualisation au retour",
+      "creatingAllocation": "Création…",
+      "inlineAllocationHint": "Créez une allocation IP/port sur ce nœud sans quitter ce formulaire.",
+      "inlineAllocationTitle": "Nouvelle allocation",
       "interface": "Interface",
       "interfaceOption_one": "{{network}} — {{cidr}} ({{count}} disponible)",
       "interfaceOption_many": "{{network}} — {{cidr}} ({{count}} disponibles)",
@@ -233,6 +280,7 @@
       "ipAllocation": "Allocation IP",
       "macvlanTitle": "Configuration Macvlan",
       "newAllocation": "Nouvelle",
+      "nextFreePortHint": "Prochain port libre sur ce nœud : {{port}}",
       "noInterfaces": "Aucune interface macvlan configurée pour ce nœud.",
       "portPlaceholder": "Port",
       "primaryAllocation": "Allocation principale",
@@ -279,6 +327,8 @@
     "allocationRemoved": "Allocation retirée",
     "cloningNotice": "Impossible de démarrer avant la fin de la copie.",
     "copiedAddress": "Adresse copiée",
+    "copyAddressHint": "Copier {{address}} dans le presse-papiers",
+    "copyAddressLabel": "Copier l’adresse {{address}}",
     "copyFailed": "Échec de la copie",
     "crashCountReset": "Compteur de plantages réinitialisé",
     "databaseCreated": "Base de données créée",
@@ -344,7 +394,8 @@
   "hints": {
     "actions": "actions",
     "navigate": "naviguer",
-    "open": "ouvrir"
+    "open": "ouvrir",
+    "select": "sélectionner"
   },
   "hostNetwork": {
     "confirm": "Activer et démarrer",

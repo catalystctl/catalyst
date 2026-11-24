@@ -24,15 +24,18 @@
     "importAllButton": "全部导入（约 249 个 egg）",
     "importAllEggs": "导入所有 Pterodactyl Egg",
     "importAllEggsHint": "从 pterodactyl/game-eggs 仓库下载并导入所有模板。Nest 会根据 egg 分类自动创建。",
+    "importAndCreate": "导入并创建",
     "importComplete": "导入完成",
     "importDescription": "从 URL 导入、上传本地文件，或导入所有 Pterodactyl egg。",
     "importedCount": "已导入 {{total}} 个",
     "importedTemplates_other": "已导入 {{count}} 个模板",
     "importingAll": "正在导入所有 egg…",
+    "importReady": "此 egg 已完整——可立即创建，或检查下方字段。",
     "importTitle": "导入模板",
     "invalidJson": "模板 JSON 无效",
     "invalidUrl": "解析失败——该 URL 必须返回有效的 JSON 或 YAML。",
     "moreErrors": "另有 {{total}} 个错误",
+    "nestNamePlaceholder": "新分类名称",
     "nestsHint": "Nest 是用于整理模板的分类。例如，可以创建一个“Minecraft”Nest 存放所有与 Minecraft 相关的模板，或创建一个“Source Engine”Nest 存放 Counter-Strike 和 Garry's Mod 模板。",
     "newTemplate": "新建模板",
     "noNests": "尚无任何 Nest。",
@@ -234,7 +237,10 @@
   },
   "variables": {
     "default": "默认值：",
+    "edit": "编辑变量值",
     "empty": "未定义变量。",
-    "rules": "规则："
+    "rules": "规则：",
+    "saved": "变量已保存",
+    "value": "值"
   }
 }

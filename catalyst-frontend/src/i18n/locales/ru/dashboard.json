@@ -15,6 +15,10 @@
     "alertsOpen_other": "{{count}} активных предупреждения",
     "allClear": "Всё работает",
     "allClearDetail": "Нет отключённых серверов и непросмотренных предупреждений.",
+    "andMore_one": "и ещё {{count}}",
+    "andMore_few": "и ещё {{count}}",
+    "andMore_many": "и ещё {{count}}",
+    "andMore_other": "и ещё {{count}}",
     "nodesOffline_one": "{{count}} узел не в сети",
     "nodesOffline_few": "{{count}} узла не в сети",
     "nodesOffline_many": "{{count}} узлов не в сети",
@@ -43,6 +47,10 @@
   "pendingAlerts_few": "{{count}} непросмотренных предупреждения",
   "pendingAlerts_many": "{{count}} непросмотренных предупреждений",
   "pendingAlerts_other": "{{count}} непросмотренных предупреждения",
+  "quickActions": {
+    "newServer": "Новый сервер",
+    "viewAlerts": "Просмотр оповещений"
+  },
   "resources": {
     "cpu": "Процессор",
     "memory": "Память"

@@ -57,6 +57,7 @@
   "nodeAssignments": {
     "allNodes": "All Nodes (*)",
     "allNodesDescription": "Access to all current and future nodes",
+    "createModeNote": "Saved once the account is created.",
     "defaultLabel": "Node Access",
     "dialog": {
       "description": "Choose when access to {{name}} expires.",
@@ -73,6 +74,7 @@
     "selectIndividualNodes": "Select individual nodes",
     "setExpiration": "Set Expiration",
     "toast": {
+      "assignmentNotFound": "That assignment no longer exists.",
       "expirationUpdated": "Expiration updated",
       "nodeAssigned": "Node assigned",
       "nodeUnassigned": "Node unassigned",

@@ -13,6 +13,8 @@
     "alertsOpen_other": "{{count}} open alerts",
     "allClear": "All systems nominal",
     "allClearDetail": "No servers down and no unacknowledged alerts.",
+    "andMore_one": "and {{count}} more",
+    "andMore_other": "and {{count}} more",
     "nodesOffline_one": "{{count}} node offline",
     "nodesOffline_other": "{{count}} nodes offline",
     "title": "Needs attention"
@@ -37,6 +39,10 @@
   },
   "pendingAlerts_one": "{{count}} unacknowledged alert",
   "pendingAlerts_other": "{{count}} unacknowledged alerts",
+  "quickActions": {
+    "newServer": "New server",
+    "viewAlerts": "View alerts"
+  },
   "resources": {
     "cpu": "CPU",
     "memory": "Memory"
