@@ -11,7 +11,12 @@
  *   server_created, server_deleted
  *   node_created, node_deleted
  *   template_created, template_deleted, template_updated
- *   alert_created, alert_resolved, alert_deleted
+ *   alert_created, alert_resolved
+ *
+ * `alert_deleted` was allowlisted here for years but never emitted: there is no
+ * alert-instance delete endpoint (only rules can be deleted, and those are
+ * `alert_rule_deleted`). It was pruned from this list and from the frontend
+ * mirror in the 2026-11-24 realtime audit (C8); the FE branch went with it.
  */
 import type { FastifyInstance } from 'fastify';
 import type { WebSocketGateway } from '../websocket/gateway';
@@ -34,7 +39,7 @@ export const ADMIN_EVENT_TYPES = [
   'server_suspended', 'server_unsuspended',
   'node_created', 'node_deleted', 'node_updated',
   'template_created', 'template_deleted', 'template_updated',
-  'alert_created', 'alert_resolved', 'alert_deleted',
+  'alert_created', 'alert_resolved',
   'alert_rule_created', 'alert_rule_deleted', 'alert_rule_updated',
   'role_created', 'role_deleted', 'role_updated',
   'api_key_created', 'api_key_updated', 'api_key_deleted',

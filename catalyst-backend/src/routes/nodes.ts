@@ -2138,6 +2138,121 @@ export async function nodeRoutes(app: FastifyInstance) {
 		},
 	);
 
+	// Update a node assignment's expiry in place
+	//
+	// Expiry used to be "changed" by deleting the assignment and re-creating it,
+	// which lost `assignedAt`/`assignedBy` and raced with concurrent readers.
+	// This route edits the single row: `expiresAt: null` clears the expiry.
+	app.patch(
+		"/:nodeId/assignments/:assignmentId",
+		{
+			schema: {
+				summary: "Update assignment expiry",
+				description: "Set or clear the expiry of an existing node assignment.",
+				tags: ["Nodes"],
+				params: { type: "object", required: ["nodeId", "assignmentId"], properties: { nodeId: { type: "string" }, assignmentId: { type: "string" } } },
+				body: { type: "object", properties: { expiresAt: { type: ["string", "null"] } } },
+				response: { 200: { type: "object", additionalProperties: true } },
+			},
+			onRequest: [app.authenticate],
+		},
+		async (request: FastifyRequest, reply: FastifyReply) => {
+			if (!ensurePermission(request, reply, "node.assign")) return;
+
+			const { nodeId, assignmentId } = request.params as {
+				nodeId: string;
+				assignmentId: string;
+			};
+			const body = (request.body ?? {}) as { expiresAt?: string | null };
+
+			const assignment = await prisma.nodeAssignment.findUnique({
+				where: { id: assignmentId },
+			});
+
+			if (!assignment) {
+				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Assignment not found");
+			}
+
+			if (assignment.nodeId !== nodeId) {
+				return apiError(reply, 404, ErrorCodes.NODE_ASSIGNMENT_NOT_FOUND, "Assignment not found for this node");
+			}
+
+			// Scope: mirror POST /assign and DELETE — node.assign alone must not
+			// edit assignments on nodes the caller cannot access.
+			if (!(await hasNodeScope(request, nodeId, "write"))) {
+				return apiError(reply, 403, ErrorCodes.PERMISSION_DENIED, "You don't have access to this node");
+			}
+			// Hierarchy: admin-tier targets are '*'-only (audit TARGET-§2.7).
+			if (
+				!(await assertCanAffectAssignmentTarget(
+					request,
+					assignment.userId ? "user" : "role",
+					assignment.userId ?? assignment.roleId ?? "",
+					reply,
+				))
+			) {
+				return;
+			}
+
+			// null (or an omitted field) clears the expiry.
+			let expirationDate: Date | null = null;
+			if (body.expiresAt !== null && body.expiresAt !== undefined) {
+				const parsed = new Date(body.expiresAt);
+				if (Number.isNaN(parsed.getTime())) {
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "Invalid expiresAt date");
+				}
+				if (parsed <= new Date()) {
+					return apiError(reply, 400, ErrorCodes.VALIDATION_ERROR, "expiresAt must be in the future");
+				}
+				expirationDate = parsed;
+			}
+
+			const updated = await prisma.nodeAssignment.update({
+				where: { id: assignmentId },
+				data: { expiresAt: expirationDate },
+			});
+
+			// Node access is cached 30s — flush the affected principal now.
+			if (updated.userId) {
+				invalidateNodeAccessCache(updated.userId);
+			} else {
+				invalidateNodeAccessCache();
+			}
+
+			await createAuditLog(request.user.userId, {
+				action: "node.assign.expiry",
+				resource: "node",
+				resourceId: nodeId,
+				request,
+				details: {
+					assignmentId,
+					previousExpiresAt: assignment.expiresAt?.toISOString() ?? null,
+					expiresAt: expirationDate?.toISOString() ?? null,
+					userId: assignment.userId ?? undefined,
+					roleId: assignment.roleId ?? undefined,
+				},
+			});
+
+			reply.send(serialize({ success: true, data: updated }));
+
+			// Same admin event the assign/unassign routes emit: the FE handler
+			// invalidates node + assignment queries from it.
+			const wsGatewayNodeExpiry = app.wsGateway;
+			if (wsGatewayNodeExpiry?.pushToAdminSubscribers) {
+				wsGatewayNodeExpiry.pushToAdminSubscribers('node_assigned', {
+					type: 'node_assigned',
+					nodeId,
+					targetType: updated.userId ? 'user' : 'role',
+					targetId: updated.userId || updated.roleId || '',
+					assignmentId,
+					expiresAt: expirationDate?.toISOString() ?? null,
+					updatedBy: request.user.userId,
+					timestamp: new Date().toISOString(),
+				});
+			}
+		},
+	);
+
 	// Get nodes accessible to current user
 	// This endpoint is used by the frontend to populate node selection dropdowns
 	app.get(

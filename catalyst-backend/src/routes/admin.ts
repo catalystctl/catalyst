@@ -2247,7 +2247,29 @@ export async function adminRoutes(app: FastifyInstance) {
   // Get audit logs (requires admin.read)
   app.get(
     '/audit-logs',
-    { preHandler: authenticate },
+    {
+      preHandler: authenticate,
+      schema: {
+        summary: 'List audit logs',
+        description:
+          'Paginated audit log with optional user/action/resource/date filters and a free-text `q` searched across action, resource, ids, actor and stored details.',
+        tags: ['Admin'],
+        querystring: {
+          type: 'object',
+          properties: {
+            page: { type: 'string' },
+            limit: { type: 'string' },
+            userId: { type: 'string' },
+            action: { type: 'string' },
+            resource: { type: 'string' },
+            from: { type: 'string' },
+            to: { type: 'string' },
+            q: { type: 'string' },
+          },
+        },
+        response: { 200: { type: 'object', additionalProperties: true } },
+      },
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
 
       if (!(checkPerm(request, 'admin.read'))) {
@@ -2262,6 +2284,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resource,
         from,
         to,
+        q,
       } = request.query as {
         page?: number;
         limit?: number;
@@ -2270,6 +2293,7 @@ export async function adminRoutes(app: FastifyInstance) {
         resource?: string;
         from?: string;
         to?: string;
+        q?: string;
       };
 
       const pagination = parsePagination(page, limit, 50);
@@ -2279,6 +2303,31 @@ export async function adminRoutes(app: FastifyInstance) {
       if (userId) where.userId = userId;
       if (action) where.action = { contains: action };
       if (resource) where.resource = resource;
+      // Free-text search runs in the database, not over one fetched page, so it
+      // matches every row in the window rather than the 50 already loaded.
+      // Details are a JSON column, so the only parameterized way to ILIKE them
+      // is a cast to text; the id set is bounded to the newest matches because
+      // the list itself is ordered newest-first.
+      const search = typeof q === 'string' ? q.trim() : '';
+      if (search) {
+        const detailMatches = await prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT "id" FROM "AuditLog"
+          WHERE "details"::text ILIKE ${`%${search}%`}
+          ORDER BY "timestamp" DESC
+          LIMIT 5000
+        `;
+        where.OR = [
+          { action: { contains: search, mode: 'insensitive' } },
+          { resource: { contains: search, mode: 'insensitive' } },
+          { resourceId: { contains: search, mode: 'insensitive' } },
+          { userId: { contains: search, mode: 'insensitive' } },
+          { user: { is: { OR: [
+            { username: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
+          ] } } },
+          { id: { in: detailMatches.map((row) => row.id) } },
+        ];
+      }
       if (from || to) {
         const parsedFrom = from ? new Date(from) : undefined;
         const parsedTo = to ? new Date(to) : undefined;

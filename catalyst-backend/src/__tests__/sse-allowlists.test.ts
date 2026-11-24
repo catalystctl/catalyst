@@ -33,8 +33,15 @@ describe('ADMIN_EVENT_TYPES allowlist (P0.2)', () => {
   it('keeps the pre-existing core entries', () => {
     expect(ADMIN_EVENT_TYPES).toContain('alert_created');
     expect(ADMIN_EVENT_TYPES).toContain('alert_resolved');
-    expect(ADMIN_EVENT_TYPES).toContain('alert_deleted');
     expect(ADMIN_EVENT_TYPES).toContain('server_created');
+  });
+
+  it('no longer carries the never-emitted alert_deleted dead branch (C8)', () => {
+    // There is no alert-instance delete endpoint: only alert RULES can be
+    // deleted (alert_rule_deleted). Allowlisting the instance event kept a
+    // permanent gap in the FE⊆BE⊆emitted contract, so it is pruned on both
+    // sides and pinned here so it cannot come back without an emitter.
+    expect(ADMIN_EVENT_TYPES).not.toContain('alert_deleted');
   });
 
   it('has no duplicate entries', () => {

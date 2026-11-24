@@ -599,7 +599,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2342",
+          "source": "src/routes/admin.ts:2391",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -630,7 +630,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4467",
+          "source": "src/routes/admin.ts:4516",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -673,7 +673,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4519",
+          "source": "src/routes/admin.ts:4568",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_LOCKOUT_NOT_FOUND"
@@ -703,7 +703,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4217",
+          "source": "src/routes/admin.ts:4266",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -733,7 +733,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4230",
+          "source": "src/routes/admin.ts:4279",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -764,7 +764,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3619",
+          "source": "src/routes/admin.ts:3668",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -800,7 +800,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3639",
+          "source": "src/routes/admin.ts:3688",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -852,7 +852,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3730",
+          "source": "src/routes/admin.ts:3779",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_NOT_FOUND",
@@ -897,7 +897,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3834",
+          "source": "src/routes/admin.ts:3883",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_IN_USE"
@@ -941,7 +941,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3880",
+          "source": "src/routes/admin.ts:3929",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_DATABASE_HOST_NOT_FOUND"
@@ -971,7 +971,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3989",
+          "source": "src/routes/admin.ts:4038",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1007,7 +1007,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2622",
+          "source": "src/routes/admin.ts:2671",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1036,7 +1036,7 @@
           }
         },
         "x-catalyst": {
-          "source": "src/routes/admin-events.ts:105",
+          "source": "src/routes/admin-events.ts:110",
           "errorCodes": [
             "AUTH_EXPIRED",
             "PERMISSION_DENIED",
@@ -1067,7 +1067,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3154",
+          "source": "src/routes/admin.ts:3203",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1096,7 +1096,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3256",
+          "source": "src/routes/admin.ts:3305",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1133,7 +1133,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3327",
+          "source": "src/routes/admin.ts:3376",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -1182,7 +1182,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3438",
+          "source": "src/routes/admin.ts:3487",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_IP_POOL_NOT_FOUND",
@@ -1226,7 +1226,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3545",
+          "source": "src/routes/admin.ts:3594",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_IP_POOL_IN_USE"
@@ -1257,7 +1257,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3098",
+          "source": "src/routes/admin.ts:3147",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1287,7 +1287,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3110",
+          "source": "src/routes/admin.ts:3159",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -1319,7 +1319,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3043",
+          "source": "src/routes/admin.ts:3092",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1349,7 +1349,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:3055",
+          "source": "src/routes/admin.ts:3104",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -1808,7 +1808,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4161",
+          "source": "src/routes/admin.ts:4210",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1838,7 +1838,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4175",
+          "source": "src/routes/admin.ts:4224",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -1898,7 +1898,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4560",
+          "source": "src/routes/admin.ts:4609",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -1928,7 +1928,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4597",
+          "source": "src/routes/admin.ts:4646",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -1988,7 +1988,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2877",
+          "source": "src/routes/admin.ts:2926",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -2018,7 +2018,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2891",
+          "source": "src/routes/admin.ts:2940",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -2116,7 +2116,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4688"
+          "source": "src/routes/admin.ts:4737"
         }
       }
     },
@@ -2142,7 +2142,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4049",
+          "source": "src/routes/admin.ts:4098",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -2172,7 +2172,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4068",
+          "source": "src/routes/admin.ts:4117",
           "permissionGuards": [
             "Tls"
           ],
@@ -2238,7 +2238,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2432",
+          "source": "src/routes/admin.ts:2481",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -2282,7 +2282,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2780",
+          "source": "src/routes/admin.ts:2829",
           "errorCodes": [
             "PERMISSION_DENIED",
             "ADMIN_SYSTEM_ERROR_NOT_FOUND"
@@ -2316,7 +2316,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2509",
+          "source": "src/routes/admin.ts:2558",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -2349,7 +2349,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:2815",
+          "source": "src/routes/admin.ts:2864",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -2380,7 +2380,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4300",
+          "source": "src/routes/admin.ts:4349",
           "errorCodes": [
             "PERMISSION_DENIED"
           ]
@@ -2410,7 +2410,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/admin.ts:4344",
+          "source": "src/routes/admin.ts:4393",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR"
@@ -6431,7 +6431,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3343",
+          "source": "src/routes/nodes.ts:3458",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6496,7 +6496,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3387",
+          "source": "src/routes/nodes.ts:3502",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -6560,7 +6560,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2925",
+          "source": "src/routes/nodes.ts:3040",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6620,7 +6620,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2970",
+          "source": "src/routes/nodes.ts:3085",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6686,7 +6686,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3298",
+          "source": "src/routes/nodes.ts:3413",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6751,7 +6751,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3102",
+          "source": "src/routes/nodes.ts:3217",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6810,7 +6810,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2829",
+          "source": "src/routes/nodes.ts:2944",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND"
@@ -6874,7 +6874,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3154",
+          "source": "src/routes/nodes.ts:3269",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -6934,7 +6934,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3239",
+          "source": "src/routes/nodes.ts:3354",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND"
@@ -7553,6 +7553,91 @@
             "PERMISSION_DENIED"
           ]
         }
+      },
+      "patch": {
+        "operationId": "patch_api_nodes_by_nodeId_assignments_by_assignmentId",
+        "summary": "Update assignment expiry",
+        "description": "Set or clear the expiry of an existing node assignment.",
+        "tags": [
+          "Nodes"
+        ],
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "7f3c1a90-2b64-4d8e-9c15-8a0b6e4f2d31"
+          },
+          {
+            "name": "assignmentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "7f3c1a90-2b64-4d8e-9c15-8a0b6e4f2d31"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expiresAt": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "HTTP 200 response.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "description": "Unauthenticated."
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+            "cookieAuth": []
+          }
+        ],
+        "x-catalyst": {
+          "source": "src/routes/nodes.ts:2146",
+          "errorCodes": [
+            "NODE_ASSIGNMENT_NOT_FOUND",
+            "PERMISSION_DENIED",
+            "VALIDATION_ERROR"
+          ]
+        }
       }
     },
     "/api/nodes/{nodeId}/deployment-token": {
@@ -7718,7 +7803,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:3471",
+          "source": "src/routes/nodes.ts:3586",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -7787,7 +7872,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2385",
+          "source": "src/routes/nodes.ts:2500",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -8090,7 +8175,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2196",
+          "source": "src/routes/nodes.ts:2311",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND"
@@ -8154,7 +8239,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2249",
+          "source": "src/routes/nodes.ts:2364",
           "errorCodes": [
             "PERMISSION_DENIED",
             "NODE_NOT_FOUND",
@@ -8193,7 +8278,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2143"
+          "source": "src/routes/nodes.ts:2258"
         }
       }
     },
@@ -8242,7 +8327,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2619",
+          "source": "src/routes/nodes.ts:2734",
           "errorCodes": [
             "PERMISSION_DENIED",
             "VALIDATION_ERROR",
@@ -8312,7 +8397,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/nodes.ts:2748",
+          "source": "src/routes/nodes.ts:2863",
           "errorCodes": [
             "VALIDATION_ERROR",
             "PERMISSION_DENIED",
