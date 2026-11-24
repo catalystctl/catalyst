@@ -95,4 +95,26 @@ describe("installer compatibility wire contract", () => {
     expect(Object.prototype.hasOwnProperty.call(template, "installEntrypoint")).toBe(false);
     expect(template.installScript).toBe("#!/bin/bash\nexit 0");
   });
+
+  it("emits pullLatestImage only when the caller requests an image refresh", () => {
+    for (const operation of [
+      "rebuild_server",
+      "reinstall_server",
+    ] satisfies InstallCommandType[]) {
+      const def = buildInstallCommand(fixtureTemplate(), operation, { trust: "non-admin" });
+      expect(Object.prototype.hasOwnProperty.call(def.command, "pullLatestImage")).toBe(false);
+
+      const forced = buildInstallCommand(fixtureTemplate(), operation, {
+        trust: "non-admin",
+        pullLatestImage: true,
+      });
+      expect(forced.command.pullLatestImage).toBe(true);
+
+      const off = buildInstallCommand(fixtureTemplate(), operation, {
+        trust: "non-admin",
+        pullLatestImage: false,
+      });
+      expect(Object.prototype.hasOwnProperty.call(off.command, "pullLatestImage")).toBe(false);
+    }
+  });
 });

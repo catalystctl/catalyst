@@ -23,6 +23,14 @@ export type InstallCommandType = 'install_server' | 'reinstall_server' | 'rebuil
 
 export interface InstallExecutionContext {
   trust: ServerEnvironmentExecutionTrust;
+  /**
+   * Ask the agent to force-refresh the install and runtime images from the
+   * registry before re-running the install script (rebuild/reinstall). Without
+   * it the agent reuses a cached tag, so an upstream image rebuild (e.g. a
+   * security-patched JDK) is never fetched. The server ends stopped; the next
+   * start recreates the container from the refreshed image.
+   */
+  pullLatestImage?: boolean;
 }
 
 /**
@@ -146,6 +154,7 @@ export function buildInstallCommand(
     environment: syncedEnvironment,
     command: {
       type,
+      ...(context.pullLatestImage ? { pullLatestImage: true } : {}),
       serverId: server.id,
       serverUuid: server.uuid,
       template: runtimeTemplate,

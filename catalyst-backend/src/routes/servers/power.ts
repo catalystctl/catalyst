@@ -382,7 +382,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Reinstall server (stops server, wipes data, runs install script)
   app.post(
     "/:serverId/reinstall",
-    { schema: { summary: "Reinstall a server", description: "Reinstall a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Reinstall a server", description: "Reinstall a server.", tags: ["Power"], body: { type: "object", properties: { pullLatestImage: { type: "boolean" } }, additionalProperties: false }, params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
 
@@ -430,6 +430,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       try {
         payload = buildInstallCommand(server, "reinstall_server", {
           trust: checkIsAdmin(request, "admin.write") ? "admin" : "non-admin",
+          pullLatestImage: (request.body as { pullLatestImage?: boolean } | undefined)?.pullLatestImage === true,
         });
       } catch (error: any) {
         if (error instanceof InstallPayloadError) {
@@ -658,7 +659,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
   // Rebuild server (stops server, re-runs the template install script, preserves data)
   app.post(
     "/:serverId/rebuild",
-    { schema: { summary: "Rebuild a server", description: "Rebuild a server.", tags: ["Power"], params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    { schema: { summary: "Rebuild a server", description: "Rebuild a server.", tags: ["Power"], body: { type: "object", properties: { pullLatestImage: { type: "boolean" } }, additionalProperties: false }, params: { type: "object", required: ['serverId'], properties: { serverId: { type: "string" } } }, response: { 200: { type: "object", additionalProperties: true } } },  onRequest: [app.authenticate], config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { serverId } = request.params as { serverId: string };
 
@@ -712,6 +713,7 @@ export async function serverPowerRoutes(app: FastifyInstance) {
       try {
         payload = buildInstallCommand(server, "rebuild_server", {
           trust: checkIsAdmin(request, "admin.write") ? "admin" : "non-admin",
+          pullLatestImage: (request.body as { pullLatestImage?: boolean } | undefined)?.pullLatestImage === true,
         });
       } catch (error: any) {
         if (error instanceof InstallPayloadError) {

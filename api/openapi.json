@@ -11900,7 +11900,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:491",
+          "source": "src/routes/servers/power.ts:492",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_NOT_INSTALLING",
@@ -14038,7 +14038,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:1065",
+          "source": "src/routes/servers/power.ts:1067",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_STATE_TRANSITION_INVALID",
@@ -15411,6 +15411,22 @@
             "example": "7f3c1a90-2b64-4d8e-9c15-8a0b6e4f2d31"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pullLatestImage": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "HTTP 200 response.",
@@ -15451,7 +15467,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:659",
+          "source": "src/routes/servers/power.ts:660",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_STATE_TRANSITION_INVALID",
@@ -15459,8 +15475,7 @@
             "GATEWAY_NOT_AVAILABLE",
             "SERVER_NETWORK_IP_INVALID",
             "AGENT_COMMAND_FAILED"
-          ],
-          "bodyUndocumented": true
+          ]
         }
       }
     },
@@ -15483,6 +15498,22 @@
             "example": "7f3c1a90-2b64-4d8e-9c15-8a0b6e4f2d31"
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "pullLatestImage": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "HTTP 200 response.",
@@ -15531,8 +15562,7 @@
             "GATEWAY_NOT_AVAILABLE",
             "SERVER_NETWORK_IP_INVALID",
             "AGENT_COMMAND_FAILED"
-          ],
-          "bodyUndocumented": true
+          ]
         }
       }
     },
@@ -15595,7 +15625,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:1198",
+          "source": "src/routes/servers/power.ts:1200",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_STATE_TRANSITION_INVALID",
@@ -15725,7 +15755,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:760",
+          "source": "src/routes/servers/power.ts:762",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_STATE_TRANSITION_INVALID",
@@ -15915,7 +15945,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:929",
+          "source": "src/routes/servers/power.ts:931",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_STATE_TRANSITION_INVALID",
@@ -16052,7 +16082,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:1353",
+          "source": "src/routes/servers/power.ts:1355",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_ALREADY_SUSPENDED",
@@ -16625,7 +16655,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:1529",
+          "source": "src/routes/servers/power.ts:1531",
           "errorCodes": [
             "SERVER_NOT_FOUND",
             "SERVER_NOT_SUSPENDED"
@@ -17001,7 +17031,7 @@
           }
         ],
         "x-catalyst": {
-          "source": "src/routes/servers/power.ts:594",
+          "source": "src/routes/servers/power.ts:595",
           "errorCodes": [
             "VALIDATION_ERROR",
             "SERVER_NOT_FOUND",

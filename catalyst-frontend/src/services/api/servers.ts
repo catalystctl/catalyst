@@ -124,8 +124,11 @@ export const serversApi = {
     const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/install`);
     return data;
   },
-  reinstall: async (id: string) => {
-    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/reinstall`);
+  reinstall: async (id: string, opts?: { pullLatestImage?: boolean }) => {
+    const data = await apiClient.post<ApiResponse<void>>(
+      `/api/servers/${id}/reinstall`,
+      opts?.pullLatestImage ? { pullLatestImage: true } : undefined,
+    );
     return data;
   },
   cancelInstall: async (id: string) => {
@@ -387,8 +390,11 @@ export const serversApi = {
     return data;
   },
 
-  rebuild: async (id: string) => {
-    const data = await apiClient.post<ApiResponse<void>>(`/api/servers/${id}/rebuild`);
+  rebuild: async (id: string, opts?: { pullLatestImage?: boolean }) => {
+    const data = await apiClient.post<ApiResponse<void>>(
+      `/api/servers/${id}/rebuild`,
+      opts?.pullLatestImage ? { pullLatestImage: true } : undefined,
+    );
     return data;
   },
 

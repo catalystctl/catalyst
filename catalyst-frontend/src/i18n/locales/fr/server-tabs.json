@@ -554,6 +554,8 @@
       },
       "ports": "Ports",
       "primary": "Principal",
+      "pullLatestImage": "Télécharger la dernière image",
+      "pullLatestImageHint": "Récupère la version la plus récente de l'image conteneur du serveur depuis le registre avant de relancer la commande d'installation, afin d'appliquer les mises à jour de l'image en amont (par exemple un runtime Java corrigé sur le plan de la sécurité). Démarrez ensuite le serveur pour exécuter l'image mise à jour.",
       "rebuild": "Reconstruire",
       "rebuildConfirmMessage": "Cela arrête le serveur s’il est en cours d’exécution et relance la commande d’installation du modèle. Vos fichiers de serveur existants ne sont pas supprimés, mais le script d’installation peut en écraser ou en mettre à jour certains. Une sauvegarde est toujours recommandée avant de reconstruire.",
       "rebuildConfirmTitle": "Relancer la commande d’installation",

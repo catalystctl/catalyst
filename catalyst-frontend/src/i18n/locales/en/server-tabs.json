@@ -534,6 +534,8 @@
       },
       "ports": "Ports",
       "primary": "Primary",
+      "pullLatestImage": "Pull latest image",
+      "pullLatestImageHint": "Fetch the newest version of the server's container image from the registry before re-running the install command, so upstream image updates (such as a security-patched Java runtime) are applied. Start the server afterwards to run the updated image.",
       "rebuild": "Rebuild",
       "rebuildConfirmMessage": "This stops the server if it is running and re-runs the template's install command. Your existing server files are not deleted, but the install script may overwrite or update some of them. A backup is always recommended before rebuilding.",
       "rebuildConfirmTitle": "Re-run the install command",

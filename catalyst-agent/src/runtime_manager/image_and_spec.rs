@@ -962,35 +962,70 @@ fn snapshot_prepare_error(phase: &'static str, failure: SnapshotPrepareFailure) 
 
 use super::ContainerdRuntime;
 
+/// Whether `ensure_image` must contact the registry: either the image is absent
+/// locally, or the caller forced a refresh of an already-cached tag. A cached
+/// tag is otherwise reused without any registry round-trip (pull-if-missing).
+fn should_pull_image(exists_locally: bool, force_pull: bool) -> bool {
+    force_pull || !exists_locally
+}
+
 impl ContainerdRuntime {
     pub(crate) async fn ensure_image(&self, image: &str) -> AgentResult<()> {
+        self.ensure_image_with_pull(image, false).await
+    }
+
+    /// Ensure an image is present locally, optionally forcing a registry refresh.
+    ///
+    /// `force_pull = false` (the default on every start/install path) is
+    /// pull-if-missing: a cached tag is reused without contacting the registry.
+    /// `force_pull = true` re-resolves the tag from the registry even when it
+    /// already exists, so an upstream rebuild (e.g. a security-patched JDK) is
+    /// fetched; the container is recreated from the refreshed tag on the next
+    /// start. Used by rebuild/reinstall when the panel asks to pull the latest
+    /// image.
+    pub(crate) async fn ensure_image_with_pull(
+        &self,
+        image: &str,
+        force_pull: bool,
+    ) -> AgentResult<()> {
         let qualified = Self::qualify_image_ref(image);
-        let mut client = ImagesClient::new(self.channel.clone());
-        let req = GetImageRequest {
-            name: qualified.clone(),
+        // A forced refresh skips the local existence probe entirely: a cached
+        // tag must be re-resolved from the registry even when it already exists.
+        let exists_locally = if force_pull {
+            info!("Force-refreshing image {} from registry", qualified);
+            false
+        } else {
+            let mut client = ImagesClient::new(self.channel.clone());
+            let req = GetImageRequest {
+                name: qualified.clone(),
+            };
+            let req = with_namespace!(req, &self.namespace);
+            // This is a local existence probe, not an image pull. Give it its own
+            // short deadline so a wedged daemon cannot stall before the later,
+            // independently bounded metadata lookup. Do not include the reference
+            // or tonic's untrusted status message in the timeout diagnostic.
+            match tokio::time::timeout(IMAGE_PREFLIGHT_TIMEOUT, client.get(req)).await {
+                Ok(Ok(_)) => true,
+                Ok(Err(e)) if e.code() == tonic::Code::NotFound => {
+                    info!("Image {} not found, pulling...", qualified);
+                    false
+                }
+                Ok(Err(e)) => {
+                    return Err(AgentError::ContainerError(format!(
+                        "Image ensure preflight Images.Get failed with gRPC {:?}",
+                        e.code()
+                    )))
+                }
+                Err(_) => {
+                    return Err(AgentError::ContainerError(format!(
+                        "Image ensure preflight Images.Get exceeded its {}ms deadline",
+                        IMAGE_PREFLIGHT_TIMEOUT.as_millis()
+                    )))
+                }
+            }
         };
-        let req = with_namespace!(req, &self.namespace);
-        // This is a local existence probe, not an image pull. Give it its own
-        // short deadline so a wedged daemon cannot stall before the later,
-        // independently bounded metadata lookup. Do not include the reference
-        // or tonic's untrusted status message in the timeout diagnostic.
-        match tokio::time::timeout(IMAGE_PREFLIGHT_TIMEOUT, client.get(req)).await {
-            Ok(Ok(_)) => return Ok(()),
-            Ok(Err(e)) if e.code() == tonic::Code::NotFound => {
-                info!("Image {} not found, pulling...", qualified)
-            }
-            Ok(Err(e)) => {
-                return Err(AgentError::ContainerError(format!(
-                    "Image ensure preflight Images.Get failed with gRPC {:?}",
-                    e.code()
-                )))
-            }
-            Err(_) => {
-                return Err(AgentError::ContainerError(format!(
-                    "Image ensure preflight Images.Get exceeded its {}ms deadline",
-                    IMAGE_PREFLIGHT_TIMEOUT.as_millis()
-                )))
-            }
+        if !should_pull_image(exists_locally, force_pull) {
+            return Ok(());
         }
         const IMAGE_PULL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
         let output = tokio::time::timeout(
@@ -2562,6 +2597,17 @@ mod tests {
         );
         assert!(!error.contains("pull"), "{error}");
         assert!(started.elapsed() < IMAGE_PREFLIGHT_TIMEOUT + Duration::from_millis(500));
+    }
+
+    #[test]
+    fn force_pull_overrides_local_existence() {
+        // pull-if-missing: a cached tag is reused, an absent one is pulled.
+        assert!(!should_pull_image(true, false));
+        assert!(should_pull_image(false, false));
+        // A forced refresh re-pulls even a cached tag — the path that lets a
+        // rebuild/reinstall pick up an upstream security rebuild of the image.
+        assert!(should_pull_image(true, true));
+        assert!(should_pull_image(false, true));
     }
 
     #[test]

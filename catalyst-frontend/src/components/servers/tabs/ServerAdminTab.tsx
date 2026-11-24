@@ -34,6 +34,7 @@ import UpdateServerModal from '../UpdateServerModal';
 import TransferServerModal from '../TransferServerModal';
 import DeleteServerDialog from '../DeleteServerDialog';
 import ConfirmDialog from '../../shared/ConfirmDialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import ServerTabCard from './ServerTabCard';
 import TabHeader from './TabHeader';
 import TabEmptyState from './TabEmptyState';
@@ -239,6 +240,8 @@ export default function ServerAdminTab({
  const [rebuildConfirm, setRebuildConfirm] = useState(false);
  const [killConfirm, setKillConfirm] = useState(false);
  const [reinstallConfirm, setReinstallConfirm] = useState(false);
+ const [pullLatestOnRebuild, setPullLatestOnRebuild] = useState(false);
+ const [pullLatestOnReinstall, setPullLatestOnReinstall] = useState(false);
  const [rebuildPending, setRebuildPending] = useState(false);
  const [killPending, setKillPending] = useState(false);
  const [reinstallPending, setReinstallPending] = useState(false);
@@ -439,7 +442,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  const handleRebuild = useCallback(async () => {
  try {
  setRebuildPending(true);
- await serversApi.rebuild(serverId);
+ await serversApi.rebuild(serverId, { pullLatestImage: pullLatestOnRebuild });
  notifySuccess(t('tabs.admin.rebuildInitiated'));
  setRebuildConfirm(false);
  } catch (err: unknown) {
@@ -457,7 +460,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  queryClient.invalidateQueries({ queryKey: qk.tasks(serverId) });
  }
- }, [serverId, queryClient, t]);
+ }, [serverId, queryClient, t, pullLatestOnRebuild]);
 
  const handleChangeImageVariant = useCallback(async () => {
  if (!imageVariantConfirm) return;
@@ -522,7 +525,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  const handleReinstall = useCallback(async () => {
  try {
  setReinstallPending(true);
- await serversApi.reinstall(serverId);
+ await serversApi.reinstall(serverId, { pullLatestImage: pullLatestOnReinstall });
  notifySuccess(t('tabs.admin.reinstallInitiated'));
  setReinstallConfirm(false);
  } catch (err: unknown) {
@@ -539,7 +542,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  queryClient.invalidateQueries({ queryKey: qk.server(serverId) });
  queryClient.invalidateQueries({ queryKey: qk.servers() });
  }
- }, [serverId, queryClient, t]);
+ }, [serverId, queryClient, t, pullLatestOnReinstall]);
 
  const handleTransferOwnership = useCallback(async () => {
  // Capture before the state reset: the new owner's node reach changes too.
@@ -805,7 +808,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
           <SettingsRow label={t('tabs.admin.rebuild')} description={t('tabs.admin.rebuildDescription')}>
             <button
               type="button"
-              onClick={() => setRebuildConfirm(true)}
+              onClick={() => { setPullLatestOnRebuild(false); setRebuildConfirm(true); }}
               disabled={!canEdit}
               className="h-7 rounded-sm bg-primary px-3 text-mini font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             >
@@ -815,7 +818,7 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
           <SettingsRow label={t('tabs.admin.reinstall')} description={t('tabs.admin.reinstallDescription')}>
             <button
               type="button"
-              onClick={() => setReinstallConfirm(true)}
+              onClick={() => { setPullLatestOnReinstall(false); setReinstallConfirm(true); }}
               disabled={!canEditWhenStopped}
               className="h-7 rounded-sm border border-warning/30 px-3 text-mini font-semibold text-warning transition-colors hover:bg-warning/10 disabled:opacity-50"
             >
@@ -1230,7 +1233,22 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  <ConfirmDialog
  open={rebuildConfirm}
  title={t('tabs.admin.rebuildConfirmTitle')}
- message={t('tabs.admin.rebuildConfirmMessage')}
+ message={
+   <div className="space-y-3">
+     <p>{t('tabs.admin.rebuildConfirmMessage')}</p>
+     <label className="flex cursor-pointer items-start gap-2 rounded-sm border border-border bg-card/50 p-2">
+       <Checkbox
+         checked={pullLatestOnRebuild}
+         onCheckedChange={(v) => setPullLatestOnRebuild(v === true)}
+         className="mt-0.5"
+       />
+       <span className="space-y-0.5">
+         <span className="block font-medium text-foreground">{t('tabs.admin.pullLatestImage')}</span>
+         <span className="block text-xs">{t('tabs.admin.pullLatestImageHint')}</span>
+       </span>
+     </label>
+   </div>
+ }
  confirmText={t('tabs.admin.rebuild')}
  variant="default"
  loading={rebuildPending}
@@ -1264,7 +1282,22 @@ const editableRows = (environment: Record<string, string> | null | undefined): E
  <ConfirmDialog
  open={reinstallConfirm}
  title={t('tabs.admin.reinstallConfirmTitle')}
- message={t('tabs.admin.reinstallConfirmMessage')}
+ message={
+   <div className="space-y-3">
+     <p>{t('tabs.admin.reinstallConfirmMessage')}</p>
+     <label className="flex cursor-pointer items-start gap-2 rounded-sm border border-border bg-card/50 p-2">
+       <Checkbox
+         checked={pullLatestOnReinstall}
+         onCheckedChange={(v) => setPullLatestOnReinstall(v === true)}
+         className="mt-0.5"
+       />
+       <span className="space-y-0.5">
+         <span className="block font-medium text-foreground">{t('tabs.admin.pullLatestImage')}</span>
+         <span className="block text-xs">{t('tabs.admin.pullLatestImageHint')}</span>
+       </span>
+     </label>
+   </div>
+ }
  confirmText={t('tabs.admin.reinstall')}
  variant="warning"
  loading={reinstallPending}

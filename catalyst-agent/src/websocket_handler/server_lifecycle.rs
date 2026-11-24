@@ -1163,6 +1163,38 @@ impl WebSocketHandler {
             "[DEBUG] install_server: host_server_dir: {}",
             host_server_dir
         );
+
+        // Optional "pull latest image" refresh (rebuild/reinstall). ensure_image
+        // is pull-if-missing, so a cached tag would otherwise be reused forever
+        // and the next start would recreate the container from the stale layer
+        // (e.g. an unpatched JDK). Force-refresh the install image and the
+        // runtime image here; this operation ends with the server stopped, and
+        // the next start/restart builds the container from the refreshed tags.
+        if msg
+            .get("pullLatestImage")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            self.runtime
+                .ensure_image_with_pull(install_image, true)
+                .await?;
+            let runtime_image = environment
+                .get("TEMPLATE_IMAGE")
+                .and_then(|v| v.as_str())
+                .or_else(|| template.get("image").and_then(|v| v.as_str()))
+                .filter(|image| *image != install_image);
+            if let Some(runtime_image) = runtime_image {
+                self.runtime
+                    .ensure_image_with_pull(runtime_image, true)
+                    .await?;
+            }
+            self.emit_console_output(
+                server_id,
+                "system",
+                "[Catalyst] Pulled the latest images; start the server to run the updated version.\n",
+            )
+            .await?;
+        }
         // Using debug! (not info!) because the substituted script body contains
         // secrets (passwords, API keys) that should never be written to disk
         // at the default info log level.
