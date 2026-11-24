@@ -10,7 +10,10 @@ const transitionalStatuses = new Set(['installing', 'starting', 'stopping', 'tra
 export function useServer(id?: string) {
   // P1-24: the 2s poll below is transitional-only — during an SSE outage the
   // detail page would freeze, so poll at 30s while streams are down.
-  const outagePoll = useStreamAwareInterval(30_000);
+  const outagePoll = useStreamAwareInterval(30_000, [
+    '/api/servers/all-servers/events',
+    ...(id ? [`/api/servers/${id}/events`, `/api/servers/${id}/metrics/stream`] : []),
+  ]);
   return useQuery({
     queryKey: qk.server(id!),
     queryFn: () => {

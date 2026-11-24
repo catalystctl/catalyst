@@ -119,6 +119,41 @@ function noteBcTraffic(stream: SharedStream): void {
   stream.leaseUntil = Date.now() + LEASE_TTL_MS;
 }
 
+/** Publish this tab's current status for `stream` to every peer tab. */
+function postStatusToPeers(stream: SharedStream): void {
+  if (!bc) return;
+  try {
+    bc.postMessage({
+      kind: 'status',
+      url: stream.url,
+      status: stream.status,
+    } satisfies BcEnvelope);
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * A1(a)/(c) — announce leadership for one led stream, and only when this tab
+ * can back the claim with a live socket.
+ *
+ * - With a socket: post `leader` AND the stream's current `status`, because a
+ *   tab that joins/re-announces after the fact (hello, B2 challenge) otherwise
+ *   never learns 'connected' and sits at 'connecting' until the next status
+ *   change — or a 30s lease expiry (A1 split-brain).
+ * - Without a socket (dead ES after a fatal close, or mid-backoff): a `leader`
+ *   claim would keep suppressing live peers, so recover instead of announcing.
+ */
+function announceLeadershipState(stream: SharedStream): void {
+  if (stream.es) {
+    postLeaderAnnouncement(stream);
+    postStatusToPeers(stream);
+    return;
+  }
+  // The retry path owns the next open; otherwise (zombie claim) start one.
+  if (stream.retryTimer === null) scheduleRecovery(stream);
+}
+
 /**
  * P0-C — keep the two shared hub intervals alive exactly while needed:
  * - heartbeat: re-announce leadership for every led URL, so followers can
@@ -140,7 +175,7 @@ function syncHubTimers(): void {
     heartbeatTimer = window.setInterval(() => {
       if (!bc) return;
       for (const s of streams.values()) {
-        if (s.isLeader && s.refCount > 0) postLeaderAnnouncement(s);
+        if (s.isLeader && s.refCount > 0) announceLeadershipState(s);
       }
     }, LEADER_HEARTBEAT_MS) as unknown as number;
   }
@@ -232,8 +267,11 @@ function ensureBroadcast() {
         peers.add(msg.tabId);
         // B1: re-assert leadership for every URL we lead so the new tab
         // converges on the incumbent instead of waiting for the next heartbeat.
+        // A1(a): also replay each led stream's current status — otherwise the
+        // newcomer knows who leads but never learns we are already
+        // 'connected', and renders "Reconnecting…" until something changes.
         for (const s of streams.values()) {
-          if (s.isLeader && s.refCount > 0) postLeaderAnnouncement(s);
+          if (s.isLeader && s.refCount > 0) announceLeadershipState(s);
         }
         break;
       case 'bye':
@@ -264,12 +302,23 @@ function ensureBroadcast() {
           stream.knownLeader = msg.tabId;
         }
         if (stream.isLeader) {
-          if (msg.tabId < TAB_ID) {
+          if (!stream.es) {
+            // A1(d): we still believe we lead but hold no socket (dead ES after
+            // a fatal close, or a stalled recovery). The claimant is alive, so
+            // hand leadership over regardless of id order — asserting a dead
+            // claim is exactly what left the other tab frozen. Recording the
+            // claimant as leader keeps scheduleTakeover from re-promoting us
+            // into a fight when its id is the smaller one.
+            stream.knownLeader = msg.tabId;
+            demoteLeader(stream, { reclaim: false });
+          } else if (msg.tabId < TAB_ID) {
             demoteLeader(stream);
           } else {
             // B2: incumbency assertion — the smaller id wins, so re-announce;
-            // the challenger sees our (smaller) id and defers.
-            postLeaderAnnouncement(stream);
+            // the challenger sees our (smaller) id and defers. A1(a): the
+            // re-announcement carries our status too, so the challenger (and
+            // any other listener) converges on 'connected' immediately.
+            announceLeadershipState(stream);
           }
         } else {
           clearTakeover(stream);
@@ -298,6 +347,11 @@ function ensureBroadcast() {
         if (stream.isLeader) return;
         clearTakeover(stream);
         if (stream.knownLeader === null) stream.knownLeader = '__remote__';
+        // A1(b): an event can only come from a leader with a live socket, so
+        // our own status ('connecting'/'reconnecting'/'error') is stale by
+        // definition — mirror 'connected' instead of waiting for a `status`
+        // message that may never be re-sent.
+        if (stream.status !== 'connected') setStatus(stream, 'connected', false);
         for (const l of stream.eventListeners) {
           try {
             l(msg.type, msg.data);
@@ -575,7 +629,7 @@ function promoteLeader(stream: SharedStream) {
   syncHubTimers();
 }
 
-function demoteLeader(stream: SharedStream) {
+function demoteLeader(stream: SharedStream, options?: { reclaim?: boolean }) {
   stream.isLeader = false;
   clearConnectingTimer(stream);
   clearTakeover(stream);
@@ -592,7 +646,11 @@ function demoteLeader(stream: SharedStream) {
   stream.nativeHandlers.clear();
   stream.pingProbeBound = false;
   setStatus(stream, 'connecting', false);
-  scheduleTakeover(stream);
+  // A1(d): a tab that hands over because its own socket died must not start
+  // wrestling the live claimant ~1s later — it stays a follower and mirrors
+  // the new leader. If that leader later dies silently, lease expiry still
+  // takes over (syncHubTimers → scheduleTakeover), so reclaim is not lost.
+  if (options?.reclaim !== false) scheduleTakeover(stream);
   syncHubTimers();
 }
 
@@ -800,4 +858,21 @@ export function __resetSharedEventSources() {
 
 export function __getSseHubTabId() {
   return TAB_ID;
+}
+
+/**
+ * Test helper — push a status transition for a URL nobody opened a socket for,
+ * through the same global listener path `setStatus` uses. Lets a consumer test
+ * (e.g. useStreamAwareInterval scope) drive the hub without stubbing
+ * EventSource/BroadcastChannel.
+ */
+export function __emitSharedStatusForTests(url: string, status: StreamStatus): void {
+  const prev: StreamStatus = getSharedStreamStatus(url) ?? 'connecting';
+  for (const l of statusSubscribers) {
+    try {
+      l(url, status, prev);
+    } catch {
+      /* isolate */
+    }
+  }
 }

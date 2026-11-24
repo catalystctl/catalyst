@@ -104,6 +104,117 @@ function metricPatch(row: Record<string, any>, d: Record<string, any>): Record<s
   return patch;
 }
 
+/**
+ * C2 — live capacity tiles.
+ *
+ * `['dashboard-resources']` is a fleet-wide aggregate
+ * (`{cpuUtilization, memoryUtilization, networkThroughput}`) served by
+ * routes/dashboard.ts and previously refreshed only by a 30s poll. The REST
+ * route sums CPU cores used over the fleet's total core ceiling and memory used
+ * over total memory (the same percentage the tiles render), so the live values
+ * can be re-derived from the per-server metric events the hub already carries.
+ *
+ * Inputs are read from the servers list caches — the two patches just above
+ * bring those rows up to date first, so this sees the newest sample for every
+ * visible server. A server that has not reported keeps its previous
+ * contribution (unknown is not idle); with nothing to accumulate the tile is
+ * left alone rather than zeroed. Per-server network *rates* are not derivable
+ * from a cumulative counter, so only utilization moves here and the next poll
+ * corrects the throughput reading.
+ */
+function patchDashboardResources(q: any, prev: Record<string, any>): Record<string, any> {
+  type Row = {
+    cpuPercent?: number;
+    memoryUsageMb?: number;
+    memoryPercent?: number;
+    allocatedMemoryMb?: number;
+    allocatedCpuCores?: number;
+    status?: string;
+    cpu?: number;
+    memory?: number;
+  };
+
+  // One representative fleet view: the unfiltered list, else any list cache.
+  const views: Row[][] = [];
+  for (const key of [['servers'], ['servers', null]]) {
+    const cached = q.getQueryData(key);
+    if (Array.isArray(cached)) views.push(cached as Row[]);
+  }
+  if (views.length === 0) {
+    const anyView = q.getQueriesData({
+      predicate: (query: Query) =>
+        Array.isArray(query.queryKey) && query.queryKey[0] === 'servers' && isServerListKey(query.queryKey),
+    }) as Array<[unknown, unknown]>;
+    for (const [, data] of anyView) {
+      if (Array.isArray(data)) views.push(data as Row[]);
+    }
+  }
+
+  for (const rows of views) {
+    let cpuUsed = 0;
+    let cpuLimit = 0;
+    let memoryUsed = 0;
+    let memoryLimit = 0;
+    let seen = 0;
+
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue;
+      // Stopped/installing rows contribute no usage (matches the REST route,
+      // which only aggregates nodes with a live metric sample).
+      if (row.status !== undefined && row.status !== 'running') continue;
+
+      const cores = typeof row.allocatedCpuCores === 'number' ? row.allocatedCpuCores : undefined;
+      const cpuPercent =
+        typeof row.cpuPercent === 'number' && Number.isFinite(row.cpuPercent)
+          ? row.cpuPercent
+          : typeof row.cpu === 'number' && Number.isFinite(row.cpu)
+            ? row.cpu
+            : undefined;
+      if (cores === undefined || cpuPercent === undefined) continue;
+
+      const memAllocated =
+        typeof row.allocatedMemoryMb === 'number' && Number.isFinite(row.allocatedMemoryMb)
+          ? row.allocatedMemoryMb
+          : undefined;
+      let memUsed =
+        typeof row.memoryUsageMb === 'number' && Number.isFinite(row.memoryUsageMb)
+          ? row.memoryUsageMb
+          : undefined;
+      if (memUsed === undefined && memAllocated !== undefined) {
+        const pct =
+          typeof row.memoryPercent === 'number' && Number.isFinite(row.memoryPercent)
+            ? row.memoryPercent
+            : typeof row.memory === 'number' && Number.isFinite(row.memory)
+              ? row.memory
+              : undefined;
+        if (pct !== undefined) memUsed = (pct / 100) * memAllocated;
+      }
+      if (memAllocated === undefined || memUsed === undefined) continue;
+
+      cpuUsed += (cpuPercent / 100) * cores;
+      cpuLimit += cores;
+      memoryUsed += memUsed;
+      memoryLimit += memAllocated;
+      seen += 1;
+    }
+
+    if (seen === 0) continue;
+
+    const cpuUtilization = cpuLimit > 0 ? clampPercent((cpuUsed / cpuLimit) * 100) : prev.cpuUtilization;
+    const memoryUtilization =
+      memoryLimit > 0 ? clampPercent((memoryUsed / memoryLimit) * 100) : prev.memoryUtilization;
+    if (cpuUtilization === prev.cpuUtilization && memoryUtilization === prev.memoryUtilization) return prev;
+    return { ...prev, cpuUtilization, memoryUtilization };
+  }
+
+  return prev;
+}
+
+/** Same rounding as routes/dashboard.ts `clampPercent`. */
+function clampPercent(value: number): number {
+  return Math.max(0, Math.min(100, Math.round(value)));
+}
+
 export function useServerStateUpdates() {
   const queryClient = useQueryClient();
   const pendingUpdates = useRef<Map<string, { state: string; data: Record<string, unknown> }>>(new Map());
@@ -260,6 +371,21 @@ export function useServerStateUpdates() {
           : prev;
       },
     );
+
+    // C2: the dashboard capacity tiles (cpu/memory/network utilization) are a
+    // fleet-wide aggregate on ['dashboard-resources'] that only had a 30s poll
+    // (useDashboard.ts:30) — non-admins saw stale tiles for half a minute. The
+    // REST aggregate divides total CPU cores used by the fleet's total core
+    // ceiling (routes/dashboard.ts:294-295), so accumulate the live per-server
+    // numbers over the fleet rows already in cache and re-derive the same way.
+    // Rows outside the reported set keep their previous reading (unknown ≠ 0).
+    q.setQueriesData(
+      { predicate: (query: Query) => Array.isArray(query.queryKey) && query.queryKey[0] === 'dashboard-resources' },
+      (prev: any) => {
+        if (!prev || typeof prev !== 'object') return prev;
+        return patchDashboardResources(q, prev);
+      },
+    );
   }, [queryClient]);
 
   const scheduleMetrics = useCallback(() => {
@@ -373,12 +499,23 @@ export function useServerStateUpdates() {
           q.removeQueries({ queryKey: qk.backups(serverId) });
           q.removeQueries({ queryKey: qk.tasks(serverId) });
           invalidateOnce(q, { queryKey: qk.servers() });
+          // C4: the dashboard's counters are only otherwise invalidated by the
+          // admin stream (useSseAdminEvents) — non-admins kept a deleted server
+          // in the totals until the next fallback poll. This stream reaches
+          // every user, so move the counts here too.
+          invalidateOnce(q, { queryKey: qk.dashboardStats() });
           return;
         }
 
         // Server lifecycle events — invalidate list and detail caches
         if (type === 'server_created' || type === 'server_updated' || type === 'server_suspended' || type === 'server_unsuspended') {
           invalidateOnce(q, { queryKey: qk.servers() });
+          if (type === 'server_created') {
+            // C4: a new server changes the dashboard totals (and the capacity
+            // tiles' denominators). Non-admins only get this stream.
+            invalidateOnce(q, { queryKey: qk.dashboardStats() });
+            invalidateOnce(q, { queryKey: qk.dashboardResources() });
+          }
           if (serverId) {
             invalidateOnce(q, { queryKey: qk.server(serverId) });
             invalidateOnce(q, { queryKey: qk.serverAllocations(serverId) });
@@ -413,7 +550,7 @@ export function useServerStateUpdates() {
           return;
         }
 
-        // P1.9: store the one-shot prompt so useEulaPrompt (and any future
+        // P1.9: store the one-shot prompt so EulaPrompt (and any future
         // consumer) can show it regardless of which surface started the server.
         if (type === 'eula_required') {
           setPendingEula(serverId, {

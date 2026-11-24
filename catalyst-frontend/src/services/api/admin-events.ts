@@ -28,7 +28,6 @@ export type AdminEventType =
   | 'role_updated'
   | 'alert_created'
   | 'alert_resolved'
-  | 'alert_deleted'
   | 'server_updated'
   | 'server_suspended'
   | 'server_unsuspended'
@@ -126,7 +125,6 @@ export const ADMIN_EVENT_TYPES: AdminEventType[] = [
   'role_updated',
   'alert_created',
   'alert_resolved',
-  'alert_deleted',
   'server_updated',
   'server_suspended',
   'server_unsuspended',

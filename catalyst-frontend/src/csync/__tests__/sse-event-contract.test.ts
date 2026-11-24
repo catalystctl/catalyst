@@ -148,6 +148,17 @@ describe('SSE event subscription contract', () => {
     expect(handledAdminTypes.length).toBe(new Set(handledAdminTypes).size);
   });
 
+  it('no longer lists the never-emitted alert_deleted dead branch (C8)', () => {
+    // Nothing emits alert_deleted — there is no alert-instance delete
+    // endpoint (only alert rules are deletable, via alert_rule_deleted). The
+    // FE branch and both allowlist entries were removed in the 2026-11-24
+    // realtime audit; re-adding any of them without an emitter re-opens the
+    // dead-entry gap this file exists to prevent.
+    expect(feAdminTypes).not.toContain('alert_deleted');
+    expect(beAdminTypes).not.toContain('alert_deleted');
+    expect(handledAdminTypes).not.toContain('alert_deleted');
+  });
+
   it('documents the dead FE server-stream entry console_output and the server_state alias', () => {
     // `console_output` — dead on /events (console stream only): present on
     // the FE list, absent from the backend allowlist, exempted above.

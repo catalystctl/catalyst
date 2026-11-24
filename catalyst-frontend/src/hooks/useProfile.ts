@@ -6,7 +6,7 @@ import { useStreamAwareInterval } from './useStreamAwareInterval';
 export function useProfile() {
   // P1-24: user_updated/permissions_updated arrive via SSE — poll only during
   // stream outages so the header/sidebar cannot freeze on stale identity data.
-  const outagePoll = useStreamAwareInterval(60_000);
+  const outagePoll = useStreamAwareInterval(60_000, ['/api/servers/all-servers/events']);
   return useQuery({
     queryKey: qk.profile(),
     queryFn: profileApi.getProfile,

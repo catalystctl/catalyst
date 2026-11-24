@@ -39,7 +39,7 @@ export function useAdminUsers(params?: { page?: number; limit?: number; search?:
 
 export function useAdminRoles() {
   // P1-24: role CRUD arrives via the admin stream only — poll during outages.
-  const outagePoll = useStreamAwareInterval(60_000);
+  const outagePoll = useStreamAwareInterval(60_000, ['/api/admin/events']);
   return useQuery({
     queryKey: qk.adminRoles(),
     queryFn: adminApi.listRoles,

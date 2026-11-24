@@ -55,7 +55,6 @@ export const HANDLED_ADMIN_EVENTS: AdminEventType[] = [
   'alert_rule_deleted',
   'alert_created',
   'alert_resolved',
-  'alert_deleted',
   'api_key_created',
   'api_key_updated',
   'api_key_deleted',
@@ -404,6 +403,11 @@ export function useSseAdminEvents() {
             // Agent control panel status depends on node online + agentVersion
             invalidateOnce(q, { queryKey: qk.agentStatus(nodeId) });
             invalidateOnce(q, { queryKey: qk.agentUpdateStatus(nodeId) });
+            // C5: the agent config editor (AgentControlPanel) reads
+            // ['nodes', id, 'agent-config'] with a 30s staleTime and no poll.
+            // A node update rewrites config.toml server-side (advanced paths),
+            // so the editor kept showing the pre-edit file until a reload.
+            invalidateOnce(q, { queryKey: qk.agentConfig(nodeId) });
           }
         }
 
@@ -452,7 +456,14 @@ export function useSseAdminEvents() {
         // ── Role Events ─────────────────────────────────────────────
         if (type === 'role_created' || type === 'role_updated' || type === 'role_deleted') {
           invalidateOnce(q, { queryKey: qk.adminRoles() });
-          // Role changes affect permissions — invalidate server-permissions and my-permissions
+          // C5: the role wizard's presets list was never invalidated; a role
+          // change also affects the caller's effective permissions.
+          Promise.all([
+            invalidateOnce(q, { queryKey: qk.rolePresets() }),
+            invalidateOnce(q, { queryKey: qk.myPermissions() }),
+          ]);
+          // Role changes affect permissions — invalidate the per-server
+          // permission caches AND the shared server-permission catalog.
           if (type === 'role_updated') {
             Promise.all([
               invalidateOnce(q, {
@@ -461,7 +472,15 @@ export function useSseAdminEvents() {
                   query.queryKey[0] === 'servers' &&
                   query.queryKey[2] === 'permissions',
               }),
-              invalidateOnce(q, { queryKey: qk.myPermissions() }),
+              // A5: the invite/access pickers read the catalog from
+              // ['server-permissions'] (lib/serverPermissions.ts, staleTime
+              // 10 min, gcTime ∞, no other invalidation). The comment above
+              // used to claim it was covered while the predicate only matched
+              // per-server permissions, so role edits never reached a picker.
+              invalidateOnce(q, {
+                queryKey: ['server-permissions'],
+                dedupeKey: 'server-permissions',
+              }),
             ]);
           }
           if (type === 'role_deleted') {
@@ -476,7 +495,11 @@ export function useSseAdminEvents() {
         }
 
         // ── Alert Instance Events ───────────────────────────────────
-        if (type === 'alert_created' || type === 'alert_resolved' || type === 'alert_deleted') {
+        // C8: there is no alert-instance delete endpoint, so `alert_deleted`
+        // was an allowlisted-but-never-emitted dead branch (removed from both
+        // allowlists and from here). Creation and resolution both invalidate
+        // the list and the counters.
+        if (type === 'alert_created' || type === 'alert_resolved') {
           Promise.all([
             invalidateOnce(q, { queryKey: qk.alerts() }),
             invalidateOnce(q, { queryKey: qk.alertStats() }),
@@ -496,6 +519,10 @@ export function useSseAdminEvents() {
           Promise.all([
             invalidateOnce(q, { queryKey: qk.apiKeys() }),
             invalidateOnce(q, { queryKey: qk.profileApiKeys() }),
+            // C5: the mod/plugin tabs gate provider options on
+            // ['providers','key-status']; without this they kept saying
+            // "API key not configured" after one was saved, until a reload.
+            invalidateOnce(q, { queryKey: qk.providerKeyStatus }),
             invalidateOnce(q, {
               predicate: (query: any) =>
                 Array.isArray(query.queryKey) &&
@@ -569,6 +596,21 @@ export function useSseAdminEvents() {
             // settings server-side — UpdateSettings reads both keys.
             invalidateOnce(q, { queryKey: qk.adminUpdateSettings() }),
             invalidateOnce(q, { queryKey: qk.adminUpdateStatus() }),
+            // C5: saving provider API keys emits this event
+            // (routes/admin.ts:4183-4209) — the mod/plugin tabs read the
+            // configured-key booleans from here, so a fresh key must reach
+            // them without a reload.
+            invalidateOnce(q, { queryKey: qk.providerKeyStatus }),
+            // C5: the secondary ("another drive") backup destination is stored
+            // as a system setting too (routes/admin.ts:4229+) and its
+            // ['backup-secondary-drive', serverId] caches were never
+            // invalidated — CreateBackupModal kept the old destination.
+            invalidateOnce(q, {
+              predicate: (query: any) =>
+                Array.isArray(query.queryKey) &&
+                query.queryKey[0] === 'backup-secondary-drive',
+              dedupeKey: 'backup-secondary-drive',
+            }),
           ]);
         }
         if (type === 'oidc_settings_updated') {
@@ -578,7 +620,14 @@ export function useSseAdminEvents() {
         // A2: EnvironmentPage (useAdmin.ts:271) — emitted by routes/env.ts:86
         // but previously dropped by the allowlist and unhandled here.
         if (type === 'env_settings_updated') {
-          invalidateOnce(q, { queryKey: qk.adminEnv() });
+          Promise.all([
+            invalidateOnce(q, { queryKey: qk.adminEnv() }),
+            // C3: the always-mounted EnvRestartNotice banner polls
+            // ['admin-env-restart-status'] (useAdmin.ts:308, 30s). Without
+            // this the "restart required" hint lagged up to half a minute
+            // after the setting that caused it was saved.
+            invalidateOnce(q, { queryKey: qk.adminEnvRestartStatus() }),
+          ]);
         }
         // A3: SecurityPage MCP card (useAdmin.ts:139).
         if (type === 'mcp_settings_updated') {
@@ -955,6 +1004,10 @@ export function useSseAdminEvents() {
           invalidateOnce(q, { queryKey: qk.agentStatus(nodeId) });
           invalidateOnce(q, { queryKey: qk.node(nodeId) });
           invalidateOnce(q, { queryKey: qk.nodeStats(nodeId) });
+          // C5: an update rewritten the agent binary alongside config.toml, so
+          // the config editor's cache is suspect for every phase (the endpoint
+          // reports 'unavailable' while the agent restarts).
+          invalidateOnce(q, { queryKey: qk.agentConfig(nodeId) });
         }
       });
       },

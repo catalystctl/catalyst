@@ -5,7 +5,7 @@ import { useStreamAwareInterval } from './useStreamAwareInterval';
 
 export function useAlerts() {
   // P1-24: alerts are event-driven — poll only while the SSE streams are down.
-  const outagePoll = useStreamAwareInterval(60_000);
+  const outagePoll = useStreamAwareInterval(60_000, ['/api/servers/all-servers/events']);
   return useQuery({
     queryKey: qk.alerts(),
     queryFn: () => alertsApi.list({ resolved: false, scope: 'mine' }),
