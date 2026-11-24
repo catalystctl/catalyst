@@ -241,8 +241,23 @@ run_tagged() {
   PIDS+=($!)
 }
 
-# Backend / Frontend — first arg after tag/color is the working directory.
-run_tagged() { :; }  # placeholder replaced below
+# Backend / Frontend — first arg after tag/color is the working directory, the
+# rest is the command. Each service runs in its own session (setsid) inside the
+# repo root so pnpm resolves the workspace; the agent runs from its crate dir.
+run_tagged "api" "$C_BLUE" "$ROOT_DIR" pnpm --filter catalyst-backend run dev
+run_tagged "web" "$C_GREEN" "$ROOT_DIR" pnpm --filter catalyst-frontend run dev
+
+if [[ "$RUN_AGENT" -eq 1 ]]; then
+  # The agent talks to containerd, so it needs root: `sudo cargo run -- <config>`.
+  # sudo resets the environment, which drops the toolchain dirs cargo needs —
+  # forward them explicitly (and only when set; an empty CARGO_HOME makes cargo
+  # resolve a relative home).
+  agent_env=(sudo env "PATH=$PATH")
+  [[ -n "${CARGO_HOME:-}" ]] && agent_env+=("CARGO_HOME=$CARGO_HOME")
+  [[ -n "${RUSTUP_HOME:-}" ]] && agent_env+=("RUSTUP_HOME=$RUSTUP_HOME")
+  run_tagged "agent" "$C_MAGENTA" "$ROOT_DIR/catalyst-agent" \
+    "${agent_env[@]}" cargo run -- ./config.toml
+fi
 
 ok "All requested services launched (pids: ${PIDS[*]})."
 log "Tailing logs — Ctrl+C to stop."
